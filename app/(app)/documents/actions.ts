@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireUser, requireRole } from '@/lib/auth';
+import { requireUser, requireRole, requireCan } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import {
   documentMetaSchema,
@@ -141,7 +141,7 @@ export async function archiveDocument(documentId: string): Promise<
       error: string;
     }
 > {
-  const user = await requireRole(['dc', 'doc_controller', 'admin']);
+  const user = await requireCan('document.archive');
   const supabase = await createClient();
 
   const { data: doc } = await supabase
@@ -175,7 +175,7 @@ export async function archiveDocument(documentId: string): Promise<
 export async function restoreDocument(
   documentId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireRole(['dc', 'doc_controller', 'admin']);
+  await requireCan('archive.restore');
   const supabase = await createClient();
 
   const { data: doc } = await supabase

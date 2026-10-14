@@ -1,51 +1,83 @@
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import {
+  type AppRole,
+  type Capability,
+  can,
+  normalizeRole,
+} from '@/lib/permissions';
 
-export type Role =
-  | 'admin'
-  | 'dc'
-  | 'authority_engineer'
-  | 'engineer'
-  | 'resident_engineer'
-  | 'area_manager'
-  | 'ceo'
-  | 'doc_controller'
-  | 'manager';
+export type Role = AppRole;
 
-export const getCurrentUser = cache(async () => {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+  full_name: string;
+  role: AppRole;
+}
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, full_name, role')
-    .eq('id', user.id)
-    .maybeSingle();
+export const getCurrentUser = cache(
+  async (): Promise<AuthenticatedUser | null> => {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
 
-  if (profile) {
-    return { ...profile, email: user.email ?? '' };
-  }
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, active')
+      .eq('id', user.id)
+      .maybeSingle();
 
-  return {
-    id: user.id,
-    full_name: (user.user_metadata?.full_name as string) || user.email?.split('@')[0] || 'Engineer',
-    role: ((user.user_metadata?.role as Role) || 'engineer') as Role,
-    email: user.email ?? '',
-  };
-});
+    // Strict check: if no profile or profile inactive, deny role escalation
+    if (!profile || profile.active === false) {
+      return null;
+    }
 
-export async function requireUser() {
+    const normalized = normalizeRole(profile.role);
+    if (!normalized) {
+      return null;
+    }
+
+    return {
+      id: profile.id,
+      email: user.email ?? '',
+      full_name: profile.full_name || user.email?.split('@')[0] || 'User',
+      role: normalized,
+    };
+  },
+);
+
+export async function requireUser(): Promise<AuthenticatedUser> {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
   return user;
 }
 
-export async function requireRole(allowed: Role[]) {
+export async function requireRole(
+  allowed: (AppRole | string)[],
+): Promise<AuthenticatedUser> {
   const user = await requireUser();
-  if (!allowed.includes(user.role)) redirect('/documents');
+  const normalizedAllowed = allowed
+    .map((r) => normalizeRole(r))
+    .filter((r): r is AppRole => r !== null);
+
+  if (!normalizedAllowed.includes(user.role)) {
+    redirect('/documents');
+  }
+  return user;
+}
+
+export async function requireCan(
+  capability: Capability,
+): Promise<AuthenticatedUser> {
+  const user = await requireUser();
+  if (!can(user.role, capability)) {
+    throw new Error(
+      `Unauthorized: Role '${user.role}' lacks capability '${capability}'`,
+    );
+  }
   return user;
 }

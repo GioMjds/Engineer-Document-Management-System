@@ -22,16 +22,6 @@ async function signOut() {
 
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const user = await requireUser();
-  const canReview = [
-    'manager',
-    'resident_engineer',
-    'area_manager',
-    'doc_controller',
-    'dc',
-    'admin',
-  ].includes(user.role);
-  const canManageUsers = ['admin', 'dc', 'doc_controller'].includes(user.role);
-  const canArchive = ['dc', 'doc_controller', 'admin'].includes(user.role);
 
   const roleLabelMap = {
     admin: 'Admin',
@@ -40,9 +30,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     resident_engineer: 'Resident Engineer',
     authority_engineer: 'Authority Engineer',
     dc: 'Document Controller',
-    doc_controller: 'Document Controller',
     engineer: 'Engineer',
-    manager: 'Manager',
   } satisfies Record<string, string>;
 
   return (
@@ -53,9 +41,6 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
           full_name: user.full_name,
           role: user.role,
         }}
-        canReview={canReview}
-        canManageUsers={canManageUsers}
-        canArchive={canArchive}
         roleLabel={roleLabelMap[user.role] ?? user.role.replace('_', ' ')}
         onSignOut={signOut}
       />

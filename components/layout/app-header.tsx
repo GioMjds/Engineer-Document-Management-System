@@ -16,14 +16,35 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { navFor, type Capability } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 
-interface NavItem {
-  label: string;
-  href: Route;
-  icon: React.ComponentType<{ className?: string }>;
-  active: boolean;
-}
+const ICON_MAP: Record<Capability, React.ComponentType<{ className?: string }>> = {
+  'dashboard.view': LayoutDashboard,
+  'noc.view': ShieldCheck,
+  'noc.matrix.view': Layers,
+  'document.view': FileText,
+  'review.queue': CheckSquare,
+  'archive.view': Archive,
+  'users.manage': Users,
+  'project.viewAll': LayoutDashboard,
+  'project.create': LayoutDashboard,
+  'project.contacts.manage': LayoutDashboard,
+  'document.upload': FileText,
+  'document.edit': FileText,
+  'document.edit.own': FileText,
+  'document.archive': Archive,
+  'archive.restore': Archive,
+  'archive.purge': Archive,
+  'review.decide': CheckSquare,
+  'review.escalate': CheckSquare,
+  'noc.tracker.update': ShieldCheck,
+  'noc.sequence.override': ShieldCheck,
+  'noc.matrix.edit': Layers,
+  'amount.consultant.view': LayoutDashboard,
+  'amount.contractor.view': LayoutDashboard,
+  'expiry.notify': ShieldCheck,
+};
 
 interface AppHeaderProps {
   user: {
@@ -31,79 +52,29 @@ interface AppHeaderProps {
     full_name?: string | null;
     role: string;
   };
-  canReview: boolean;
-  canManageUsers: boolean;
-  canArchive: boolean;
   roleLabel: string;
   onSignOut: () => Promise<void>;
 }
 
 export function AppHeader({
   user,
-  canReview,
-  canManageUsers,
-  canArchive,
   roleLabel,
   onSignOut,
 }: AppHeaderProps) {
   const pathname = usePathname();
 
-  const navItems: NavItem[] = [
-    {
-      label: 'Dashboard',
-      href: '/',
-      icon: LayoutDashboard,
-      active: pathname === '/',
-    },
-    {
-      label: 'NOC Tracker',
-      href: '/noc-tracker',
-      icon: ShieldCheck,
-      active: pathname.startsWith('/noc-tracker'),
-    },
-    {
-      label: 'NOC Matrix',
-      href: '/noc-matrix' as Route,
-      icon: Layers,
-      active: pathname.startsWith('/noc-matrix'),
-    },
-    {
-      label: 'Documents',
-      href: '/documents',
-      icon: FileText,
-      active: pathname.startsWith('/documents'),
-    },
-    ...(canReview
-      ? [
-          {
-            label: 'Review Queue',
-            href: '/review' as Route,
-            icon: CheckSquare,
-            active: pathname.startsWith('/review'),
-          },
-        ]
-      : []),
-    ...(canManageUsers
-      ? [
-          {
-            label: 'Users',
-            href: '/users' as Route,
-            icon: Users,
-            active: pathname.startsWith('/users'),
-          },
-        ]
-      : []),
-    ...(canArchive
-      ? [
-          {
-            label: 'Archive',
-            href: '/archive' as Route,
-            icon: Archive,
-            active: pathname.startsWith('/archive'),
-          },
-        ]
-      : []),
-  ];
+  const allowedNav = navFor(user.role);
+
+  const navItems = allowedNav.map((item) => {
+    const isDashboard = item.href === '/';
+    const active = isDashboard ? pathname === '/' : pathname.startsWith(item.href);
+    return {
+      label: item.label,
+      href: item.href as Route,
+      icon: ICON_MAP[item.capability] ?? FileText,
+      active,
+    };
+  });
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-card/95 backdrop-blur-md supports-backdrop-filter:bg-card/85 transition-colors">

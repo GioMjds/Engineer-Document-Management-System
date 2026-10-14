@@ -124,3 +124,50 @@
   - Bug 6 (NOC Tracker Header): Initialized project roles with seed defaults and added name-based discipline matching to prevent MEP engineer from being misassigned as Civil engineer.
   - Bug 7 (Documents Table Overflow): Wrapped Documents table in responsive card container with explicit column widths, text wrapping on document titles, and actions alignment to prevent the Download column from being cut off.
 - Verified TypeScript compilation (`npx tsc --noEmit`) and Next.js production build (`pnpm run build`) with zero errors across all 16 routes.
+## Session 2026-10-14
+
+- Analyzed baseline role flows from `CVTEC_EDMS.md`, `CVTEC EDMS – Implementation Plan by Role.md`, and `lib/permissions.ts`.
+- Initiated `/superpowers:brainstorming` for role specification files across all 7 CVTEC EDMS roles.
+- Classified task as Architectural; conducted multi-turn user discovery and requirements confirmation.
+- User approved Modular Dependency Architecture (Approach 1): 1 foundation spec (`00-foundation.md`) + 7 individual role specs in `docs/specs/roles/`.
+- Authored full technical specifications:
+  - `docs/specs/roles/00-foundation.md`: Core role enum, permissions matrix, database security definer functions (`private.has_role`, `private.can_see_project`), financial confidentiality split, review state machine, and soft-delete/audit schema.
+  - `docs/specs/roles/01-admin.md`: User lifecycle, project registration, team assignments, sequence overrides, permanent purge, and RLS policies.
+  - `docs/specs/roles/02-document-controller.md`: Document CRUD, soft-delete archive and restore, NOC tracker and matrix editing, and RLS policies.
+  - `docs/specs/roles/03-authority-engineer.md`: Statutory authority submissions, prerequisite gating, fee tracking, matrix revisions, and RLS policies.
+  - `docs/specs/roles/04-engineer.md`: Discipline drawings (MEP, Architect, Structure, Civil), immutability guards, revision workflows, and RLS policies.
+  - `docs/specs/roles/05-resident-engineer.md`: Level-1 technical review, direct approval vs escalation, rejection comments, and RLS policies.
+  - `docs/specs/roles/06-area-manager.md`: Level-2 review, RE-absent fallback, cross-project oversight, financial visibility, and RLS policies.
+  - `docs/specs/roles/07-ceo.md`: Read-only executive oversight, dashboard KPIs, financial portfolio, and strict RLS policies.
+  - `docs/superpowers/specs/2026-10-14-role-specs-design.md`: Master design document and specification index.
+
+- Implemented Phase 1: Shared Foundation (`F1`-`F10`) and Admin Role (`01-admin.md`):
+  - Created migration `supabase/migrations/20261014000000_shared_foundation.sql`:
+    - Provisioned `private` schema with security definer functions `private.has_role()` and `private.can_see_project()`.
+    - Augmented `projects` with `client_contractor_amount`, `contractor_name`, `client_emails`, and `contractor_emails`.
+    - Augmented `project_members` with `discipline` (`mep`, `architect`, `structure`, `civil`).
+    - Provisioned `project_confidential` table with strict RLS restricted to Admin, CEO, and Area Manager.
+    - Provisioned `document_reviews` table with constraint enforcing non-empty comments on rejections.
+    - Provisioned `audit_log` table with Admin SELECT RLS.
+    - Added trigger `handle_new_user()` on `auth.users` to prevent unverified `user_metadata` privilege escalation.
+  - Updated `lib/auth.ts`:
+    - Strict role normalization; eliminated untrusted `user_metadata.role` fallback when profile row is absent.
+    - Implemented `requireCan(capability)`.
+  - Refactored `components/layout/app-header.tsx` and `app/(app)/layout.tsx`:
+    - Dynamically populated navigation tabs strictly from `navFor(user.role)` based on capability matrix.
+    - Removed hardcoded legacy role boolean checks.
+  - Implemented Admin actions in `app/actions/admin.ts`:
+    - `inviteUser`: Invites via service-role client and sets canonical role.
+    - `updateUserRole`: Guarded against self-demotion and demoting the last active Admin.
+    - `deactivateUser`: Guarded against self-deactivation and deactivating the last active Admin.
+    - `createProject`: Registers project scope, contact email lists, and confidential consultant contract amounts.
+    - `updateProjectMembers`: Syncs team members and engineering disciplines.
+    - `overrideNocSequence`: Enforces mandatory justification string and writes to `audit_log`.
+    - `purgeDocument`: Permanently deletes storage blob and document record with audit logging.
+  - Created `/projects/new` page and `ProjectRegistrationForm` guarded by `project.create`.
+  - Updated `/users` page with `InviteUserDialog` guarded by `users.manage`.
+  - Updated `/archive` page with `PurgeButton` (typed "CONFIRM PURGE" modal) guarded by `archive.purge`.
+  - Enforced `requireCan` across `/review`, `/documents`, and `/noc-tracker` actions (disallowed Area Manager from recording NOC fees).
+  - Updated `types/database.ts` with new table and column typings.
+  - Verified with `scripts/verify-foundation-and-admin.ts`: 11/11 automated checks passed.
+  - Verified `tsc --noEmit` and `pnpm run build`: 17/17 routes compiled cleanly with 0 errors.

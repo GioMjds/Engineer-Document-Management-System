@@ -14,6 +14,118 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          entity: string
+          entity_id: string
+          id: string
+          metadata: Json | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          entity: string
+          entity_id: string
+          id?: string
+          metadata?: Json | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          entity?: string
+          entity_id?: string
+          id?: string
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_reviews: {
+        Row: {
+          comment: string | null
+          created_at: string
+          decision: "approve" | "reject"
+          document_id: string
+          id: string
+          level: "re" | "am" | "admin"
+          reviewer_id: string
+          revision_label: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          decision: "approve" | "reject"
+          document_id: string
+          id?: string
+          level: "re" | "am" | "admin"
+          reviewer_id: string
+          revision_label?: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          decision?: "approve" | "reject"
+          document_id?: string
+          id?: string
+          level?: "re" | "am" | "admin"
+          reviewer_id?: string
+          revision_label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_reviews_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_confidential: {
+        Row: {
+          client_consultant_amount: number
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_consultant_amount?: number
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_consultant_amount?: number
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_confidential_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           archived_at: string | null
@@ -377,16 +489,19 @@ export type Database = {
       project_members: {
         Row: {
           assigned_at: string
+          discipline: "mep" | "architect" | "structure" | "civil" | null
           project_id: string
           user_id: string
         }
         Insert: {
           assigned_at?: string
+          discipline?: "mep" | "architect" | "structure" | "civil" | null
           project_id: string
           user_id: string
         }
         Update: {
           assigned_at?: string
+          discipline?: "mep" | "architect" | "structure" | "civil" | null
           project_id?: string
           user_id?: string
         }
@@ -598,8 +713,12 @@ export type Database = {
       projects: {
         Row: {
           archived_at: string | null
+          client_contractor_amount: number
+          client_emails: string[] | null
           client_name: string | null
           code: string
+          contractor_emails: string[] | null
+          contractor_name: string | null
           created_at: string
           created_by: string | null
           description: string
@@ -611,8 +730,12 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          client_contractor_amount?: number
+          client_emails?: string[] | null
           client_name?: string | null
           code: string
+          contractor_emails?: string[] | null
+          contractor_name?: string | null
           created_at?: string
           created_by?: string | null
           description: string
@@ -624,8 +747,12 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          client_contractor_amount?: number
+          client_emails?: string[] | null
           client_name?: string | null
           code?: string
+          contractor_emails?: string[] | null
+          contractor_name?: string | null
           created_at?: string
           created_by?: string | null
           description?: string

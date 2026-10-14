@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth';
+import { requireCan } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { ReviewDialog } from './review-dialog';
 import { DownloadButton } from '../documents/download-button';
@@ -12,14 +12,7 @@ import {
 } from '@/components/ui/table';
 
 export default async function ReviewPage() {
-  await requireRole([
-    'resident_engineer',
-    'area_manager',
-    'admin',
-    'dc',
-    'doc_controller',
-    'manager',
-  ]);
+  await requireCan('review.queue');
   const supabase = await createClient();
 
   const { data: pending } = await supabase

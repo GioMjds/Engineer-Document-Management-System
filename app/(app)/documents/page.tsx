@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { requireUser } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { UploadForm } from './upload-form';
 import { DownloadButton } from './download-button';
@@ -24,10 +25,7 @@ export default async function DocumentsPage() {
   const user = await requireUser();
   const supabase = await createClient();
 
-  const isDC =
-    user.role === 'dc' ||
-    user.role === 'doc_controller' ||
-    user.role === 'admin';
+  const isDC = can(user.role, 'document.edit');
 
   // RLS filters this automatically per role
   const { data: documents } = await supabase

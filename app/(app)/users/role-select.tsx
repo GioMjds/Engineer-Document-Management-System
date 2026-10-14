@@ -9,20 +9,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { updateUserRole } from './actions';
+import { updateUserRole } from '@/app/actions/admin';
+import type { AppRole } from '@/lib/permissions';
 
-import type { Role } from '@/lib/auth';
-
-const LABELS: Record<Role, string> = {
+const LABELS: Record<AppRole, string> = {
   admin: 'Admin',
   ceo: 'CEO',
   area_manager: 'Area Manager',
   resident_engineer: 'Resident Engineer',
   authority_engineer: 'Authority Engineer',
-  dc: 'Document Controller (DC)',
   engineer: 'Engineer',
-  doc_controller: 'Document Controller (Legacy)',
-  manager: 'Manager (Legacy)',
+  dc: 'Document Controller (DC)',
 };
 
 export function RoleSelect({
@@ -31,21 +28,21 @@ export function RoleSelect({
   isSelf,
 }: {
   userId: string;
-  currentRole: Role;
+  currentRole: AppRole;
   isSelf: boolean;
 }) {
-  const [value, setValue] = useState<Role>(currentRole);
+  const [value, setValue] = useState<AppRole>(currentRole);
   const [pending, startTransition] = useTransition();
 
-  function onChange(next: Role) {
+  function onChange(next: AppRole) {
     const previous = value;
-    setValue(next); // optimistic
+    setValue(next); // optimistic update
 
     startTransition(async () => {
       const result = await updateUserRole({ user_id: userId, role: next });
       if (!result.ok) {
-        setValue(previous); // roll back
-        toast.error(result.error);
+        setValue(previous); // roll back on failure
+        toast.error(result.error ?? 'Failed to update role.');
         return;
       }
       toast.success('Role updated.');
@@ -55,14 +52,14 @@ export function RoleSelect({
   return (
     <Select
       value={value}
-      onValueChange={(v) => onChange(v as Role)}
+      onValueChange={(v) => onChange(v as AppRole)}
       disabled={pending || isSelf}
     >
-      <SelectTrigger className="w-48">
+      <SelectTrigger className="w-52">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {(Object.keys(LABELS) as Role[]).map((r) => (
+        {(Object.keys(LABELS) as AppRole[]).map((r) => (
           <SelectItem key={r} value={r}>
             {LABELS[r]}
           </SelectItem>

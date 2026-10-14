@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { requireUser, requireRole } from '@/lib/auth';
+import { requireUser, requireRole, requireCan } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { NocPayerType } from '@/types/noc';
 
@@ -49,7 +49,7 @@ export type AdminOverridePrerequisiteSequenceInput = {
 export async function recordNocFeePayment(
   input: RecordNocFeePaymentInput
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole(['admin', 'authority_engineer', 'dc', 'area_manager']);
+  const user = await requireCan('noc.tracker.update');
 
   const parsed = recordFeePaymentSchema.safeParse(input);
   if (!parsed.success) {
@@ -149,7 +149,7 @@ export async function resubmitNocRevision(
 export async function adminOverridePrerequisiteSequence(
   input: AdminOverridePrerequisiteSequenceInput
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole(['admin']);
+  const user = await requireCan('noc.sequence.override');
 
   const parsed = adminOverrideSchema.safeParse(input);
   if (!parsed.success) {
