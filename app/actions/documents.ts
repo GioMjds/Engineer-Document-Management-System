@@ -1,21 +1,29 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
-import { requireUser, requireCan } from '@/lib/auth';
-import { can } from '@/lib/permissions';
-import { createClient } from '@/lib/supabase/server';
+import { requireCan, requireUser } from '@/lib/auth';
 import {
   MAX_FILE_SIZE,
-  ALLOWED_MIME_TYPES,
-  sanitizeFileName,
+  sanitizeFileName
 } from '@/lib/documents';
+import { can } from '@/lib/permissions';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 
 export interface DocumentUpdateInput {
   title?: string;
   description?: string;
   discipline?: 'mep' | 'architect' | 'structure' | 'civil';
   doc_number?: string;
+}
+
+export interface UploadDrawingInput {
+  projectId: string;
+  discipline: 'mep' | 'architect' | 'structure' | 'civil';
+  drawingNumber: string;
+  title: string;
+  file: File;
 }
 
 const updateDocSchema = z.object({
@@ -58,7 +66,12 @@ export async function uploadDocument(
   const user = await requireCan('document.upload');
   const supabase = await createClient();
 
-  const allowed = await canAccessProject(supabase, user.id, user.role, projectId);
+  const allowed = await canAccessProject(
+    supabase,
+    user.id,
+    user.role,
+    projectId,
+  );
   if (!allowed) {
     return { success: false, error: 'Project access denied.' };
   }
@@ -99,13 +112,17 @@ export async function uploadDocument(
 
   const { error: uploadError } = await supabase.storage
     .from('documents')
-    .upload(filePath, buffer, { contentType: file.type || 'application/octet-stream' });
+    .upload(filePath, buffer, {
+      contentType: file.type || 'application/octet-stream',
+    });
 
   if (uploadError) {
     return { success: false, error: `Upload failed: ${uploadError.message}` };
   }
 
-  const validDiscipline = ['mep', 'architect', 'structure', 'civil'].includes(discipline ?? '')
+  const validDiscipline = ['mep', 'architect', 'structure', 'civil'].includes(
+    discipline ?? '',
+  )
     ? (discipline as 'mep' | 'architect' | 'structure' | 'civil')
     : null;
 
@@ -138,6 +155,19 @@ export async function uploadDocument(
   return { success: true, documentId: insertedDoc.id };
 }
 
+/** Initial drawing upload creates R00 */
+export async function uploadDrawing(
+  input: UploadDrawingInput,
+): Promise<{ success: boolean; documentId?: string; error?: string }> {
+  const formData = new FormData();
+  formData.append('file', input.file);
+  formData.append('doc_number', input.drawingNumber);
+  formData.append('title', input.title);
+  formData.append('discipline', input.discipline);
+
+  return uploadDocument(input.projectId, formData);
+}
+
 /**
  * Edits or replaces metadata of any document within an assigned project.
  */
@@ -150,14 +180,20 @@ export async function editDocument(
   const canEditOwn = can(user.role, 'document.edit.own');
 
   if (!canEditAny && !canEditOwn) {
-    return { success: false, error: 'Forbidden: Document edit capability required.' };
+    return {
+      success: false,
+      error: 'Forbidden: Document edit capability required.',
+    };
   }
 
   const supabase = await createClient();
 
   const parsed = updateDocSchema.safeParse(updates);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid update data' };
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Invalid update data',
+    };
   }
 
   const { data: doc } = await supabase
@@ -171,10 +207,18 @@ export async function editDocument(
   }
 
   if (!canEditAny && canEditOwn && doc.uploaded_by !== user.id) {
-    return { success: false, error: 'Forbidden: You can only edit your own uploads.' };
+    return {
+      success: false,
+      error: 'Forbidden: You can only edit your own uploads.',
+    };
   }
 
-  const allowed = await canAccessProject(supabase, user.id, user.role, doc.project_id);
+  const allowed = await canAccessProject(
+    supabase,
+    user.id,
+    user.role,
+    doc.project_id,
+  );
   if (!allowed) {
     return { success: false, error: 'Access denied to document project.' };
   }
@@ -192,9 +236,12 @@ export async function editDocument(
   };
 
   if (parsed.data.title !== undefined) updatePayload.title = parsed.data.title;
-  if (parsed.data.description !== undefined) updatePayload.description = parsed.data.description;
-  if (parsed.data.discipline !== undefined) updatePayload.discipline = parsed.data.discipline;
-  if (parsed.data.doc_number !== undefined) updatePayload.doc_number = parsed.data.doc_number;
+  if (parsed.data.description !== undefined)
+    updatePayload.description = parsed.data.description;
+  if (parsed.data.discipline !== undefined)
+    updatePayload.discipline = parsed.data.discipline;
+  if (parsed.data.doc_number !== undefined)
+    updatePayload.doc_number = parsed.data.doc_number;
 
   const { error } = await supabase
     .from('documents')
@@ -221,7 +268,7 @@ export async function uploadDocumentRevision(
 
   const { data: doc } = await supabase
     .from('documents')
-    .select('id, project_id, revision, status')
+    .select('id, project_id, revision, status, uploaded_by')
     .eq('id', documentId)
     .maybeSingle();
 
@@ -229,9 +276,30 @@ export async function uploadDocumentRevision(
     return { success: false, error: 'Document not found.' };
   }
 
-  const allowed = await canAccessProject(supabase, user.id, user.role, doc.project_id);
+  const allowed = await canAccessProject(
+    supabase,
+    user.id,
+    user.role,
+    doc.project_id,
+  );
   if (!allowed) {
     return { success: false, error: 'Access denied to document project.' };
+  }
+
+  if (user.role === 'engineer') {
+    if (doc.uploaded_by !== user.id) {
+      return {
+        success: false,
+        error:
+          'Forbidden: You can only upload revisions for your own drawings.',
+      };
+    }
+    if (doc.status !== 'rejected') {
+      return {
+        success: false,
+        error: 'Revisions can only be uploaded after a drawing has been rejected.',
+      };
+    }
   }
 
   const file = formData.get('file') as File | null;
@@ -257,13 +325,16 @@ export async function uploadDocumentRevision(
 
   const { error: uploadError } = await supabase.storage
     .from('documents')
-    .upload(filePath, buffer, { contentType: file.type || 'application/octet-stream' });
+    .upload(filePath, buffer, {
+      contentType: file.type || 'application/octet-stream',
+    });
 
   if (uploadError) {
     return { success: false, error: `Upload failed: ${uploadError.message}` };
   }
 
-  const { error: updateError } = await supabase
+  const adminClient = createAdminClient();
+  const { error: updateError } = await adminClient
     .from('documents')
     .update({
       revision: nextRevision,
@@ -308,7 +379,12 @@ export async function archiveDocument(
     return { success: false, error: 'Document is already archived.' };
   }
 
-  const allowed = await canAccessProject(supabase, user.id, user.role, doc.project_id);
+  const allowed = await canAccessProject(
+    supabase,
+    user.id,
+    user.role,
+    doc.project_id,
+  );
   if (!allowed) {
     return { success: false, error: 'Access denied to document project.' };
   }
@@ -355,7 +431,12 @@ export async function restoreDocument(
     return { success: false, error: 'Document is not archived.' };
   }
 
-  const allowed = await canAccessProject(supabase, user.id, user.role, doc.project_id);
+  const allowed = await canAccessProject(
+    supabase,
+    user.id,
+    user.role,
+    doc.project_id,
+  );
   if (!allowed) {
     return { success: false, error: 'Access denied to document project.' };
   }
@@ -401,7 +482,12 @@ export async function getDownloadUrl(documentId: string): Promise<{
     return { ok: false, error: 'Document not found.' };
   }
 
-  const allowed = await canAccessProject(supabase, user.id, user.role, doc.project_id);
+  const allowed = await canAccessProject(
+    supabase,
+    user.id,
+    user.role,
+    doc.project_id,
+  );
   if (!allowed) {
     return { ok: false, error: 'Access denied to document project.' };
   }
@@ -411,7 +497,10 @@ export async function getDownloadUrl(documentId: string): Promise<{
     .createSignedUrl(doc.file_path, 60, { download: doc.file_name });
 
   if (error || !data) {
-    return { ok: false, error: error?.message || 'Failed to generate download URL.' };
+    return {
+      ok: false,
+      error: error?.message || 'Failed to generate download URL.',
+    };
   }
 
   return { ok: true, url: data.signedUrl };

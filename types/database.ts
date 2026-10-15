@@ -963,7 +963,14 @@ export type Database = {
         | "resident_engineer"
         | "area_manager"
         | "ceo"
-      doc_status: "draft" | "submitted" | "approved" | "rejected" | "archived"
+      doc_status:
+        | "draft"
+        | "submitted"
+        | "approved"
+        | "rejected"
+        | "archived"
+        | "escalated"
+        | "ready_for_authority"
       noc_stage: "design" | "information" | "construction" | "handover"
       noc_submitter: "consultant" | "client" | "contractor" | "specialist"
       office_site: "head_office" | "site_office"
@@ -1110,7 +1117,15 @@ export const Constants = {
         "area_manager",
         "ceo",
       ],
-      doc_status: ["draft", "submitted", "approved", "rejected", "archived"],
+      doc_status: [
+        "draft",
+        "submitted",
+        "approved",
+        "rejected",
+        "archived",
+        "escalated",
+        "ready_for_authority",
+      ],
       noc_stage: ["design", "information", "construction", "handover"],
       noc_submitter: ["consultant", "client", "contractor", "specialist"],
       office_site: ["head_office", "site_office"],

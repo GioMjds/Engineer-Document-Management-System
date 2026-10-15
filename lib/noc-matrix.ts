@@ -1,9 +1,6 @@
 import type {
   MasterAuthority,
   NocMatrixItem,
-  NocStage,
-  ReviewingAuthority,
-  SubmittedBy,
 } from '@/types/noc';
 
 // Standard NOC matrix templates by Master Authority ID.

@@ -275,3 +275,39 @@
   - Outlined immediate Sprint 3 remediation roadmap.
 
 
+## Session 2026-10-16
+
+- Fixed compilation defect in `lib/server/noc-data.ts`:
+  - Restored `master_authority_id` and `client_name` to `RawDbProject` interface.
+  - Added `contractor_name` and `client_contractor_amount` to project query.
+  - Added `discipline` to `project_members` query.
+  - Re-verified TypeScript compilation (`tsc --noEmit`): 0 errors.
+
+- Implemented Resident Engineer (RE) role per `docs/specs/roles/05-resident-engineer.md`:
+  - Created database migration `supabase/migrations/20261016000000_resident_engineer_role_rls.sql`:
+    - Safely added `escalated` and `ready_for_authority` values to `doc_status` enum.
+    - Added RLS policy `re_documents_select` on `public.documents` scoped to assigned projects (`private.can_see_project`).
+    - Added RLS policy `re_documents_status_update` on `public.documents` allowing updates from `submitted` to `escalated`, `ready_for_authority`, or `rejected`.
+    - Added RLS policy `reviews_insert_re` on `public.document_reviews` with level `re` and project access check.
+    - Enforced zero SELECT policy on `project_confidential` and zero INSERT/DELETE on `public.documents`.
+  - Updated `types/database.ts`:
+    - Added `escalated` and `ready_for_authority` to `doc_status` enum type and runtime constants.
+  - Created server action in `app/actions/reviews.ts`:
+    - `submitResidentEngineerReview`: Validates `review.decide`, checks assigned project scope, checks `submitted` status, enforces >= 5 char comment on rejection, updates document status (`ready_for_authority`, `escalated`, or `rejected`), records audit row in `public.document_reviews`, and revalidates paths.
+    - Updated `app/(app)/review/actions.ts` to forward `submitReview` to `submitResidentEngineerReview`.
+  - Rebuilt `/review` and `/reviews` UI:
+    - Updated `components/status-badge.tsx` with high-contrast badge styles and human-readable labels for `ready_for_authority` and `escalated`.
+    - Created `components/review/drawing-review-modal.tsx`: Modal displaying drawing sheet number, revision tag, discipline badge, author, submission date, download button, previous revision reviews changelog, and a 3-way decision panel (Approve Direct, Approve & Escalate, Reject with required >= 5 char comment).
+    - Created `components/review/review-queue-table.tsx`: Review table with search, discipline filter, project filter, and drawing review action controls.
+    - Updated `app/(app)/review/page.tsx`: Scoped queue strictly to assigned projects for Resident Engineer and queries prior review audit records.
+    - Created `app/(app)/reviews/page.tsx` redirecting to `/review`.
+  - Created automated acceptance test suite `scripts/verify-resident-engineer.ts`:
+    - Automated tests covering TC-RE-01 through TC-RE-10.
+    - Executed and verified: 10/10 tests passed.
+  - Verified regression test suites:
+    - `scripts/verify-foundation-and-admin.ts`: 11/11 passed.
+    - `scripts/verify-document-controller.ts`: 11/11 passed.
+    - `scripts/verify-authority-engineer.ts`: 11/11 passed.
+    - `scripts/verify-noc-matrix.ts`: 4/4 passed.
+  - Verified TypeScript compilation (`npx tsc --noEmit`): 0 errors.
+  - Verified Next.js production build (`pnpm run build`): 18/18 routes compiled cleanly with 0 errors.

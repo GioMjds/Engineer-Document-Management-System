@@ -178,12 +178,15 @@ export interface ProjectNocItem {
 }
 
 export interface AssignedProject {
+  id?: string;
   code: string;
   name: string;
   masterAuthority: MasterAuthority;
   projectType: string;
   location: string;
   contractType: string;
+  contractorName?: string;
+  clientContractorAmount?: number;
   currentStage: string;
   lifecycleStage: ProjectLifecycleStage;
   milestones?: StageMilestoneDates;

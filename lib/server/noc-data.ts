@@ -32,17 +32,20 @@ interface RawProfile {
 }
 
 interface RawProjectMember {
-  user_id: string;
+  user_id?: string;
+  discipline?: string | null;
   profiles: RawProfile | null;
 }
 
 interface RawDbProject {
   id: string;
   code: string;
-  description: string;
-  client_name: string | null;
+  description: string | null;
+  client_name?: string | null;
   master_authority_id: number;
-  stage: string;
+  stage: string | null;
+  contractor_name?: string | null;
+  client_contractor_amount?: number | null;
   project_members?: RawProjectMember[] | null;
 }
 
@@ -128,13 +131,13 @@ function mapDbProjectToAssigned(
           roles.docController = name;
           break;
         case 'engineer':
-          if (lower.includes('mep')) {
+          if (pm.discipline === 'mep' || lower.includes('mep')) {
             roles.mepEngineer = name;
-          } else if (lower.includes('architect')) {
+          } else if (pm.discipline === 'architect' || lower.includes('architect')) {
             roles.architectEngineer = name;
-          } else if (lower.includes('structur')) {
+          } else if (pm.discipline === 'structure' || lower.includes('structur')) {
             roles.structureEngineer = name;
-          } else if (lower.includes('civil') || lower.includes('ismail')) {
+          } else if (pm.discipline === 'civil' || lower.includes('civil') || lower.includes('ismail')) {
             roles.civilEngineer = name;
           } else if (roles.civilEngineer === 'Unassigned') {
             roles.civilEngineer = name;
@@ -153,16 +156,19 @@ function mapDbProjectToAssigned(
   };
 
   return {
+    id: p.id,
     code: p.code,
     name: p.description || p.code,
     masterAuthority: masterAuth,
     projectType: 'Commercial & Residential',
     location: 'Dubai, UAE',
     contractType: 'Design & Supervision',
+    contractorName: p.contractor_name || undefined,
+    clientContractorAmount: Number(p.client_contractor_amount) || 0,
     currentStage: p.stage
       ? p.stage.charAt(0).toUpperCase() + p.stage.slice(1)
       : 'Pre-Construction',
-    lifecycleStage: stageMap[p.stage] || 'Pre-Construction',
+    lifecycleStage: p.stage ? stageMap[p.stage] || 'Pre-Construction' : 'Pre-Construction',
     assignedRoles: roles,
   };
 }
@@ -272,8 +278,11 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
         client_name,
         master_authority_id,
         stage,
+        contractor_name,
+        client_contractor_amount,
         project_members (
           user_id,
+          discipline,
           profiles (
             id,
             full_name,
