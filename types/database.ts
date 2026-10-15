@@ -132,12 +132,15 @@ export type Database = {
           archived_by: string | null
           created_at: string
           description: string | null
+          discipline: "mep" | "architect" | "structure" | "civil" | null
           doc_number: string
           file_name: string
           file_path: string
           file_size: number | null
           id: string
           mime_type: string | null
+          project_id: string | null
+          revision: string
           status: Database["public"]["Enums"]["doc_status"]
           status_before_archive:
             | Database["public"]["Enums"]["doc_status"]
@@ -151,12 +154,15 @@ export type Database = {
           archived_by?: string | null
           created_at?: string
           description?: string | null
+          discipline?: "mep" | "architect" | "structure" | "civil" | null
           doc_number: string
           file_name: string
           file_path: string
           file_size?: number | null
           id?: string
           mime_type?: string | null
+          project_id?: string | null
+          revision?: string
           status?: Database["public"]["Enums"]["doc_status"]
           status_before_archive?:
             | Database["public"]["Enums"]["doc_status"]
@@ -170,12 +176,15 @@ export type Database = {
           archived_by?: string | null
           created_at?: string
           description?: string | null
+          discipline?: "mep" | "architect" | "structure" | "civil" | null
           doc_number?: string
           file_name?: string
           file_path?: string
           file_size?: number | null
           id?: string
           mime_type?: string | null
+          project_id?: string | null
+          revision?: string
           status?: Database["public"]["Enums"]["doc_status"]
           status_before_archive?:
             | Database["public"]["Enums"]["doc_status"]
@@ -190,6 +199,13 @@ export type Database = {
             columns: ["archived_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {

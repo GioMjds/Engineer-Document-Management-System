@@ -171,3 +171,101 @@
   - Updated `types/database.ts` with new table and column typings.
   - Verified with `scripts/verify-foundation-and-admin.ts`: 11/11 automated checks passed.
   - Verified `tsc --noEmit` and `pnpm run build`: 17/17 routes compiled cleanly with 0 errors.
+
+- Added **New Project** navigation button for Admin role directly in Executive Command Deck header (`components/dashboard/executive-dashboard-client.tsx`):
+  - Renders cyan `<Link href="/projects/new"><Button ...><FolderPlus /> New Project</Button></Link>` when `currentRole === 'admin'`.
+  - Added `engineer` to `AVAILABLE_ROLES` in dashboard preview switcher.
+  - Verified `tsc --noEmit` and `pnpm run build` with 0 errors across all 17 routes.
+
+- Synchronized Resident Engineer (RE) capabilities per latest `CVTEC_EDMS.md`:
+  - Updated `lib/permissions.ts`: Removed `resident_engineer` from `document.upload` and `document.edit.own`.
+  - Updated `docs/specs/roles/05-resident-engineer.md`: Marked document upload, document edit, and 14-day expiry alerts as denied (`—`) with updated acceptance tests TC-RE-04 and TC-RE-07.
+  - Updated `docs/specs/roles/00-foundation.md`: Updated capability matrix to deny RE uploads and edits.
+  - Updated `scripts/verify-foundation-and-admin.ts`: Added assertions verifying RE is denied `document.upload` and `document.edit.own`.
+  - Verified all 11 foundation & admin tests passed and `tsc --noEmit` passed with 0 errors.
+
+- Integrated Confirmed Client Answers (Questions 1–6):
+  - Question 1 (Clients/contractors do not log in): External parties have no login accounts; email notifications only.
+  - Question 2 (Admin full access): Confirmed full access to review submittals and NOC matrix editing.
+  - Question 3 (Engineer upload only; adjustments via DC):
+    - Removed `engineer` from `document.edit.own` in `lib/permissions.ts`, `docs/specs/roles/00-foundation.md`, and `CVTEC_EDMS.md`.
+    - Updated `docs/specs/roles/04-engineer.md` to remove `editOwnDocument` and enforce upload-only workflows.
+    - Updated `scripts/verify-foundation-and-admin.ts` to assert that Engineers cannot edit uploads directly.
+  - Question 4 (CEO sees all projects): Confirmed full read-only visibility.
+  - Question 5 (3 Stages: Pre-Construction, Construction, Handover):
+    - Migrated 4-stage lifecycle to 3 stages across `types/noc.ts`, `lib/project-lifecycle.ts`, `components/lifecycle/project-lifecycle-stepper.tsx`, `components/lifecycle/stage-gate-drawer.tsx`, `utils/formatters.ts`, `lib/server/noc-data.ts`, `lib/noc-tracker.ts`, `components/dashboard/executive-dashboard-client.tsx`, and `app/(app)/projects/new/project-form.tsx`.
+    - Consolidated Feasibility and Design into Pre-Construction (Information and Design) milestones and stage gates.
+  - Question 6 (Admin only registers projects): Confirmed `/projects/new` is restricted to Admin only.
+  - Verified with `npx tsx scripts/verify-foundation-and-admin.ts`: 11/11 tests passed.
+  - Verified with `tsc --noEmit` and `pnpm run build`: Compiled 17/17 routes with 0 errors.
+
+## Session 2026-10-15
+
+- Implemented Document Controller (DC) role per `docs/specs/roles/02-document-controller.md`:
+  - Created migration `supabase/migrations/20261015000000_dc_role_rls.sql`:
+    - Augmented `public.documents` with `discipline` (`mep`, `architect`, `structure`, `civil`) and `revision` (`TEXT DEFAULT 'R00'`).
+    - Added RLS policies for DC on `public.documents`: `dc_documents_select`, `dc_documents_insert`, `dc_documents_update` scoped strictly to assigned projects via `private.can_see_project(project_id)`.
+    - Enforced zero DELETE policy on `public.documents` for DC (soft delete archive only).
+    - Preserved zero SELECT policy on `public.project_confidential` for DC.
+  - Updated `types/database.ts`:
+    - Added `discipline`, `revision`, and `project_id` to `Row`, `Insert`, and `Update` for `documents`.
+    - Added `documents_project_id_fkey` to `documents` table relationships.
+  - Created `app/actions/documents.ts`:
+    - `uploadDocument(projectId, formData)`: Validates `document.upload`, checks project assignment, stores file, sets initial revision `R00` and status `submitted`.
+    - `editDocument(documentId, updates)`: Validates `document.edit`, checks project scope, updates metadata.
+    - `uploadDocumentRevision(documentId, formData)`: Increments revision (e.g. `R00` -> `R01`), uploads file, resets status to `submitted`.
+    - `archiveDocument(documentId)`: Validates `document.archive`, checks project scope, soft deletes document with `archived_at` and `archived_by`.
+    - `restoreDocument(documentId)`: Validates `archive.restore`, checks project scope, clears archive fields and restores previous status.
+    - `getDownloadUrl(documentId)`: Generates 60-second signed download URL with project access validation.
+  - Created `app/actions/noc.ts`:
+    - `recordNocFeePayment(nocId, input)`: Validates `noc.tracker.update`, records amount, payer, receipt reference.
+    - `updateNocMatrixItem(matrixItemId, newValue, justification)`: Validates `noc.matrix.edit`, enforces minimum 10-character justification, logs revision row, and propagates updates to unobtained project NOCs.
+  - Rebuilt `/documents` UI:
+    - Created `components/documents/document-upload-modal.tsx`: Modal for project selection, discipline, drawing number, title, and file upload.
+    - Created `components/documents/document-edit-modal.tsx`: Modal for editing metadata and indexing information.
+    - Created `components/documents/document-revision-modal.tsx`: Modal for uploading successive revisions.
+    - Created `components/documents/document-row-actions.tsx`: Action controls with Download, Edit Metadata, Upload New Revision, and Archive confirmation (no approve/reject controls).
+    - Created `components/documents/document-table-client.tsx`: High-density engineering data table with search, project filter, discipline filter, status filter, and rejection comments.
+    - Updated `app/(app)/documents/page.tsx`: Scopes project selector to user assignments and queries documents with discipline and revision.
+  - Updated `app/(app)/archive/page.tsx`:
+    - Scoped archived documents to assigned projects with project code display.
+    - Verified Restore button active for DC and Purge button hidden for DC (Admin only).
+  - Created `scripts/verify-document-controller.ts`:
+    - Automated verification covering TC-DC-01 through TC-DC-11.
+    - Executed and verified: 11/11 tests passed.
+  - Verified regression suite `scripts/verify-foundation-and-admin.ts`: 11/11 tests passed.
+  - Verified TypeScript compilation (`tsc --noEmit`): 0 errors.
+  - Verified Next.js production build (`pnpm run build`): 17/17 routes compiled cleanly with 0 errors.
+
+- Implemented Authority Engineer role per `docs/specs/roles/03-authority-engineer.md`:
+  - Created migration `supabase/migrations/20261015010000_authority_engineer_role_rls.sql`:
+    - RLS policies on `public.project_nocs`: `auth_eng_noc_select`, `auth_eng_noc_update` scoped strictly to assigned projects.
+    - RLS policy on `public.noc_matrix_revisions`: `auth_eng_matrix_revisions_insert` with actor verification.
+    - RLS policies on `public.documents`: `auth_eng_documents_select`, `auth_eng_documents_insert`, `auth_eng_documents_update` restricted strictly to own uploads (`uploaded_by = auth.uid()`).
+    - Enforced zero DELETE policy on `public.documents` (no archive/purge privileges).
+    - Preserved zero SELECT policy on `public.project_confidential` (consultant financial confidentiality maintained).
+  - Implemented server actions in `app/actions/noc.ts`:
+    - `submitNocApplication(nocId, input)`: Validates `noc.tracker.update`, verifies prerequisite sequence is in `obtained`/`approved` state (or sequence overridden), sets status to `submitted`, logs to `audit_log`.
+    - `recordAuthorityDecision(nocId, input)`: Validates `noc.tracker.update`; if obtained, validates future expiry date and sets status to `obtained` with automated 14-day expiry tracking; if rejected, enforces minimum 5-character reason, increments revision tag (e.g. `R00` -> `R01`), logs entry to `noc_resubmission_history`, and logs to `audit_log`.
+  - Updated `app/actions/documents.ts`:
+    - `editDocument`: Enforced dual-permission model: DC and Admin can edit any document in project; Authority Engineers can edit own uploads only (`uploaded_by === user.id`).
+  - Upgraded NOC Tracker UI:
+    - Updated `types/noc.ts` to include `Submitted` status in `NocStatus`.
+    - Added `Submitted` high-contrast badge in `components/noc/noc-status-badge.tsx`.
+    - Added `obtained` and `submitted` mappings in `lib/server/noc-data.ts`.
+    - Created `components/noc/submission-modal.tsx`: Dialog for authority reference, submission date, and proof slip upload.
+    - Created `components/noc/authority-result-modal.tsx`: Dialog for recording statutory determination (Approved with future expiry vs Rejected with reason & R01 revision history).
+    - Integrated modals and prerequisite-blocked indicator into `components/noc/noc-inspector-drawer.tsx` with hover tooltip when blocked.
+  - Upgraded Documents UI:
+    - Added `ready_for_authority` filter in `components/documents/document-table-client.tsx` allowing Authority Engineers to find approved packages for submission.
+    - Updated `components/documents/document-row-actions.tsx` to conditionally allow Edit button on own uploads and hide Archive/Purge for Authority Engineers.
+  - Created acceptance test suite `scripts/verify-authority-engineer.ts`:
+    - Automated verification covering TC-AE-01 through TC-AE-11.
+    - Executed and verified: 11/11 tests passed.
+  - Verified regression suites:
+    - `scripts/verify-document-controller.ts`: 11/11 tests passed.
+    - `scripts/verify-foundation-and-admin.ts`: 11/11 tests passed.
+  - Verified TypeScript compilation (`tsc --noEmit`): 0 errors.
+  - Verified Next.js production build (`pnpm run build`): 17/17 routes compiled cleanly with 0 errors.
+
+

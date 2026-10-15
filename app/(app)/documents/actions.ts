@@ -132,6 +132,11 @@ export async function docNumberExists(docNumber: string): Promise<boolean> {
   return !!data;
 }
 
+import {
+  archiveDocument as appArchiveDocument,
+  restoreDocument as appRestoreDocument,
+} from '@/app/actions/documents';
+
 export async function archiveDocument(documentId: string): Promise<
   | {
       ok: true;
@@ -141,67 +146,19 @@ export async function archiveDocument(documentId: string): Promise<
       error: string;
     }
 > {
-  const user = await requireCan('document.archive');
-  const supabase = await createClient();
-
-  const { data: doc } = await supabase
-    .from('documents')
-    .select('id, status')
-    .eq('id', documentId)
-    .single();
-
-  if (!doc) return { ok: false, error: 'Document not found.' };
-  if (doc.status === 'archived')
-    return { ok: false, error: 'Document is already archived.' };
-
-  const { error } = await supabase
-    .from('documents')
-    .update({
-      status: 'archived',
-      status_before_archive: doc.status,
-      archived_at: new Date().toISOString(),
-      archived_by: user.id,
-    })
-    .eq('id', documentId);
-
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath('/documents');
-  revalidatePath('/archive');
-  revalidatePath('/review');
+  const res = await appArchiveDocument(documentId);
+  if (!res.success) {
+    return { ok: false, error: res.error || 'Failed to archive document.' };
+  }
   return { ok: true };
 }
 
 export async function restoreDocument(
   documentId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireCan('archive.restore');
-  const supabase = await createClient();
-
-  const { data: doc } = await supabase
-    .from('documents')
-    .select('id, status, status_before_archive')
-    .eq('id', documentId)
-    .single();
-
-  if (!doc) return { ok: false, error: 'Document not found.' };
-  if (doc.status !== 'archived')
-    return { ok: false, error: 'Document is not archived.' };
-
-  const { error } = await supabase
-    .from('documents')
-    .update({
-      status: doc.status_before_archive ?? 'submitted',
-      status_before_archive: null,
-      archived_at: null,
-      archived_by: null,
-    })
-    .eq('id', documentId);
-
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath('/documents');
-  revalidatePath('/archive');
-  revalidatePath('/review');
+  const res = await appRestoreDocument(documentId);
+  if (!res.success) {
+    return { ok: false, error: res.error || 'Failed to restore document.' };
+  }
   return { ok: true };
 }

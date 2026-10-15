@@ -1,33 +1,3 @@
-/**
- * lib/permissions.ts: single source of truth for "who can do what".
- *
- * Pure TypeScript with no server imports, so it is safe in server actions,
- * server components and client components (e.g. the nav).
- *
- * Rules of use:
- *  - Never write `role === 'x'` or inline role arrays elsewhere. Call can() / requireCan().
- *  - The RLS policies in supabase/migrations must mirror this table. Change both together.
- *  - Lines tagged Q# are still unconfirmed. The default is the least-privilege
- *    choice. Flip the line when the client answers.
- *
- * Answered by the client (2026-10-14):
- *  - Client and contractor staff never log in (they only receive system emails).
- *  - Admin can approve drawings and edit the NOC Matrix.
- *  - Engineers can edit or replace their OWN uploads and add new revisions.
- *  - CEO sees all projects, read-only.
- *  - Admin only registers new projects.
- *  - RE, Authority Eng and Engineer can all upload and edit/replace uploads
- *    (read as own files only, same as Engineer. Flip to 'document.edit' if she
- *    means any file in scope).
- *  - AM cannot record NOC fees (only Authority Eng, DC and Admin).
- *
- *  - Client and contractor are emailed when a NOC is obtained, about to expire
- *    (14 days) or rejected, and the email includes the contract amount.
- *
- * Still open (confirm with the client, see EXTERNAL_EMAIL_AMOUNTS):
- *  - Which contract amount each party may be shown.
- */
-
 // ---------------------------------------------------------------------------
 // Roles
 // ---------------------------------------------------------------------------
@@ -77,7 +47,6 @@ export const PERMISSIONS = {
   // Upload includes uploading a new revision (R01, R02...) after a rejection.
   'document.upload': [
     'admin',
-    'resident_engineer',
     'authority_engineer',
     'engineer',
     'dc',
@@ -86,7 +55,8 @@ export const PERMISSIONS = {
   'document.edit': ['admin', 'dc'],
   // In-place edit or replace of a file the user uploaded. Use canEditDocument(),
   // because this capability alone does not check ownership.
-  'document.edit.own': ['resident_engineer', 'authority_engineer', 'engineer'],
+  // Engineers cannot edit/replace; they only upload new revisions or inform DC for adjustments.
+  'document.edit.own': ['authority_engineer'],
   // "Delete" is always a restorable archive, never a hard delete.
   'document.archive': ['admin', 'dc'],
 

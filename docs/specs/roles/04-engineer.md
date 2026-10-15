@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary & Scope
 
-The **Engineer** (MEP, Architect, Structure, Civil) creates and submits technical engineering drawings and design documentation within **assigned projects only**. An engineer's discipline is assigned per project membership. Engineers upload initial drawings (R00), address reviewer rejection feedback by uploading successive revisions (R01, R02), and edit their **own uploads only**. Once a drawing is approved, in-place replacements are strictly prohibited to maintain audit integrity.
+The **Engineer** (MEP, Architect, Structure, Civil) creates and submits technical engineering drawings and design documentation within **assigned projects only**. An engineer's discipline is assigned per project membership. Engineers upload initial drawings (R00) and address reviewer rejection feedback by uploading successive revisions (R01, R02). Engineers cannot edit or replace existing drawing files directly; any file or metadata adjustments must be routed through the Document Controller (DC).
 
 ---
 
@@ -17,24 +17,23 @@ The **Engineer** (MEP, Architect, Structure, Civil) creates and submits technica
 
 Inherits foundation contracts from [00-foundation.md](./00-foundation.md).
 
-| Capability                |     Allowed      | Constraint / Note                                                                |
-| ------------------------- | :--------------: | -------------------------------------------------------------------------------- |
-| Project Scope             |   **Assigned**   | Accessible strictly within assigned projects                                     |
-| Discipline Assignment     | **Per-Project**  | Stored on `project_members.discipline` (MEP / Architect / Structure / Civil)     |
-| View Documents & NOCs     |      **✓**       | View assigned projects and drawings                                              |
-| Upload Drawings           |      **✓**       | Uploads R00; auto-sets status to `submitted`                                     |
-| Edit Uploads              | **✓ (Own only)** | Strictly restricted to own files (`uploaded_by = auth.uid()`)                    |
-| In-Place Edit Guard       |   **Guarded**    | Disallowed once document reaches `ready_for_authority`; must upload new revision |
-| Upload Revisions          |      **✓**       | Permitted after rejection (R00 -> R01); resets status to `submitted`             |
-| Archive / Soft Delete     |      **—**       | Denied                                                                           |
-| Permanent Purge           |      **—**       | Denied                                                                           |
-| Approve / Reject Drawings |      **—**       | Denied (drawings reviewed by Resident Engineer and Area Manager)                 |
-| Edit NOC Matrix           |      **—**       | Denied                                                                           |
-| Update NOC Tracker        |      **—**       | Denied (view-only summary available)                                             |
-| View Contractor Amount    |      **✓**       | Permitted (`projects.client_contractor_amount`)                                  |
-| View Consultant Amount    |      **—**       | Denied. Hidden at all layers                                                     |
-| User Management           |      **—**       | Denied                                                                           |
-| Expiry Alerts             |      **✓**       | Receives email 14 days prior to NOC expiration                                   |
+| Capability                |     Allowed      | Constraint / Note                                                            |
+| ------------------------- | :--------------: | ---------------------------------------------------------------------------- |
+| Project Scope             |   **Assigned**   | Accessible strictly within assigned projects                                 |
+| Discipline Assignment     | **Per-Project**  | Stored on `project_members.discipline` (MEP / Architect / Structure / Civil) |
+| View Documents & NOCs     |      **✓**       | View assigned projects and drawings                                          |
+| Upload Drawings           |      **✓**       | Uploads R00; auto-sets status to `submitted`                                 |
+| Edit / Replace Uploads    |      **—**       | Denied. Must inform Document Controller (DC) for adjustments                 |
+| Upload Revisions          |      **✓**       | Permitted after rejection (R00 -> R01); resets status to `submitted`         |
+| Archive / Soft Delete     |      **—**       | Denied                                                                       |
+| Permanent Purge           |      **—**       | Denied                                                                       |
+| Approve / Reject Drawings |      **—**       | Denied (drawings reviewed by Resident Engineer and Area Manager)             |
+| Edit NOC Matrix           |      **—**       | Denied                                                                       |
+| Update NOC Tracker        |      **—**       | Denied (view-only summary available)                                         |
+| View Contractor Amount    |      **✓**       | Permitted (`projects.client_contractor_amount`)                              |
+| View Consultant Amount    |      **—**       | Denied. Hidden at all layers                                                 |
+| User Management           |      **—**       | Denied                                                                       |
+| Expiry Alerts             |      **✓**       | Receives email 14 days prior to NOC expiration                               |
 
 ---
 
@@ -65,8 +64,6 @@ Inherits foundation contracts from [00-foundation.md](./00-foundation.md).
 - **RejectionFeedbackCard**: Rendered when a drawing is rejected. Displays:
   - Reviewer name, review level (`re` or `am`), timestamp, and explicit **Rejection Comment**.
   - **UploadRevisionButton**: Opens **RevisionUploadModal** (increments revision to R01, accepts file and changelog notes).
-- **EditDrawingModal**:
-  - Allows editing title/metadata or replacing file if and only if `status !== 'ready_for_authority'` and `uploaded_by === auth.uid()`.
 
 #### `/dashboard`
 
@@ -98,20 +95,6 @@ export async function uploadDrawing(
 // 1. requireCan('document.upload')
 // 2. verifies private.can_see_project(input.projectId)
 // 3. sets uploaded_by = auth.uid(), status = 'submitted', revision = 'R00'
-
-/** Edits own document metadata/file before approval */
-export async function editOwnDocument(
-  documentId: string,
-  updates: {
-    title?: string;
-    metadata?: Record<string, unknown>;
-    newFile?: File;
-  },
-): Promise<{ success: boolean; error?: string }>;
-// Validation:
-// 1. requireCan('document.edit.own')
-// 2. checks document.uploaded_by === auth.uid()
-// 3. checks document.status !== 'ready_for_authority' (throws if approved)
 
 /** Uploads successive revision (e.g. R01) after reviewer rejection */
 export async function uploadDocumentRevision(
@@ -151,21 +134,7 @@ with check (
   and uploaded_by = (select auth.uid())
 );
 
--- Update drawing: must be own upload and not yet approved
-create policy "engineer_documents_update"
-on public.documents
-for update
-using (
-  private.has_role(array['engineer'])
-  and uploaded_by = (select auth.uid())
-  and status != 'ready_for_authority'
-)
-with check (
-  private.has_role(array['engineer'])
-  and uploaded_by = (select auth.uid())
-  and status != 'ready_for_authority'
-);
-
+-- Engineer has ZERO update policy on documents (adjustments/edits performed by DC)
 -- Engineer has ZERO delete policy on documents
 -- Engineer has ZERO select policy on project_confidential
 ```
@@ -177,16 +146,14 @@ with check (
 ### Positive Tests
 
 - [ ] **TC-ENG-01**: Engineer uploads drawing R00 in assigned Project A; document created with status `submitted`.
-- [ ] **TC-ENG-02**: Engineer edits own unapproved drawing; title and file update successfully.
-- [ ] **TC-ENG-03**: Following drawing rejection, Engineer inspects rejection comment and uploads R01; status transitions back to `submitted`.
-- [ ] **TC-ENG-04**: Engineer views contractor amount on assigned project dashboard.
-- [ ] **TC-ENG-05**: Engineer receives 14-day expiry email for project NOCs.
+- [ ] **TC-ENG-02**: Following drawing rejection, Engineer inspects rejection comment and uploads R01; status transitions back to `submitted`.
+- [ ] **TC-ENG-03**: Engineer views contractor amount on assigned project dashboard.
+- [ ] **TC-ENG-04**: Engineer receives 14-day expiry email for project NOCs.
 
 ### Negative & Security Tests
 
-- [ ] **TC-ENG-06**: Engineer attempts to edit a drawing uploaded by another engineer; rejected by RLS.
-- [ ] **TC-ENG-07**: Engineer attempts to in-place replace an approved drawing (`ready_for_authority`); rejected with immutability error.
-- [ ] **TC-ENG-08**: Engineer attempts to access unassigned Project B documents; returns 404 / access denied.
-- [ ] **TC-ENG-09**: Engineer attempts to approve/reject drawings or update review queue; rejected with 403 Forbidden.
-- [ ] **TC-ENG-10**: Engineer attempts to archive or purge a document; rejected with 403 Forbidden.
-- [ ] **TC-ENG-11**: Engineer queries `project_confidential` table directly; returns zero rows.
+- [ ] **TC-ENG-05**: Engineer attempts to edit or replace a drawing directly; denied at UI (no edit button) and server action (`canEditDocument('engineer')` returns false; `requireCan('document.edit.own')` throws 403).
+- [ ] **TC-ENG-06**: Engineer attempts to access unassigned Project B documents; returns 404 / access denied.
+- [ ] **TC-ENG-07**: Engineer attempts to approve/reject drawings or update review queue; rejected with 403 Forbidden.
+- [ ] **TC-ENG-08**: Engineer attempts to archive or purge a document; rejected with 403 Forbidden.
+- [ ] **TC-ENG-09**: Engineer queries `project_confidential` table directly; returns zero rows.

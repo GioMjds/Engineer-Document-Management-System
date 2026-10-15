@@ -105,13 +105,12 @@ export const PERMISSIONS = {
   ],
   'document.upload': [
     'admin',
-    'resident_engineer',
     'authority_engineer',
     'engineer',
     'dc',
   ],
   'document.edit': ['admin', 'dc'],
-  'document.edit.own': ['resident_engineer', 'authority_engineer', 'engineer'],
+  'document.edit.own': ['authority_engineer'],
   'document.archive': ['admin', 'dc'],
 
   // Archive Management

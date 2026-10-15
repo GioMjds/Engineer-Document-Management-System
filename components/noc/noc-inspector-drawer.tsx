@@ -15,7 +15,11 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  Send,
+  FileCheck,
 } from 'lucide-react';
+import { SubmissionModal } from './submission-modal';
+import { AuthorityResultModal } from './authority-result-modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -91,6 +95,10 @@ export function NocInspectorDrawer({
   const [isOverrideDialogOpen, setIsOverrideDialogOpen] = useState(false);
   const [overrideJustification, setOverrideJustification] = useState('');
   const [isSubmittingOverride, setIsSubmittingOverride] = useState(false);
+
+  // Statutory submission and decision modals
+  const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
+  const [isDecisionModalOpen, setIsDecisionModalOpen] = useState(false);
 
   // Resubmission history accordion state
   const [showHistory, setShowHistory] = useState(true);
@@ -393,30 +401,44 @@ export function NocInspectorDrawer({
               />
             </div>
 
-            <div className="pt-2 flex flex-wrap gap-1.5">
-              {(
-                [
-                  'Approved',
-                  'Pending for Payment',
-                  'Rejected',
-                  'Not Started',
-                ] as NocStatus[]
-              ).map((st) => (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => handleStatusChange(st)}
-                  disabled={item.status === st}
-                  className={`px-2 py-1 text-xs rounded border transition-colors ${
-                    item.status === st
-                      ? 'bg-primary text-primary-foreground font-medium'
-                      : 'bg-background hover:bg-muted text-foreground'
-                  }`}
-                >
-                  Mark {st}
-                </button>
-              ))}
-            </div>
+            {/* Authority Permitting Primary Workflow Actions */}
+            {['admin', 'authority_engineer', 'dc'].includes(currentUserRole) && (
+              <div className="pt-2 border-t space-y-2">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                  Authority Permitting Actions
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div
+                    title={
+                      isBlocked
+                        ? `Prerequisite NOC [Seq #${prerequisite?.sequenceNumber} - ${prerequisite?.reviewingAuthority}] not yet obtained.`
+                        : 'Submit application on authority portal'
+                    }
+                  >
+                    <Button
+                      size="sm"
+                      className="w-full h-8 text-xs font-semibold flex items-center justify-center gap-1.5 bg-primary text-primary-foreground"
+                      disabled={isBlocked || item.status === 'Approved'}
+                      onClick={() => setIsSubmissionModalOpen(true)}
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span>{item.status === 'Submitted' ? 'Update Submission' : 'Submit Application'}</span>
+                    </Button>
+                  </div>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full h-8 text-xs font-semibold flex items-center justify-center gap-1.5 border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
+                    disabled={item.status === 'Not Started'}
+                    onClick={() => setIsDecisionModalOpen(true)}
+                  >
+                    <FileCheck className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Record Decision</span>
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {item.status === 'Rejected' && item.rejectionReason && (
               <div className="mt-2 p-2.5 rounded bg-rose-50 border border-rose-200 text-rose-900 text-xs dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-900">
@@ -1067,6 +1089,22 @@ export function NocInspectorDrawer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Statutory Submission Modal */}
+      <SubmissionModal
+        open={isSubmissionModalOpen}
+        onOpenChange={setIsSubmissionModalOpen}
+        noc={item}
+        onSubmitted={(updated) => onUpdateNoc(updated)}
+      />
+
+      {/* Statutory Authority Decision Modal */}
+      <AuthorityResultModal
+        open={isDecisionModalOpen}
+        onOpenChange={setIsDecisionModalOpen}
+        noc={item}
+        onDecisionRecorded={(updated) => onUpdateNoc(updated)}
+      />
     </>
   );
 }

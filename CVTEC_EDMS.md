@@ -6,21 +6,21 @@ Baseline of the intended workflow, built from Jaylene's answers. Use it to test 
 
 ✓ allowed · — not allowed · ? open question. "Assigned" = only projects the user is assigned to.
 
-| Capability                          | Admin          | CEO             | AM                       | RE          | Auth Eng    | Engineer    | DC             |
-| ----------------------------------- | -------------- | --------------- | ------------------------ | ----------- | ----------- | ----------- | -------------- |
-| Project scope                       | All            | All (read-only) | All                      | Assigned    | Assigned    | Assigned    | Assigned       |
-| View documents and NOCs             | ✓              | ✓               | ✓                        | ✓           | ✓           | ✓           | ✓              |
-| Upload documents                    | ✓              | —               | —                        | ✓           | ✓           | ✓           | ✓              |
-| Edit / new revision                 | ✓              | —               | —                        | ✓ own files | ✓ own files | ✓ own files | ✓ any in scope |
-| Delete (archive, restorable)        | ✓              | —               | —                        | —           | —           | —           | ✓              |
-| Approve drawings                    | ✓ either level | —               | ✓ if flagged / RE absent | ✓ first     | —           | —           | —              |
-| Edit NOC Matrix                     | ✓              | —               | —                        | —           | ✓           | —           | ✓              |
-| Update NOC tracker (status, fees)   | ✓              | —               | —                        | —           | ✓           | —           | ✓              |
-| Override NOC sequence (with reason) | ✓              | —               | —                        | —           | —           | —           | —              |
-| See client–consultant amount        | ✓              | ✓               | ✓                        | —           | —           | —           | —              |
-| See client–contractor amount        | ✓              | ✓               | ✓                        | ✓           | ✓           | ✓           | ✓              |
-| Manage users, roles, assignments    | ✓              | —               | —                        | —           | —           | —           | —              |
-| Expiry email (14 days before)       | —              | —               | —                        | —           | ✓           | ✓           | ✓              |
+| Capability                          | Admin          | CEO             | AM                       | RE       | Auth Eng    | Engineer      | DC             |
+| ----------------------------------- | -------------- | --------------- | ------------------------ | -------- | ----------- | ------------- | -------------- |
+| Project scope                       | All            | All (read-only) | All                      | Assigned | Assigned    | Assigned      | Assigned       |
+| View documents and NOCs             | ✓              | ✓               | ✓                        | ✓        | ✓           | ✓             | ✓              |
+| Upload documents                    | ✓              | —               | —                        | x        | ✓           | ✓             | ✓              |
+| Edit / new revision                 | ✓              | —               | —                        | x        | ✓ own files | x (inform DC) | ✓ any in scope |
+| Delete (archive, restorable)        | ✓              | —               | —                        | —        | —           | —             | ✓              |
+| Approve drawings                    | ✓ either level | —               | ✓ if flagged / RE absent | ✓ first  | —           | —             | —              |
+| Edit NOC Matrix                     | ✓              | —               | —                        | —        | ✓           | —             | ✓              |
+| Update NOC tracker (status, fees)   | ✓              | —               | —                        | —        | ✓           | —             | ✓              |
+| Override NOC sequence (with reason) | ✓              | —               | —                        | —        | —           | —             | —              |
+| See client–consultant amount        | ✓              | ✓               | ✓                        | —        | —           | —             | —              |
+| See client–contractor amount        | ✓              | ✓               | ✓                        | ✓        | ✓           | ✓             | ✓              |
+| Manage users, roles, assignments    | ✓              | —               | —                        | —        | —           | —             | —              |
+| Expiry email (14 days before)       | —              | —               | —                        | —        | ✓           | ✓             | ✓              |
 
 ## 2. Document and NOC lifecycle (all roles)
 
@@ -149,7 +149,6 @@ flowchart TD
 L["Login"] --> D["Dashboard: assigned projects"]
 D --> X["Documents"]
 X --> U["Upload drawing R00"]
-X --> W["Edit or replace own upload"]
 U --> S["Status: submitted"]
 S --> R{"Review result"}
 R -- "Approved" --> OK["Done, visible to Authority Eng"]
@@ -158,7 +157,7 @@ C --> S
 D --> N["NOC Tracker (view, own project)"]
 ```
 
-Upload, view, downloadNo delete, no approve, no consultant amountEdit / replace own uploads + new revisions
+Upload only (R00, R01); for adjustments inform DC. No delete, no approve, no consultant amount.
 
 ### Document Controller (DC)
 
@@ -178,17 +177,17 @@ M --> M1["Edit item with justification"]
 D --> E["Gets 14-day expiry email"]
 ```
 
-Create / update / archive in own projectsNo Users page, no approving drawings, no other projects
+Create / update / archive in own projects. No Users page, no approving drawings, no other projects.
 
-## 4. Answered by Jaylene (14 Oct 2026)
+## 4. Answered by Jaylene (14-15 Oct 2026)
 
 1. Client and contractor staff never log in. They only receive emails from the system.
 2. Admin can approve drawings and edit the NOC Matrix.
-3. Engineers can edit or replace their own uploads and add new revisions.
+3. Engineers cannot edit or replace their own uploads (they only upload; for adjustments they must inform the DC).
 4. The CEO sees all projects, read-only.
-5. CVTEC uses 3 stages: Pre-construction, Construction, Handover.
+5. CVTEC uses 3 stages: Pre-Construction (Information and Design), Construction, Handover.
 6. Only Admin registers new projects.
-7. RE, Authority Engineer and Engineer can all upload and edit or replace their uploads (read here as their own files).
+7. Authority Engineer can upload and edit own files. RE cannot upload or edit. Engineers upload only.
 8. AM cannot record NOC fees. Only Authority Engineer, Document Controller and Admin can.
 
 ## 5. Still open

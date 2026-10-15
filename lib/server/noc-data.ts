@@ -145,8 +145,8 @@ function mapDbProjectToAssigned(
   }
 
   const stageMap: Record<string, ProjectLifecycleStage> = {
-    planning: 'Feasibility',
-    design: 'Design',
+    planning: 'Pre-Construction',
+    design: 'Pre-Construction',
     construction: 'Construction',
     handover: 'Handover',
     completed: 'Handover',
@@ -161,8 +161,8 @@ function mapDbProjectToAssigned(
     contractType: 'Design & Supervision',
     currentStage: p.stage
       ? p.stage.charAt(0).toUpperCase() + p.stage.slice(1)
-      : 'Design',
-    lifecycleStage: stageMap[p.stage] || 'Design',
+      : 'Pre-Construction',
+    lifecycleStage: stageMap[p.stage] || 'Pre-Construction',
     assignedRoles: roles,
   };
 }
@@ -182,7 +182,9 @@ function mapDbNocToItem(
 
   const statusMap: Record<string, NocStatus> = {
     approved: 'Approved',
+    obtained: 'Approved',
     rejected: 'Rejected',
+    submitted: 'Submitted',
     not_started: 'Not Started',
     pending_payment: 'Pending for Payment',
     pending_for_payment: 'Pending for Payment',

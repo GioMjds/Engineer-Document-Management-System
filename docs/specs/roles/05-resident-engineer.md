@@ -25,8 +25,8 @@ Inherits foundation contracts from [00-foundation.md](./00-foundation.md).
 | Approve (Escalate)        |      **✓**       | Flags drawing for Area Manager; transitions to `escalated`    |
 | Reject Drawing            |      **✓**       | Requires mandatory comment; transitions to `rejected`         |
 | View Documents & NOCs     |      **✓**       | In assigned projects only                                     |
-| Upload Documents          |      **✓**       | Permitted for own files                                       |
-| Edit Documents            | **✓ (Own only)** | Strictly restricted to files where `uploaded_by = auth.uid()` |
+| Upload Documents          |      **—**       | Denied. Drawings submitted by Engineer and DC for RE review  |
+| Edit Documents            |      **—**       | Denied                                                        |
 | Archive / Soft Delete     |      **—**       | Denied                                                        |
 | Permanent Purge           |      **—**       | Denied                                                        |
 | Edit NOC Matrix / Tracker |      **—**       | Denied                                                        |
@@ -34,7 +34,7 @@ Inherits foundation contracts from [00-foundation.md](./00-foundation.md).
 | View Contractor Amount    |      **✓**       | Permitted (`projects.client_contractor_amount`)               |
 | View Consultant Amount    |      **—**       | Denied. Hidden at all layers                                  |
 | User Management           |      **—**       | Denied                                                        |
-| Expiry Alerts             |      **✓**       | Receives email 14 days prior to NOC expiration                |
+| Expiry Alerts             |      **—**       | Denied (only Auth Eng, Engineer, DC receive expiry alerts)    |
 
 ---
 
@@ -158,13 +158,13 @@ with check (
 - [ ] **TC-RE-01**: RE approves submitted drawing without escalation; status changes to `ready_for_authority` and drawing exits review queue.
 - [ ] **TC-RE-02**: RE approves submitted drawing with escalation; status changes to `escalated` and drawing appears in Area Manager review queue.
 - [ ] **TC-RE-03**: RE rejects submitted drawing with detailed comment; status changes to `rejected` and rejection comment displays to author.
-- [ ] **TC-RE-04**: RE uploads and edits own technical submission document.
 
 ### Negative & Security Tests
 
+- [ ] **TC-RE-04**: RE attempts to upload drawing; denied at UI (no upload button) and server action (`requireCan('document.upload')` throws 403).
 - [ ] **TC-RE-05**: RE attempts to reject drawing with blank comment; rejected by validation guard and database check constraint.
 - [ ] **TC-RE-06**: RE attempts to review a drawing on an unassigned project; returns 404 / access denied.
-- [ ] **TC-RE-07**: RE attempts to edit an upload owned by another user; rejected by RLS.
+- [ ] **TC-RE-07**: RE attempts to edit or replace an upload; rejected by permission guard (`requireCan('document.edit.own')` throws 403).
 - [ ] **TC-RE-08**: RE attempts to archive or permanently purge a document; rejected with 403 Forbidden.
 - [ ] **TC-RE-09**: RE queries `project_confidential` table directly; returns zero rows.
 - [ ] **TC-RE-10**: RE attempts to edit NOC matrix or tracker fees; rejected with 403 Forbidden.

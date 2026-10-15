@@ -19,8 +19,7 @@ export interface ProjectLifecycleStepperProps {
 }
 
 const LIFECYCLE_STAGES = [
-  'Feasibility',
-  'Design',
+  'Pre-Construction',
   'Construction',
   'Handover',
 ] satisfies ProjectLifecycleStage[];

@@ -30,7 +30,7 @@ export function ProjectRegistrationForm() {
   const [name, setName] = useState('');
   const [stage, setStage] = useState<
     'planning' | 'design' | 'construction' | 'handover' | 'completed'
-  >('planning');
+  >('design');
   const [clientName, setClientName] = useState('');
   const [contractorName, setContractorName] = useState('');
   const [clientEmails, setClientEmails] = useState('');
@@ -104,10 +104,9 @@ export function ProjectRegistrationForm() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="planning">
-                    Planning (Pre-construction)
+                  <SelectItem value="design">
+                    Pre-Construction (Information and Design)
                   </SelectItem>
-                  <SelectItem value="design">Design</SelectItem>
                   <SelectItem value="construction">Construction</SelectItem>
                   <SelectItem value="handover">Handover</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>

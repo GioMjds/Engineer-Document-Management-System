@@ -1,16 +1,13 @@
 export type ProjectLifecycleStage =
-  | 'Feasibility'
-  | 'Design'
+  | 'Pre-Construction'
   | 'Construction'
   | 'Handover';
 
 export interface StageMilestoneDates {
-  feasibility?: {
+  preConstruction?: {
     kickoffDate?: string;
     surveyCompletionDate?: string;
     conceptApprovalDate?: string;
-  };
-  design?: {
     commencementDate?: string;
     plannedCompletionDate?: string;
     buildingPermitDate?: string;
@@ -24,6 +21,7 @@ export interface StageMilestoneDates {
     commissioningDate?: string;
     civilDefenceInspectionDate?: string;
     bccIssuanceDate?: string;
+    targetCompletionDate?: string;
   };
 }
 
@@ -81,7 +79,8 @@ export type NocStatus =
   | 'Not Started'
   | 'Pending for Payment'
   | 'Not Needed'
-  | 'Expired';
+  | 'Expired'
+  | 'Submitted';
 
 export type SubmittedBy =
   | 'Consultant'

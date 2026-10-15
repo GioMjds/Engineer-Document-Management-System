@@ -2,7 +2,7 @@ import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { AppHeader } from '@/components/layout/app-header';
+import { AppShell } from '@/components/layout/app-shell';
 
 export const metadata: Metadata = {
   title: {
@@ -34,19 +34,18 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   } satisfies Record<string, string>;
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col transition-colors">
-      <AppHeader
-        user={{
-          email: user.email,
-          full_name: user.full_name,
-          role: user.role,
-        }}
-        roleLabel={roleLabelMap[user.role] ?? user.role.replace('_', ' ')}
-        onSignOut={signOut}
-      />
-      <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 sm:px-6 lg:px-8 py-6">
-        {children}
-      </main>
-    </div>
+    <AppShell
+      user={{
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role,
+      }}
+      roleLabel={roleLabelMap[user.role] ?? user.role.replace('_', ' ')}
+      onSignOut={signOut}
+      // Optional: pass pending counts keyed by nav href, e.g. { '/review': 4 }
+      // badges={await getNavBadges(user)}
+    >
+      {children}
+    </AppShell>
   );
 }

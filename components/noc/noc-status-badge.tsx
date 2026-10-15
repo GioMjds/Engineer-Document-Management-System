@@ -21,6 +21,8 @@ const styles = {
     'bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700',
   'Not Needed':
     'bg-zinc-50 text-zinc-400 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-500 dark:border-zinc-800',
+  Submitted:
+    'bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800',
 } satisfies Record<NocStatus, string>;
 
 export function NocStatusBadge({

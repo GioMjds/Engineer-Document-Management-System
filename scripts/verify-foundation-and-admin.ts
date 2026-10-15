@@ -75,7 +75,7 @@ if (!can('area_manager', 'amount.consultant.view')) {
 }
 console.log('✓ Area Manager capabilities verified (second-level review, zero upload, no fee recording)');
 
-// 6. Verify Resident Engineer (Level-1 review, own uploads only, no confidential amounts)
+// 6. Verify Resident Engineer (Level-1 review, no uploads or edits, no confidential amounts)
 if (!can('resident_engineer', 'review.decide') || reviewStageFor('resident_engineer') !== 'first') {
   throw new Error('Resident Engineer must be level-1 reviewer');
 }
@@ -85,7 +85,10 @@ if (can('resident_engineer', 'amount.consultant.view')) {
 if (can('resident_engineer', 'document.archive') || can('resident_engineer', 'archive.purge')) {
   throw new Error('Resident Engineer must NOT archive or purge documents');
 }
-console.log('✓ Resident Engineer capabilities verified (first-level review, confidential amount hidden)');
+if (can('resident_engineer', 'document.upload') || can('resident_engineer', 'document.edit.own')) {
+  throw new Error('Resident Engineer must NOT upload or edit documents (drawings submitted by Engineer/DC)');
+}
+console.log('✓ Resident Engineer capabilities verified (first-level review, zero upload/edit, confidential amount hidden)');
 
 // 7. Verify Authority Engineer (NOC pipeline owner, no review rights, no purge)
 if (!can('authority_engineer', 'noc.matrix.edit') || !can('authority_engineer', 'noc.tracker.update')) {
@@ -117,25 +120,28 @@ if (!can('dc', 'document.archive') || !can('dc', 'archive.restore') || !can('dc'
 }
 console.log('✓ Document Controller capabilities verified (no user management, no approvals, safe archive/restore)');
 
-// 9. Verify Engineer (Uploads, own edits only, no approvals, no archive)
-if (!can('engineer', 'document.upload') || !can('engineer', 'document.edit.own')) {
-  throw new Error('Engineer must be able to upload and edit own documents');
+// 9. Verify Engineer (Uploads only, NO edits, no approvals, no archive)
+if (!can('engineer', 'document.upload')) {
+  throw new Error('Engineer must be able to upload documents');
 }
-if (can('engineer', 'document.edit')) {
-  throw new Error('Engineer must NOT have generic edit on other users files');
+if (can('engineer', 'document.edit') || can('engineer', 'document.edit.own')) {
+  throw new Error('Engineer must NOT edit documents directly (must inform DC for adjustments)');
 }
 if (can('engineer', 'review.decide')) {
   throw new Error('Engineer must NOT approve drawings');
 }
-console.log('✓ Engineer capabilities verified (own uploads only, no approval rights)');
+console.log('✓ Engineer capabilities verified (upload only, no direct edits, no approval rights)');
 
 // 10. Verify canEditDocument Ownership Enforcement
 const docOwnedByAlice = { uploadedBy: 'user-alice' };
-if (!canEditDocument('engineer', 'user-alice', docOwnedByAlice)) {
-  throw new Error('Alice should be allowed to edit her own upload');
+if (canEditDocument('engineer', 'user-alice', docOwnedByAlice)) {
+  throw new Error('Engineer must NOT edit own upload directly (must route to DC)');
 }
-if (canEditDocument('engineer', 'user-bob', docOwnedByAlice)) {
-  throw new Error('Bob must NOT be allowed to edit Alice upload');
+if (!canEditDocument('authority_engineer', 'user-alice', docOwnedByAlice)) {
+  throw new Error('Authority Engineer should be allowed to edit own upload');
+}
+if (canEditDocument('authority_engineer', 'user-bob', docOwnedByAlice)) {
+  throw new Error('Authority Engineer must NOT edit other user upload');
 }
 if (!canEditDocument('dc', 'user-bob', docOwnedByAlice)) {
   throw new Error('DC should be allowed to edit any document in scope');

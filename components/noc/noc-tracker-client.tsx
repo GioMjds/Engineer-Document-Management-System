@@ -75,7 +75,7 @@ export function NocTrackerClient({
   const currentGateReadiness = useMemo(() => {
     if (!currentProject) {
       return {
-        stage: 'Design' as ProjectLifecycleStage,
+        stage: 'Pre-Construction' as ProjectLifecycleStage,
         nextStage: 'Construction' as ProjectLifecycleStage,
         totalPrerequisites: 0,
         satisfiedPrerequisites: 0,
@@ -330,7 +330,7 @@ export function NocTrackerClient({
       {/* Project lifecycle stepper ribbon. */}
       {currentProject && (
         <ProjectLifecycleStepper
-          currentStage={currentProject.lifecycleStage || 'Design'}
+          currentStage={currentProject.lifecycleStage || 'Pre-Construction'}
           readiness={currentGateReadiness}
           milestones={currentProject.milestones}
           onOpenGateDetails={() => setIsGateDrawerOpen(true)}

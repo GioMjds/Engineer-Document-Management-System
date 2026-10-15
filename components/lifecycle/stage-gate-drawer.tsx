@@ -85,40 +85,37 @@ function getMilestoneFieldsForStage(
 ): MilestoneFieldConfig[] {
   if (!milestones) return [];
   switch (stage) {
-    case 'Feasibility':
+    case 'Pre-Construction':
       return [
         {
           key: 'kickoffDate',
           label: 'Kick-off Date',
-          value: milestones.feasibility?.kickoffDate,
+          value: milestones.preConstruction?.kickoffDate,
         },
         {
           key: 'surveyCompletionDate',
           label: 'Topographical Survey',
-          value: milestones.feasibility?.surveyCompletionDate,
+          value: milestones.preConstruction?.surveyCompletionDate,
         },
         {
           key: 'conceptApprovalDate',
           label: 'Concept Approval',
-          value: milestones.feasibility?.conceptApprovalDate,
+          value: milestones.preConstruction?.conceptApprovalDate,
         },
-      ];
-    case 'Design':
-      return [
         {
           key: 'commencementDate',
           label: 'Design Commencement',
-          value: milestones.design?.commencementDate,
+          value: milestones.preConstruction?.commencementDate,
         },
         {
           key: 'plannedCompletionDate',
           label: 'Planned Completion',
-          value: milestones.design?.plannedCompletionDate,
+          value: milestones.preConstruction?.plannedCompletionDate,
         },
         {
           key: 'buildingPermitDate',
           label: 'Building Permit Issuance',
-          value: milestones.design?.buildingPermitDate,
+          value: milestones.preConstruction?.buildingPermitDate,
         },
       ];
     case 'Construction':
@@ -217,7 +214,7 @@ export function StageGateDrawer({
 
   // Update a single milestone date field in draft.
   const handleMilestoneFieldChange = (
-    stageKey: 'feasibility' | 'design' | 'construction' | 'handover',
+    stageKey: 'preConstruction' | 'construction' | 'handover',
     field: string,
     value: string,
   ) => {
@@ -255,12 +252,15 @@ export function StageGateDrawer({
 
   const stageToKey = (
     stage: ProjectLifecycleStage,
-  ): 'feasibility' | 'design' | 'construction' | 'handover' => {
-    return stage.toLowerCase() as
-      | 'feasibility'
-      | 'design'
-      | 'construction'
-      | 'handover';
+  ): 'preConstruction' | 'construction' | 'handover' => {
+    switch (stage) {
+      case 'Pre-Construction':
+        return 'preConstruction';
+      case 'Construction':
+        return 'construction';
+      case 'Handover':
+        return 'handover';
+    }
   };
 
   return (

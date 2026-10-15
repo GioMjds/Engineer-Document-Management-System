@@ -2,114 +2,132 @@ import type { Metadata } from 'next';
 import { requireUser } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
-import { UploadForm } from './upload-form';
-import { DownloadButton } from './download-button';
-import { ArchiveButton } from './archive-button';
-import { StatusBadge } from '@/components/status-badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { formatSize } from '@/utils/formatters';
+import { DocumentUploadModal } from './document-upload-modal';
+import { DocumentTableClient, type DocumentItem } from './document-table-client';
 
 export const metadata: Metadata = {
   title: 'Documents',
-  description: 'Manage and track engineering documents',
-}
+  description: 'Manage and track engineering documents across assigned projects',
+};
 
 export default async function DocumentsPage() {
   const user = await requireUser();
   const supabase = await createClient();
 
   const isDC = can(user.role, 'document.edit');
+  const canUpload = can(user.role, 'document.upload');
 
-  // RLS filters this automatically per role
+  // Fetch projects visible to this user
+  let projects: Array<{ id: string; name: string; code: string }> = [];
+
+  if (can(user.role, 'project.viewAll')) {
+    const { data: allProjects } = await supabase
+      .from('projects')
+      .select('id, description, code')
+      .order('code', { ascending: true });
+
+    projects = (allProjects || []).map((p) => ({
+      id: p.id,
+      name: p.description,
+      code: p.code,
+    }));
+  } else {
+    const { data: memberProjects } = await supabase
+      .from('project_members')
+      .select('project:projects(id, description, code)')
+      .eq('user_id', user.id);
+
+    projects = (memberProjects || [])
+      .map((m) => m.project as { id: string; description: string; code: string } | null)
+      .filter((p): p is { id: string; description: string; code: string } => !!p)
+      .map((p) => ({
+        id: p.id,
+        name: p.description,
+        code: p.code,
+      }));
+  }
+
+  // Fetch active documents in scope (RLS filters automatically)
   const { data: documents } = await supabase
     .from('documents')
-    .select(
-      'id, doc_number, title, status, file_size, created_at, uploaded_by, reviews(decision, comment, created_at)',
-    )
+    .select(`
+      id,
+      project_id,
+      doc_number,
+      title,
+      description,
+      discipline,
+      revision,
+      status,
+      file_name,
+      file_size,
+      created_at,
+      uploaded_by,
+      projects (
+        id,
+        code,
+        description
+      ),
+      reviews:document_reviews (
+        decision,
+        comment,
+        created_at
+      )
+    `)
     .neq('status', 'archived')
     .order('created_at', { ascending: false });
 
+  const mappedDocuments: DocumentItem[] = (documents || []).map((d) => {
+    const proj = d.projects as { id: string; code: string; description: string } | null;
+    const revs = d.reviews as Array<{
+      decision: 'approve' | 'reject';
+      comment: string | null;
+      created_at: string;
+    }> | null;
+
+    return {
+      id: d.id,
+      project_id: d.project_id,
+      doc_number: d.doc_number,
+      title: d.title,
+      description: d.description,
+      discipline: d.discipline as DocumentItem['discipline'],
+      revision: d.revision || 'R00',
+      status: d.status,
+      file_name: d.file_name,
+      file_size: d.file_size,
+      created_at: d.created_at,
+      uploaded_by: d.uploaded_by,
+      projectName: proj?.description,
+      projectCode: proj?.code,
+      reviews: revs || [],
+    };
+  });
+
   return (
     <div className="space-y-6">
-      <UploadForm userId={user.id} />
-
-      <div>
-        <h2 className="mb-3 text-lg font-semibold">Documents</h2>
-        <div className="rounded-lg border border-border bg-card overflow-hidden shadow-xs">
-          <Table className="w-full">
-            <TableHeader>
-              <TableRow className="bg-muted/40">
-                <TableHead className="w-36 font-semibold whitespace-nowrap">Doc #</TableHead>
-                <TableHead className="min-w-56 font-semibold">Title</TableHead>
-                <TableHead className="w-36 font-semibold whitespace-nowrap">Status</TableHead>
-                <TableHead className="w-24 font-semibold whitespace-nowrap">Size</TableHead>
-                <TableHead className="w-28 font-semibold whitespace-nowrap">Submitted</TableHead>
-                <TableHead className="w-36 text-right font-semibold whitespace-nowrap">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {documents?.length ? (
-                documents.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell className="font-mono text-xs font-medium whitespace-nowrap">
-                      {d.doc_number}
-                    </TableCell>
-                    <TableCell className="whitespace-normal break-words max-w-xs md:max-w-md">
-                      <span className="font-medium text-foreground">{d.title}</span>
-                    </TableCell>
-                    <TableCell className="whitespace-normal">
-                      <StatusBadge status={d.status} />
-                      {d.status === 'rejected' && d.reviews?.length > 0 && (
-                        <div className="mt-1 text-xs text-red-700 dark:text-red-400">
-                          Reason:{' '}
-                          {
-                            [...d.reviews].sort((a, b) =>
-                              b.created_at.localeCompare(a.created_at),
-                            )[0].comment
-                          }
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {formatSize(d.file_size)}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {new Date(d.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <DownloadButton documentId={d.id} />
-                        {isDC && (
-                          <ArchiveButton
-                            documentId={d.id}
-                            docNumber={d.doc_number}
-                          />
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    No documents yet.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">
+            Document Library
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Manage drawings, revisions, and engineering document records across assigned projects.
+          </p>
         </div>
+
+        {canUpload && projects.length > 0 && (
+          <DocumentUploadModal projects={projects} />
+        )}
       </div>
+
+      <DocumentTableClient
+        documents={mappedDocuments}
+        projects={projects}
+        isDC={isDC}
+        currentUserRole={user.role}
+        currentUserId={user.id}
+      />
     </div>
   );
 }

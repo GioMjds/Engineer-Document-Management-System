@@ -10,12 +10,10 @@ import type {
 
 export const INITIAL_PROJECT_MILESTONES: Record<string, StageMilestoneDates> = {
   '23015': {
-    feasibility: {
+    preConstruction: {
       kickoffDate: '2026-03-01',
       surveyCompletionDate: '2026-04-15',
       conceptApprovalDate: '2026-05-10',
-    },
-    design: {
       commencementDate: '2026-06-01',
       plannedCompletionDate: '2026-11-15',
     },
@@ -25,15 +23,13 @@ export const INITIAL_PROJECT_MILESTONES: Record<string, StageMilestoneDates> = {
     },
     handover: {
       targetCompletionDate: '2028-03-30',
-    } as StageMilestoneDates['handover'], // temporary for now, as handover milestones are not yet defined for this project
+    },
   },
   '23016': {
-    feasibility: {
+    preConstruction: {
       kickoffDate: '2026-01-10',
       surveyCompletionDate: '2026-02-28',
       conceptApprovalDate: '2026-04-05',
-    },
-    design: {
       commencementDate: '2026-04-15',
       plannedCompletionDate: '2026-08-10',
       buildingPermitDate: '2026-08-15',
@@ -52,9 +48,7 @@ export function getNextLifecycleStage(
   current: ProjectLifecycleStage,
 ): ProjectLifecycleStage | 'Completed' {
   switch (current) {
-    case 'Feasibility':
-      return 'Design';
-    case 'Design':
+    case 'Pre-Construction':
       return 'Construction';
     case 'Construction':
       return 'Handover';
@@ -78,7 +72,7 @@ export function evaluateStageGateReadiness(
   disciplineStatus?: ProjectDisciplineStatus,
 ): StageGateReadiness {
   const currentStage = (project.lifecycleStage ||
-    'Design') as ProjectLifecycleStage;
+    'Pre-Construction') as ProjectLifecycleStage;
   const nextStage = getNextLifecycleStage(currentStage);
   const projectNocs = allNocs.filter((n) => n.projectCode === project.code);
   const milestones =
@@ -86,7 +80,7 @@ export function evaluateStageGateReadiness(
 
   const prerequisites: StageGatePrerequisiteItem[] = [];
 
-  if (currentStage === 'Feasibility') {
+  if (currentStage === 'Pre-Construction') {
     const topo = disciplineStatus?.specialists.find(
       (s) => s.type === 'Topographical',
     );
@@ -115,13 +109,13 @@ export function evaluateStageGateReadiness(
       id: 'gate-concept',
       title: 'Concept Master Plan & Affection Sign-Off',
       category: 'regulatory_milestone',
-      isSatisfied: Boolean(milestones.feasibility?.conceptApprovalDate),
-      sourceReference: milestones.feasibility?.conceptApprovalDate,
+      isSatisfied: Boolean(milestones.preConstruction?.conceptApprovalDate),
+      sourceReference: milestones.preConstruction?.conceptApprovalDate,
       mandatoryForNextStage: true,
     });
-  } else if (currentStage === 'Design') {
+
     const dewa = projectNocs.find(
-      (n) => n.reviewingAuthority === 'DEWA' && n.stage === 'Design NOC',
+      (n) => n.reviewingAuthority === 'DEWA' && (n.stage === 'Design NOC' || n.stage === 'Information NOC'),
     );
     prerequisites.push({
       id: 'gate-dewa',
@@ -160,9 +154,9 @@ export function evaluateStageGateReadiness(
       id: 'gate-permit',
       title: 'Official Building Permit Issuance',
       category: 'regulatory_milestone',
-      isSatisfied: Boolean(milestones.design?.buildingPermitDate),
+      isSatisfied: Boolean(milestones.preConstruction?.buildingPermitDate),
       sourceReference:
-        milestones.design?.buildingPermitDate || 'Pending Issuance',
+        milestones.preConstruction?.buildingPermitDate || 'Pending Issuance',
       mandatoryForNextStage: true,
     });
   } else if (currentStage === 'Construction') {

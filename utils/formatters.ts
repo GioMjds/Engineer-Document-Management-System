@@ -35,17 +35,14 @@ export function getStageMilestoneDate(
 ): string | undefined {
   if (!milestones) return undefined;
   switch (stage) {
-    case 'Feasibility':
+    case 'Pre-Construction':
       return (
-        milestones.feasibility?.conceptApprovalDate ||
-        milestones.feasibility?.surveyCompletionDate ||
-        milestones.feasibility?.kickoffDate
-      );
-    case 'Design':
-      return (
-        milestones.design?.buildingPermitDate ||
-        milestones.design?.plannedCompletionDate ||
-        milestones.design?.commencementDate
+        milestones.preConstruction?.buildingPermitDate ||
+        milestones.preConstruction?.conceptApprovalDate ||
+        milestones.preConstruction?.plannedCompletionDate ||
+        milestones.preConstruction?.commencementDate ||
+        milestones.preConstruction?.surveyCompletionDate ||
+        milestones.preConstruction?.kickoffDate
       );
     case 'Construction':
       return (
