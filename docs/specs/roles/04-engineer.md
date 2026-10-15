@@ -17,23 +17,23 @@ The **Engineer** (MEP, Architect, Structure, Civil) creates and submits technica
 
 Inherits foundation contracts from [00-foundation.md](./00-foundation.md).
 
-| Capability                |     Allowed      | Constraint / Note                                                            |
-| ------------------------- | :--------------: | ---------------------------------------------------------------------------- |
-| Project Scope             |   **Assigned**   | Accessible strictly within assigned projects                                 |
-| Discipline Assignment     | **Per-Project**  | Stored on `project_members.discipline` (MEP / Architect / Structure / Civil) |
-| View Documents & NOCs     |      **✓**       | View assigned projects and drawings                                          |
-| Upload Drawings           |      **✓**       | Uploads R00; auto-sets status to `submitted`                                 |
-| Edit / Replace Uploads    |      **—**       | Denied. Must inform Document Controller (DC) for adjustments                 |
-| Upload Revisions          |      **✓**       | Permitted after rejection (R00 -> R01); resets status to `submitted`         |
-| Archive / Soft Delete     |      **—**       | Denied                                                                       |
-| Permanent Purge           |      **—**       | Denied                                                                       |
-| Approve / Reject Drawings |      **—**       | Denied (drawings reviewed by Resident Engineer and Area Manager)             |
-| Edit NOC Matrix           |      **—**       | Denied                                                                       |
-| Update NOC Tracker        |      **—**       | Denied (view-only summary available)                                         |
-| View Contractor Amount    |      **✓**       | Permitted (`projects.client_contractor_amount`)                              |
-| View Consultant Amount    |      **—**       | Denied. Hidden at all layers                                                 |
-| User Management           |      **—**       | Denied                                                                       |
-| Expiry Alerts             |      **✓**       | Receives email 14 days prior to NOC expiration                               |
+| Capability                |     Allowed     | Constraint / Note                                                            |
+| ------------------------- | :-------------: | ---------------------------------------------------------------------------- |
+| Project Scope             |  **Assigned**   | Accessible strictly within assigned projects                                 |
+| Discipline Assignment     | **Per-Project** | Stored on `project_members.discipline` (MEP / Architect / Structure / Civil) |
+| View Documents & NOCs     |      **✓**      | View assigned projects and drawings                                          |
+| Upload Drawings           |      **✓**      | Uploads R00; auto-sets status to `submitted`                                 |
+| Edit / Replace Uploads    |      **—**      | Denied. Must inform Document Controller (DC) for adjustments                 |
+| Upload Revisions          |      **✓**      | Permitted after rejection (R00 -> R01); resets status to `submitted`         |
+| Archive / Soft Delete     |      **—**      | Denied                                                                       |
+| Permanent Purge           |      **—**      | Denied                                                                       |
+| Approve / Reject Drawings |      **—**      | Denied (drawings reviewed by Resident Engineer and Area Manager)             |
+| Edit NOC Matrix           |      **—**      | Denied                                                                       |
+| Update NOC Tracker        |      **—**      | Denied (view-only summary available)                                         |
+| View Contractor Amount    |      **✓**      | Permitted (`projects.client_contractor_amount`)                              |
+| View Consultant Amount    |      **—**      | Denied. Hidden at all layers                                                 |
+| User Management           |      **—**      | Denied                                                                       |
+| Expiry Alerts             |      **✓**      | Receives email 14 days prior to NOC expiration                               |
 
 ---
 
