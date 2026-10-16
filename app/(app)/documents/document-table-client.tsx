@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/status-badge';
 import { DocumentRowActions } from './document-row-actions';
 import { formatSize } from '@/utils/formatters';
+import { RejectionFeedbackCard } from './rejection-feedback-card';
 
 export interface DocumentItem {
   id: string;
@@ -31,11 +32,13 @@ export interface DocumentItem {
   uploaded_by: string;
   projectName?: string;
   projectCode?: string;
-  reviews?: Array<{
+  reviews?: {
     decision: 'approve' | 'reject';
     comment: string | null;
+    level?: string;
+    reviewerName?: string;
     created_at: string;
-  }>;
+  }[];
 }
 
 interface ProjectOption {
@@ -46,9 +49,12 @@ interface ProjectOption {
 
 const DISCIPLINE_COLORS: Record<string, string> = {
   mep: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
-  architect: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800',
-  structure: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800',
-  civil: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
+  architect:
+    'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800',
+  structure:
+    'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800',
+  civil:
+    'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
 };
 
 export function DocumentTableClient({
@@ -91,7 +97,9 @@ export function DocumentTableClient({
         const query = search.toLowerCase();
         const matchesNumber = doc.doc_number.toLowerCase().includes(query);
         const matchesTitle = doc.title.toLowerCase().includes(query);
-        const matchesProject = doc.projectCode?.toLowerCase().includes(query) || doc.projectName?.toLowerCase().includes(query);
+        const matchesProject =
+          doc.projectCode?.toLowerCase().includes(query) ||
+          doc.projectName?.toLowerCase().includes(query);
         if (!matchesNumber && !matchesTitle && !matchesProject) {
           return false;
         }
@@ -162,7 +170,11 @@ export function DocumentTableClient({
         </div>
 
         <div className="text-xs text-muted-foreground self-end md:self-center whitespace-nowrap">
-          Showing <span className="font-semibold text-foreground">{filteredDocuments.length}</span> of {documents.length} docs
+          Showing{' '}
+          <span className="font-semibold text-foreground">
+            {filteredDocuments.length}
+          </span>{' '}
+          of {documents.length} docs
         </div>
       </div>
 
@@ -171,15 +183,31 @@ export function DocumentTableClient({
         <Table className="w-full">
           <TableHeader>
             <TableRow className="bg-muted/40">
-              <TableHead className="w-32 font-semibold whitespace-nowrap">Doc #</TableHead>
+              <TableHead className="w-32 font-semibold whitespace-nowrap">
+                Doc #
+              </TableHead>
               <TableHead className="min-w-48 font-semibold">Title</TableHead>
-              <TableHead className="w-24 font-semibold whitespace-nowrap">Project</TableHead>
-              <TableHead className="w-28 font-semibold whitespace-nowrap">Discipline</TableHead>
-              <TableHead className="w-16 font-semibold whitespace-nowrap">Rev</TableHead>
-              <TableHead className="w-36 font-semibold whitespace-nowrap">Status</TableHead>
-              <TableHead className="w-20 font-semibold whitespace-nowrap">Size</TableHead>
-              <TableHead className="w-28 font-semibold whitespace-nowrap">Submitted</TableHead>
-              <TableHead className="w-32 text-right font-semibold whitespace-nowrap">Actions</TableHead>
+              <TableHead className="w-24 font-semibold whitespace-nowrap">
+                Project
+              </TableHead>
+              <TableHead className="w-28 font-semibold whitespace-nowrap">
+                Discipline
+              </TableHead>
+              <TableHead className="w-16 font-semibold whitespace-nowrap">
+                Rev
+              </TableHead>
+              <TableHead className="w-36 font-semibold whitespace-nowrap">
+                Status
+              </TableHead>
+              <TableHead className="w-20 font-semibold whitespace-nowrap">
+                Size
+              </TableHead>
+              <TableHead className="w-28 font-semibold whitespace-nowrap">
+                Submitted
+              </TableHead>
+              <TableHead className="w-32 text-right font-semibold whitespace-nowrap">
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -187,11 +215,14 @@ export function DocumentTableClient({
               filteredDocuments.map((d) => {
                 const rejectionReview =
                   d.status === 'rejected' && d.reviews && d.reviews.length > 0
-                    ? [...d.reviews].sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+                    ? [...d.reviews].sort((a, b) =>
+                        b.created_at.localeCompare(a.created_at),
+                      )[0]
                     : null;
 
                 const disciplineClass = d.discipline
-                  ? DISCIPLINE_COLORS[d.discipline] || 'bg-muted text-muted-foreground'
+                  ? DISCIPLINE_COLORS[d.discipline] ||
+                    'bg-muted text-muted-foreground'
                   : 'bg-muted text-muted-foreground';
 
                 return (
@@ -199,8 +230,10 @@ export function DocumentTableClient({
                     <TableCell className="font-mono text-xs font-semibold whitespace-nowrap">
                       {d.doc_number}
                     </TableCell>
-                    <TableCell className="whitespace-normal break-words max-w-xs md:max-w-md">
-                      <div className="font-medium text-foreground">{d.title}</div>
+                    <TableCell className="whitespace-normal wrap-break-word max-w-xs md:max-w-md">
+                      <div className="font-medium text-foreground">
+                        {d.title}
+                      </div>
                       {d.description && (
                         <div className="text-xs text-muted-foreground truncate max-w-sm">
                           {d.description}
@@ -222,16 +255,38 @@ export function DocumentTableClient({
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <Badge variant="outline" className="font-mono text-[11px] py-0 px-1.5 font-bold text-[#02a9d3]">
+                      <Badge
+                        variant="outline"
+                        className="font-mono text-[11px] py-0 px-1.5 font-bold text-[#02a9d3]"
+                      >
                         {d.revision || 'R00'}
                       </Badge>
                     </TableCell>
                     <TableCell className="whitespace-normal">
                       <StatusBadge status={d.status} />
                       {rejectionReview && (
-                        <div className="mt-1 text-xs text-red-700 dark:text-red-400 font-medium">
-                          Reason: {rejectionReview.comment}
-                        </div>
+                        <RejectionFeedbackCard
+                          document={{
+                            id: d.id,
+                            doc_number: d.doc_number,
+                            title: d.title,
+                            revision: d.revision || 'R00',
+                            file_name: d.file_name,
+                            uploaded_by: d.uploaded_by,
+                          }}
+                          review={{
+                            level: rejectionReview.level || 're',
+                            reviewerName: rejectionReview.reviewerName,
+                            comment: rejectionReview.comment,
+                            createdAt: rejectionReview.created_at,
+                          }}
+                          canUploadRevision={
+                            currentUserRole === 'engineer' &&
+                            Boolean(
+                              currentUserId && d.uploaded_by === currentUserId,
+                            )
+                          }
+                        />
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
@@ -251,6 +306,7 @@ export function DocumentTableClient({
                           revision: d.revision || 'R00',
                           file_name: d.file_name,
                           uploaded_by: d.uploaded_by,
+                          status: d.status,
                         }}
                         isDC={isDC}
                         currentUserRole={currentUserRole}

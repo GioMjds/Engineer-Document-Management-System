@@ -3,13 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import {
-  Download,
-  Edit2,
-  FileUp,
-  Archive,
-  MoreVertical,
-} from 'lucide-react';
+import { Download, Edit2, FileUp, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -29,6 +23,7 @@ interface DocumentRowItem {
   description: string | null;
   discipline: 'mep' | 'architect' | 'structure' | 'civil' | null;
   revision: string;
+  status: string;
   file_name: string;
   uploaded_by?: string;
 }
@@ -52,7 +47,10 @@ export function DocumentRowActions({
   const canArchive = isDC;
   const canRevise =
     isDC ||
-    ['authority_engineer', 'engineer'].includes(currentUserRole ?? '');
+    currentUserRole === 'authority_engineer' ||
+    (currentUserRole === 'engineer' &&
+      document.status === 'rejected' &&
+      Boolean(currentUserId && document.uploaded_by === currentUserId));
   const [downloading, setDownloading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [revisionOpen, setRevisionOpen] = useState(false);
@@ -165,7 +163,8 @@ export function DocumentRowActions({
                   <span className="font-semibold text-foreground">
                     {document.doc_number}
                   </span>
-                  ? This will soft-delete the document and move it to the Archive view.
+                  ? This will soft-delete the document and move it to the
+                  Archive view.
                 </DialogDescription>
               </DialogHeader>
 

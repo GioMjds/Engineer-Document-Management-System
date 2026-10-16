@@ -311,3 +311,7 @@
     - `scripts/verify-noc-matrix.ts`: 4/4 passed.
   - Verified TypeScript compilation (`npx tsc --noEmit`): 0 errors.
   - Verified Next.js production build (`pnpm run build`): 18/18 routes compiled cleanly with 0 errors.
+- Implemented Task 3 Step 5 in `app/(app)/documents/page.tsx`:
+  - Updated document review mapping to extract `level` and `reviewer.full_name`.
+  - Mapped `reviewerName` and `level` into each document's `reviews` list for `RejectionFeedbackCard`.
+  - Verified with `npx tsc --noEmit`: 0 errors.

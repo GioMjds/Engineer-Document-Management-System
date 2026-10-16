@@ -3,11 +3,15 @@ import { requireUser } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { DocumentUploadModal } from './document-upload-modal';
-import { DocumentTableClient, type DocumentItem } from './document-table-client';
+import {
+  DocumentTableClient,
+  type DocumentItem,
+} from './document-table-client';
 
 export const metadata: Metadata = {
   title: 'Documents',
-  description: 'Manage and track engineering documents across assigned projects',
+  description:
+    'Manage and track engineering documents across assigned projects',
 };
 
 export default async function DocumentsPage() {
@@ -38,8 +42,13 @@ export default async function DocumentsPage() {
       .eq('user_id', user.id);
 
     projects = (memberProjects || [])
-      .map((m) => m.project as { id: string; description: string; code: string } | null)
-      .filter((p): p is { id: string; description: string; code: string } => !!p)
+      .map(
+        (m) =>
+          m.project as { id: string; description: string; code: string } | null,
+      )
+      .filter(
+        (p): p is { id: string; description: string; code: string } => !!p,
+      )
       .map((p) => ({
         id: p.id,
         name: p.description,
@@ -50,7 +59,8 @@ export default async function DocumentsPage() {
   // Fetch active documents in scope (RLS filters automatically)
   const { data: documents } = await supabase
     .from('documents')
-    .select(`
+    .select(
+      `
       id,
       project_id,
       doc_number,
@@ -71,19 +81,34 @@ export default async function DocumentsPage() {
       reviews:document_reviews (
         decision,
         comment,
-        created_at
+        level,
+        created_at,
+        reviewer:profiles (
+          full_name
+        )
       )
-    `)
+    `,
+    )
     .neq('status', 'archived')
     .order('created_at', { ascending: false });
 
   const mappedDocuments: DocumentItem[] = (documents || []).map((d) => {
-    const proj = d.projects as { id: string; code: string; description: string } | null;
-    const revs = d.reviews as Array<{
-      decision: 'approve' | 'reject';
-      comment: string | null;
-      created_at: string;
-    }> | null;
+    const proj = d.projects as {
+      id: string;
+      code: string;
+      description: string;
+    } | null;
+    const revs = d.reviews as
+      | {
+          decision: 'approve' | 'reject';
+          comment: string | null;
+          level?: string;
+          created_at: string;
+          reviewer?: {
+            full_name?: string | null;
+          } | null;
+        }[]
+      | null;
 
     return {
       id: d.id,
@@ -100,7 +125,13 @@ export default async function DocumentsPage() {
       uploaded_by: d.uploaded_by,
       projectName: proj?.description,
       projectCode: proj?.code,
-      reviews: revs || [],
+      reviews: (revs || []).map((rev) => ({
+        decision: rev.decision,
+        comment: rev.comment,
+        level: rev.level,
+        reviewerName: rev.reviewer?.full_name || undefined,
+        created_at: rev.created_at,
+      })),
     };
   });
 
@@ -112,7 +143,8 @@ export default async function DocumentsPage() {
             Document Library
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Manage drawings, revisions, and engineering document records across assigned projects.
+            Manage drawings, revisions, and engineering document records across
+            assigned projects.
           </p>
         </div>
 
