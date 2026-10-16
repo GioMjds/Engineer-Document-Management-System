@@ -71,7 +71,7 @@ LANGUAGE sql STABLE AS $$
 $$;
 
 -- 9. Security Definer Helper: private.can_see_project
-CREATE OR REPLACE FUNCTION private.can_see_project(target_project_id UUID)
+CREATE OR REPLACE FUNCTION private.can_see_project(p_project UUID)
 RETURNS BOOLEAN
 SECURITY DEFINER SET search_path = ''
 LANGUAGE sql STABLE AS $$
@@ -85,7 +85,7 @@ LANGUAGE sql STABLE AS $$
         OR EXISTS (
           SELECT 1
           FROM public.project_members pm
-          WHERE pm.project_id = target_project_id
+          WHERE pm.project_id = p_project
             AND pm.user_id = p.id
         )
       )

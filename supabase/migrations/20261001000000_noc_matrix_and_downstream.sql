@@ -69,19 +69,24 @@ ALTER TABLE public.project_noc_requirements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.noc_resubmission_history ENABLE ROW LEVEL SECURITY;
 
 -- Read policies: authenticated users
+DROP POLICY IF EXISTS "Allow read matrix requirements" ON public.noc_matrix_requirements;
 CREATE POLICY "Allow read matrix requirements" ON public.noc_matrix_requirements
   FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Allow read matrix revisions" ON public.noc_matrix_revisions;
 CREATE POLICY "Allow read matrix revisions" ON public.noc_matrix_revisions
   FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Allow read project requirements" ON public.project_noc_requirements;
 CREATE POLICY "Allow read project requirements" ON public.project_noc_requirements
   FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Allow read resubmission history" ON public.noc_resubmission_history;
 CREATE POLICY "Allow read resubmission history" ON public.noc_resubmission_history
   FOR SELECT TO authenticated USING (true);
 
 -- Write policies: restricted to authority_engineer, dc, admin
+DROP POLICY IF EXISTS "Allow write matrix requirements" ON public.noc_matrix_requirements;
 CREATE POLICY "Allow write matrix requirements" ON public.noc_matrix_requirements
   FOR ALL TO authenticated
   USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'authority_engineer', 'dc')));

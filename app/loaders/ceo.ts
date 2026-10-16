@@ -82,8 +82,21 @@ export async function getExecutiveDashboardSummary(): Promise<ExecutiveKpiSummar
       .is('archived_at', null)
       .order('code', { ascending: true });
 
-    if (projError || !dbProjects || dbProjects.length === 0) {
+    if (projError) {
       return computeSeedSummary();
+    }
+
+    if (!dbProjects || dbProjects.length === 0) {
+      return {
+        activeProjectsCount: 0,
+        nocCompletionPercentage: 0,
+        criticalDelaysCount: 0,
+        expiringNocsCount: 0,
+        reviewBacklogCount: 0,
+        totalContractorAmount: 0,
+        totalConsultantAmount: 0,
+        projectFinancials: [],
+      };
     }
 
     const projectIds = dbProjects.map((p) => p.id);

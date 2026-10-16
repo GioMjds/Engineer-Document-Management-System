@@ -9,10 +9,12 @@ export function ReviewDialog({
   documentId,
   docNumber,
   title,
+  userRole,
 }: {
   documentId: string;
   docNumber: string;
   title: string;
+  userRole?: string;
 }) {
   const doc: ReviewDocument = {
     id: documentId,
@@ -27,5 +29,5 @@ export function ReviewDialog({
     createdAt: new Date().toISOString(),
   };
 
-  return <DrawingReviewModal document={doc} />;
+  return <DrawingReviewModal document={doc} userRole={userRole} />;
 }

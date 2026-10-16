@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Search, Filter, ShieldCheck, Building2, MapPin } from 'lucide-react';
+import Link from 'next/link';
+import { Search, Filter, ShieldCheck, Building2, MapPin, FolderPlus } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -204,6 +207,27 @@ export function NocTrackerClient({
     projectNocs.forEach((n) => set.add(n.reviewingAuthority));
     return Array.from(set).sort();
   }, [projectNocs]);
+
+  if (!currentProject) {
+    return (
+      <div className="p-12 text-center border rounded-lg bg-card space-y-4">
+        <Building2 className="mx-auto h-12 w-12 text-muted-foreground/60" />
+        <h2 className="text-lg font-semibold">No Projects Registered</h2>
+        <p className="text-sm text-muted-foreground max-w-md mx-auto">
+          There are currently no active projects. {currentUserRole === 'admin' ? 'Create a new project to get started.' : 'Contact an administrator to assign you to a project.'}
+        </p>
+        {currentUserRole === 'admin' && (
+          <Link
+            href="/projects/new"
+            className={cn(buttonVariants({ size: 'default' }), 'gap-1.5')}
+          >
+            <FolderPlus className="size-4" />
+            New Project
+          </Link>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

@@ -43,7 +43,7 @@ FOR UPDATE
 USING (
   private.has_role(ARRAY['area_manager'])
   AND (
-    status = 'escalated'
+    status::text = 'escalated'
     OR (
       status = 'submitted'
       AND NOT EXISTS (
@@ -57,7 +57,7 @@ USING (
 )
 WITH CHECK (
   private.has_role(ARRAY['area_manager'])
-  AND status IN ('ready_for_authority', 'rejected')
+  AND status::text IN ('ready_for_authority', 'rejected')
 );
 
 -- Area Manager has ZERO INSERT or DELETE policies on public.documents

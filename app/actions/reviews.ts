@@ -80,7 +80,7 @@ export async function submitResidentEngineerReview(
   // 3. Query document and verify project access
   const { data: doc, error: fetchError } = await supabase
     .from('documents')
-    .select('id, project_id, status, revision')
+    .select('id, project_id, status, revision, doc_number')
     .eq('id', parsed.data.documentId)
     .maybeSingle();
 
@@ -139,13 +139,36 @@ export async function submitResidentEngineerReview(
   });
 
   if (reviewError) {
+    // Rollback document status update if review logging fails
+    await supabase
+      .from('documents')
+      .update({ status: doc.status, updated_at: new Date().toISOString() })
+      .eq('id', doc.id);
     return { success: false, error: reviewError.message };
   }
 
-  // 8. Revalidate paths
+  // 8. Log review action in central audit_log
+  await supabase.from('audit_log').insert({
+    actor_id: user.id,
+    action: `DOCUMENT_REVIEW_${parsed.data.decision.toUpperCase()}`,
+    entity: 'documents',
+    entity_id: doc.id,
+    metadata: {
+      doc_number: doc.doc_number,
+      level: reviewLevel,
+      previous_status: doc.status,
+      new_status: newStatus,
+      comment: parsed.data.comment?.trim() || null,
+      escalated: Boolean(parsed.data.escalateToAreaManager),
+    },
+  });
+
+  // 9. Revalidate paths
   revalidatePath('/review');
   revalidatePath('/reviews');
   revalidatePath('/documents');
+  revalidatePath('/dashboard');
+  revalidatePath('/');
 
   return { success: true, newStatus };
 }
@@ -232,7 +255,7 @@ export async function submitAreaManagerReview(
   // 4. Query document and verify existence
   const { data: doc, error: fetchError } = await supabase
     .from('documents')
-    .select('id, project_id, status, revision')
+    .select('id, project_id, status, revision, doc_number')
     .eq('id', parsed.data.documentId)
     .maybeSingle();
 
@@ -293,10 +316,30 @@ export async function submitAreaManagerReview(
   });
 
   if (reviewError) {
+    // Rollback document status update if review logging fails
+    await supabase
+      .from('documents')
+      .update({ status: doc.status, updated_at: new Date().toISOString() })
+      .eq('id', doc.id);
     return { success: false, error: reviewError.message };
   }
 
-  // 9. Revalidate paths
+  // 9. Log review action in central audit_log
+  await supabase.from('audit_log').insert({
+    actor_id: user.id,
+    action: `DOCUMENT_REVIEW_${parsed.data.decision.toUpperCase()}`,
+    entity: 'documents',
+    entity_id: doc.id,
+    metadata: {
+      doc_number: doc.doc_number,
+      level: reviewLevel,
+      previous_status: doc.status,
+      new_status: newStatus,
+      comment: parsed.data.comment?.trim() || null,
+    },
+  });
+
+  // 10. Revalidate paths
   revalidatePath('/review');
   revalidatePath('/reviews');
   revalidatePath('/documents');

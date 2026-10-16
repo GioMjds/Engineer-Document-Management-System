@@ -46,7 +46,7 @@ Following the execution of the **Shared Foundation Migration**, **Role-Gated Sec
 | **3-Stage Project Lifecycle & Gates** | Pre-Construction, Construction, Handover with milestone tracking and prerequisite checklists.            | 3-stage sequential stepper and slide-over stage gate inspector with role-gated advance logic across NOC Tracker and Executive Dashboard.                             | **Completed & Verified**  |
 | **Dual-Axis Project Scoping (RLS)**   | Engineers and DCs view assigned projects only; Admin, CEO, Area Manager see all.                         | Enforced in database via `private.can_see_project(project_id)` and in server queries via `lib/server/noc-data.ts`.                                                   | **Completed & Verified**  |
 | **Project Setup Workspace**           | Register new project, assign authority template, generate code, configure team members.                  | `/projects/new` created with `ProjectRegistrationForm` and `app/actions/admin.ts: createProject`. Template NOC instantiation and auto-counter pending.               | **In Progress (Partial)** |
-| **Two-Tier Drawing Review**           | RE performs Level-1 review (approve, escalate, reject); AM performs Level-2 review.                      | UI page `/review` exists with `ReviewDialog`. Backend inserts into legacy `reviews` table and fails to update document status.                                       | **Critical Gap (Broken)** |
+| **Two-Tier Drawing Review**           | RE performs Level-1 review (approve, escalate, reject); AM performs Level-2 review.                      | `/review` workspace with `ReviewQueueTable`, `DrawingReviewModal`, `submitResidentEngineerReview`, and `submitAreaManagerReview` updating `documents.status` and logging to `document_reviews` and `audit_log`. | **Completed & Verified**  |
 | **Automated Expiry & 14-Day Alerts**  | Auto-flip to `Expired` on expiry date; email DC and Authority Engineer 14 days prior.                    | UI badge and KPI table identify upcoming expiries. Automated server cron (`pg_cron`) and email dispatcher (Resend) pending.                                          | **Pending**               |
 | **External Stakeholder Alerts**       | Email client and contractor on `noc.obtained`, `noc.expiring`, `noc.rejected` (no login).                | Stakeholder contact emails captured on `projects`; event taxonomy defined in `lib/permissions.ts`. Delivery worker pending.                                          | **Pending**               |
 
@@ -67,7 +67,7 @@ Following the execution of the **Shared Foundation Migration**, **Role-Gated Sec
 - [x] **`private` Schema Security Definers**: `private.has_role()` and `private.can_see_project()` preventing RLS recursion.
 - [x] **Document Controller RLS Migration**: `20261015000000_dc_role_rls.sql` executed and verified.
 - [x] **Authority Engineer RLS Migration**: `20261015010000_authority_engineer_role_rls.sql` executed and verified.
-- [ ] **Resident Engineer & Area Manager RLS Migration**: Dedicated migration for `document_reviews` and multi-tier review queue.
+- [x] **Resident Engineer & Area Manager RLS Migration**: `20261016000000_resident_engineer_role_rls.sql` and `20261016010000_area_manager_role_rls.sql` executed and verified.
 
 ---
 
@@ -77,7 +77,7 @@ Following the execution of the **Shared Foundation Migration**, **Role-Gated Sec
 - [x] **Admin Governance Actions**: User invitation, role modification, self-demotion guards, project registration, permanent purge in `app/actions/admin.ts`.
 - [x] **Document Controller Actions**: Document upload (R00), metadata editing, revision increment (R01), soft-delete archive, archive restore in `app/actions/documents.ts`.
 - [x] **Authority Engineer Actions**: Statutory application submission, authority approval with future expiry validation, rejection logging in `app/actions/noc.ts`.
-- [ ] **Two-Tier Review Server Action**: Replace `app/(app)/review/actions.ts` to insert into `document_reviews` and mutate `documents.status` (`ready_for_authority`, `escalated`, `rejected`).
+- [x] **Two-Tier Review Server Actions**: `submitResidentEngineerReview` and `submitAreaManagerReview` write to `document_reviews`, update `documents.status`, log to `audit_log`, and rollback status on error.
 - [ ] **Project Template NOC Instantiator**: Batch-copy `noc_matrix_items` into `project_nocs` when registering a new project in `createProject`.
 - [ ] **Project Code Auto-Incrementer**: Query and increment `project_code_counters` to generate `YY` + `NNN` (e.g. `26001`).
 - [ ] **Automated Expiry Cron Job**: Daily job at 00:00 GST setting status to `Expired` when `expiry_date <= CURRENT_DATE`.
@@ -95,7 +95,7 @@ Following the execution of the **Shared Foundation Migration**, **Role-Gated Sec
 - [x] **Document Management Workspace (`/documents`)**: High-density table with discipline filter, revision badges, download URLs, edit/revision modals, and `ready_for_authority` filter.
 - [x] **Document Archive (`/archive`)**: Soft-delete archive with project scoping, restore confirmation, and role-gated permanent purge dialog.
 - [x] **Project Setup Form (`/projects/new`)**: Admin form for project metadata, client/contractor contacts, and contract amounts.
-- [ ] **Review Queue Interface (`/review`)**: Upgrade `ReviewDialog` to multi-decision modal: RE Direct Approve, RE Escalate to Area Manager, and Reject with mandatory comment.
+- [x] **Review Queue Workspace (`/review`)**: High-density `ReviewQueueTable` and `DrawingReviewModal` with RE Direct Approve, RE Escalate to Area Manager, AM Direct Approve, and Reject with mandatory feedback.
 - [ ] **Project Setup Improvements**: Add authority template dropdown and auto-generate code button in `ProjectRegistrationForm`.
 
 ---
@@ -115,17 +115,16 @@ Following the execution of the **Shared Foundation Migration**, **Role-Gated Sec
 
 The following architectural and runtime points are vulnerable to failure and require immediate remediation:
 
-### 1. The Review Queue Black Hole (`app/(app)/review/actions.ts`)
+### 1. The Review Queue Disconnect [RESOLVED]
 
-- **Problem**: `submitReview` inserts into a deprecated table named `reviews`, rather than `document_reviews`.
-- **Break Point**: It **never updates `documents.status`**. When an engineer uploads a drawing (`status = 'submitted'`), any approval or rejection executed in `/review` leaves the document in `submitted` forever.
-- **Impact**: Authority Engineers filter for `ready_for_authority` drawings to submit to Dubai authorities. Because the review action never sets `ready_for_authority`, statutory submissions are permanently blocked.
+- **Resolution**: `submitResidentEngineerReview` and `submitAreaManagerReview` write directly to `public.document_reviews`, mutate `public.documents.status` (`ready_for_authority`, `escalated`, `rejected`), rollback status upon audit insertion failure, and log governance records to `public.audit_log`.
+- **Status**: Completed and verified via automated test suites `verify-resident-engineer.ts` and `verify-area-manager.ts`.
 
 ### 2. New Project Empty NOC Tracker (`app/actions/admin.ts: createProject`)
 
-- **Problem**: `createProject` inserts a row into `projects` and `project_confidential`, but does **not instantiate `project_nocs`** from `noc_matrix_items`.
-- **Break Point**: Any project created through `/projects/new` contains 0 NOC records.
-- **Impact**: When users navigate to `/noc-tracker` for the new project, the tracker displays no NOCs. Furthermore, `master_authority_id` is hardcoded to 1, preventing projects from selecting Dubai Municipality or Dubai Development Authority.
+- **Problem**: Previously, `createProject` inserted a project without instantiating `project_nocs` or checklist requirements from `noc_matrix_items`.
+- **Resolution**: `createProject` in `app/actions/admin.ts` now automatically queries `noc_matrix_items` for the selected `master_authority_id`, cloning all statutory NOCs into `public.project_nocs` and associated deliverable checklists into `public.project_noc_requirements`. Supports fallback to `SEED_MATRIX_TEMPLATES` for unseeded master authorities (e.g. Dubai Municipality), rolls back project creation upon fatal configuration errors, logs `instantiated_nocs_count` to `public.audit_log`, and revalidates `/projects`, `/noc-tracker`, `/noc`, and `/dashboard`.
+- **Status**: Completed and verified via end-to-end database instantiation test and full test suite regression pass.
 
 ### 3. Mock Fallback Mutation Blackhole (`lib/server/noc-data.ts` & `app/actions/noc.ts`)
 

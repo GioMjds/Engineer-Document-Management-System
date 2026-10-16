@@ -434,3 +434,29 @@
 - Refactored `components/noc/authority-result-modal.tsx` to `react-hook-form`, Zod `superRefine`, and reactive watchers.
 - Refactored `app/(app)/documents/document-upload-modal.tsx` to `react-hook-form` and Zod resolver with file validations.
 - Verified Next.js production build (`pnpm build`): 20/20 routes compiled, static page generation and typechecking passed with 0 errors.
+- Fixed review queue actions (`app/(app)/review/actions.ts` & `app/actions/reviews.ts`):
+  - Updated actions to write to `public.document_reviews` and update `public.documents.status` (`ready_for_authority`, `escalated`, `rejected`).
+  - Added atomic status rollback if `document_reviews` audit insert fails.
+  - Added audit logging to `public.audit_log` (`DOCUMENT_REVIEW_APPROVE` / `DOCUMENT_REVIEW_REJECT`).
+  - Smart-routed `submitReview` for Area Managers, Resident Engineers, and Admins.
+  - Verified with 7 test suites (100% pass) and production build.
+
+- Cleared seeded data from live Supabase project for client proposal testing:
+  - Created and executed `scripts/clean-seed-data.ts`.
+  - Wiped mock projects 23015 & 23016, project members, project NOCs, documents, and reviews.
+  - Cleared document storage bucket blobs in Supabase Storage.
+  - Preserved all 10 user profiles across all 7 canonical roles.
+  - Preserved statutory master authorities, reviewing authorities, and NOC matrix templates.
+  - Updated `lib/server/noc-data.ts` and `app/loaders/ceo.ts` to cleanly return empty states on 0 projects without mock fallback resurrection.
+  - Added empty state handling in `components/noc/noc-tracker-client.tsx` with Admin New Project button.
+  - Enhanced `createProject` in `app/actions/admin.ts` to automatically instantiate statutory NOC tracker items and checklist requirements from matrix templates for selected master authority.
+- Hardened template NOC auto-instantiation during project creation:
+  - Created migration `supabase/migrations/20261016030000_admin_project_nocs_rls.sql` for Admin RLS management.
+  - Implemented automatic template cloning in `createProject` via `adminClient` for both DB items and `SEED_MATRIX_TEMPLATES` fallback.
+  - Added deliverable checklist requirement cloning from matrix requirements with seed requirement fallback.
+  - Added resilient schema-safe handling for project columns with automatic rollback on project creation failures.
+  - Added audit logging with `instantiated_nocs_count` to `public.audit_log`.
+  - Revalidated `/projects`, `/noc-tracker`, `/noc`, and `/dashboard`.
+  - Verified across all test suites with 100% pass rate.
+  - Verified regression test suites (68/68 tests passed) and Next.js production build (20/20 routes passed).
+

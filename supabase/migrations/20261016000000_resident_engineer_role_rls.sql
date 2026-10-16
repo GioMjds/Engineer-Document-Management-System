@@ -51,7 +51,7 @@ USING (
 WITH CHECK (
   private.has_role(ARRAY['resident_engineer'])
   AND (project_id IS NULL OR private.can_see_project(project_id))
-  AND status IN ('escalated', 'ready_for_authority', 'rejected')
+  AND status::text IN ('escalated', 'ready_for_authority', 'rejected')
 );
 
 -- Resident Engineer has ZERO SELECT policy on project_confidential

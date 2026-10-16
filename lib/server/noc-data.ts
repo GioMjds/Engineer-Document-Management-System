@@ -300,8 +300,16 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
       .is('archived_at', null)
       .order('code', { ascending: true });
 
-    if (projectsError || !dbProjects || dbProjects.length === 0) {
+    if (projectsError) {
       return fallbackData;
+    }
+
+    if (!dbProjects || dbProjects.length === 0) {
+      return {
+        projects: [],
+        nocs: [],
+        isLive: true,
+      };
     }
 
     // 2. Fetch master and reviewing authorities lookup maps
@@ -404,7 +412,7 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
     if (nocsError || !dbNocs || dbNocs.length === 0) {
       return {
         projects: Array.from(projectMap.values()),
-        nocs: [...INITIAL_NOCS_PROJECT_23016, ...INITIAL_NOCS_PROJECT_23015],
+        nocs: [],
         isLive: true,
       };
     }
