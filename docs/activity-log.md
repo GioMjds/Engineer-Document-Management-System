@@ -315,3 +315,9 @@
   - Updated document review mapping to extract `level` and `reviewer.full_name`.
   - Mapped `reviewerName` and `level` into each document's `reviews` list for `RejectionFeedbackCard`.
   - Verified with `npx tsc --noEmit`: 0 errors.
+- Implemented Task 4 Step 5 in `components/dashboard/executive-dashboard-client.tsx` and `app/(app)/page.tsx`:
+  - Accepted `initialEngineerStats` prop in `ExecutiveDashboardClient`.
+  - Added engineer document query in `app/(app)/page.tsx` for real uploaded drawing statistics.
+  - Calculated fallback stats across scoped discipline statuses for dev role preview mode.
+  - Rendered `EngineerSummaryCards` above `AttentionTiles` when `isEngineer` is active.
+  - Re-verified TypeScript compilation (`tsc --noEmit`): 0 errors.

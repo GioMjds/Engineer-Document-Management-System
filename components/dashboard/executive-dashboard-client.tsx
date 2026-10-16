@@ -32,11 +32,17 @@ import { AttentionTiles, type QueueFilter } from './attention-tiles';
 import { PortfolioTable } from './portfolio-table';
 import { ProjectDisciplineCard } from './project-discipline-card';
 import { useDashboardData } from './use-dashboard-data';
+import { EngineerSummaryCards } from './engineer-summary-cards'; 
 
 interface ExecutiveDashboardClientProps {
   projects: AssignedProject[];
   initialNocs: ProjectNocItem[];
   currentUserRole: string;
+  initialEngineerStats?: {
+    totalUploaded: number;
+    underReview: number;
+    requiringRevision: number;
+  };
 }
 
 /** Dev-only. Set NEXT_PUBLIC_ENABLE_ROLE_PREVIEW=true in .env.local to show it. */
@@ -87,6 +93,7 @@ export function ExecutiveDashboardClient({
   projects,
   initialNocs,
   currentUserRole,
+  initialEngineerStats,
 }: ExecutiveDashboardClientProps) {
   // NOTE: `projects` must already be scoped to the user's assignments on the
   // server (getNocTrackerData + RLS). Client-side filtering is not a security boundary.
@@ -108,6 +115,56 @@ export function ExecutiveDashboardClient({
   const [nocItems] = useState<ProjectNocItem[]>(initialNocs);
 
   const data = useDashboardData(projectList, nocItems, scope);
+  const isEngineer =
+    currentRole === 'engineer' ||
+    currentRole === 'architect_engineer' ||
+    currentRole === 'structure_engineer' ||
+    currentRole === 'mep_engineer';
+
+  const engineerStats = useMemo(() => {
+    if (initialEngineerStats && currentRole === currentUserRole) {
+      return initialEngineerStats;
+    }
+
+    let totalUploaded = 0;
+    let underReview = 0;
+    let requiringRevision = 0;
+
+    for (const project of data.scopedProjects) {
+      const status = disciplineStatuses[project.code];
+      if (!status) continue;
+      const disciplines: ('architecture' | 'structure' | 'mep')[] =
+        currentRole === 'architect_engineer'
+          ? ['architecture']
+          : currentRole === 'structure_engineer'
+            ? ['structure']
+            : currentRole === 'mep_engineer'
+              ? ['mep']
+              : ['architecture', 'structure', 'mep'];
+
+      for (const d of disciplines) {
+        const item = status[d];
+        if (!item) continue;
+        if (item.status !== 'Not Started') {
+          totalUploaded += 1;
+        }
+        if (item.status === 'Under Review' || item.status === 'Client Approval') {
+          underReview += 1;
+        }
+        if (item.status === 'On Hold') {
+          requiringRevision += 1;
+        }
+      }
+    }
+
+    return { totalUploaded, underReview, requiringRevision };
+  }, [
+    initialEngineerStats,
+    currentRole,
+    currentUserRole,
+    data.scopedProjects,
+    disciplineStatuses,
+  ]);
 
   /* ---------- mutations (still local state; persist to Supabase next) ---------- */
   const patch = (
@@ -292,6 +349,14 @@ export function ExecutiveDashboardClient({
             </SelectContent>
           </Select>
         </div>
+      )}
+
+      {isEngineer && (
+        <EngineerSummaryCards
+          totalUploaded={engineerStats.totalUploaded}
+          underReview={engineerStats.underReview}
+          requiringRevision={engineerStats.requiringRevision}
+        />
       )}
 
       <AttentionTiles

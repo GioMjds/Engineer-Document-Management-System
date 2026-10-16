@@ -16,12 +16,7 @@ import type {
   StageGateReadiness,
   StageMilestoneDates,
 } from '@/types/noc';
-import {
-  MapPin,
-  FileCheck2,
-  Paperclip,
-  ArrowRight,
-} from 'lucide-react';
+import { MapPin, FileCheck2, Paperclip, ArrowRight } from 'lucide-react';
 
 interface ProjectDisciplineCardProps {
   project: AssignedProject;
@@ -76,13 +71,13 @@ export function ProjectDisciplineCard({
   ).length;
 
   return (
-    <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-xs transition hover:border-[var(--site-cyan)]/40 text-card-foreground">
+    <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-xs transition hover:border-(--site-cyan)/40 text-card-foreground">
       <div className="space-y-4">
         {/* Project Header */}
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-sm font-bold text-[var(--site-cyan)]">
+              <span className="font-mono text-sm font-bold text-(--site-cyan)">
                 #{project.code}
               </span>
               <Badge variant="outline" className="text-xs font-medium">
@@ -106,11 +101,31 @@ export function ProjectDisciplineCard({
 
           <Link href={`/noc-tracker?project=${project.code}`}>
             <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-              <FileCheck2 className="h-3.5 w-3.5 text-[var(--site-cyan)]" />
+              <FileCheck2 className="h-3.5 w-3.5 text-(--site-cyan)" />
               NOC Matrix
               <ArrowRight className="h-3 w-3 text-muted-foreground" />
             </Button>
           </Link>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+          {project.contractorName && (
+            <span className="text-muted-foreground">
+              Contractor:{' '}
+              <span className="font-semibold text-foreground">
+                {project.contractorName}
+              </span>
+            </span>
+          )}
+          {project.clientContractorAmount !== undefined && (
+            <span className="inline-flex items-center gap-1 rounded bg-muted/60 px-2 py-0.5 font-mono text-[11px] font-medium text-foreground">
+              Contractor Value: AED{' '}
+              {project.clientContractorAmount.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+          )}
         </div>
 
         {/* Project Lifecycle Stepper */}
@@ -211,7 +226,7 @@ export function ProjectDisciplineCard({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-xs text-[var(--site-cyan)] hover:text-[var(--site-cyan-hover)] hover:bg-[var(--site-cyan)]/10"
+            className="h-7 text-xs text-(--site-cyan) hover:text-(--site-cyan-hover) hover:bg-(--site-cyan)/10"
             onClick={() => setIsSpecialistDrawerOpen(true)}
           >
             Manage Studies & Files
