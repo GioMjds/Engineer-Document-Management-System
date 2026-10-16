@@ -1,8 +1,10 @@
 import { requireCan } from '@/lib/auth';
+import { getMasterAuthorities } from '@/app/(app)/noc-matrix/actions';
 import { ProjectRegistrationForm } from './project-form';
 
 export default async function NewProjectPage() {
   await requireCan('project.create');
+  const authRes = await getMasterAuthorities();
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -13,7 +15,7 @@ export default async function NewProjectPage() {
         </p>
       </div>
 
-      <ProjectRegistrationForm />
+      <ProjectRegistrationForm authorities={authRes.ok ? authRes.data : []} />
     </div>
   );
 }

@@ -220,14 +220,17 @@ export type Database = {
       master_authorities: {
         Row: {
           id: number
+          jurisdiction: string | null
           name: string
         }
         Insert: {
           id?: never
+          jurisdiction?: string | null
           name: string
         }
         Update: {
           id?: never
+          jurisdiction?: string | null
           name?: string
         }
         Relationships: []

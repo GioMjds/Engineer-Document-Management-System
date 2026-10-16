@@ -43,6 +43,7 @@ const createProjectSchema = z.object({
   contractor_emails: z.array(z.string().email()).default([]),
   client_contractor_amount: z.number().nonnegative().default(0),
   client_consultant_amount: z.number().nonnegative().default(0),
+  master_authority_id: z.number().int().default(1),
 });
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
@@ -217,7 +218,7 @@ export async function createProject(
       contractor_emails: parsed.data.contractor_emails,
       client_contractor_amount: parsed.data.client_contractor_amount,
       created_by: caller.id,
-      master_authority_id: 1, // Default authority container
+      master_authority_id: parsed.data.master_authority_id,
     })
     .select('id')
     .single();

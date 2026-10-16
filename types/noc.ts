@@ -44,13 +44,20 @@ export interface StageGateReadiness {
   prerequisites: StageGatePrerequisiteItem[];
 }
 
-// This is hardcoded for now, but we can make it dynamic in the future if needed.
+// Dynamic authorities with known statutory defaults for autocomplete.
 export type MasterAuthority =
   | 'Nakheel and Trakhees'
   | 'Dubai Municipality'
-  | 'Dubai Development Authority';
+  | 'Dubai Development Authority'
+  | (string & {});
 
-// This is hardcoded for now, but we can make it dynamic in the future if needed.
+export interface MasterAuthorityRecord {
+  id: number;
+  name: string;
+  jurisdiction?: string | null;
+}
+
+// Dynamic reviewing authorities with known statutory departments for autocomplete.
 export type ReviewingAuthority =
   | 'Trakhees'
   | 'Nakheel'
@@ -65,7 +72,13 @@ export type ReviewingAuthority =
   | 'Green Building'
   | 'Third Party'
   | 'DCD'
-  | 'DDA';
+  | 'DDA'
+  | (string & {});
+
+export interface ReviewingAuthorityRecord {
+  id: number;
+  name: string;
+}
 
 export type NocStage =
   | 'Design NOC'

@@ -304,10 +304,18 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
       return fallbackData;
     }
 
-    // 2. Fetch reviewing authorities lookup map
-    const { data: dbRevAuths } = await supabase
-      .from('reviewing_authorities')
-      .select('id, name');
+    // 2. Fetch master and reviewing authorities lookup maps
+    const [{ data: dbMasterAuths }, { data: dbRevAuths }] = await Promise.all([
+      supabase.from('master_authorities').select('id, name'),
+      supabase.from('reviewing_authorities').select('id, name'),
+    ]);
+
+    const masterAuthMap = new Map<number, string>();
+    if (dbMasterAuths) {
+      for (const a of dbMasterAuths) {
+        masterAuthMap.set(a.id, a.name);
+      }
+    }
 
     const revAuthMap = new Map<number, string>();
     if (dbRevAuths) {
@@ -336,7 +344,7 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
     const projectDbIdToCode = new Map<string, string>();
 
     for (const rawProj of dbProjects as unknown as RawDbProject[]) {
-      const masterAuth = getAuthorityName(rawProj.master_authority_id);
+      const masterAuth = getAuthorityName(rawProj.master_authority_id, masterAuthMap);
       const consultantAmt = confidentialMap.get(rawProj.id);
       const assigned = mapDbProjectToAssigned(rawProj, masterAuth, consultantAmt);
       projectMap.set(rawProj.code, assigned);

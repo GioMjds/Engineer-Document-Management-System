@@ -3,6 +3,7 @@
 import {
   createMatrixItem,
   saveMatrixItem,
+  createReviewingAuthority,
 } from '@/app/(app)/noc-matrix/actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,12 +17,20 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { getAvailablePrerequisites } from '@/lib/noc-matrix';
 import { cn } from '@/lib/utils';
 import type {
   NocMatrixItem,
   NocStage,
   ReviewingAuthority,
+  ReviewingAuthorityRecord,
   SubmittedBy,
 } from '@/types/noc';
 import {
@@ -47,6 +56,8 @@ export interface MatrixItemEditorDrawerProps {
   masterAuthorityId: number;
   canEdit?: boolean;
   currentUserRole?: string;
+  availableReviewingAuthorities?: ReviewingAuthorityRecord[];
+  onReviewingAuthorityCreated?: (newAuth: ReviewingAuthorityRecord) => void;
   onSaveSuccess?: (
     savedItem: NocMatrixItem,
     projectsUpdated?: number,
@@ -103,6 +114,8 @@ function MatrixItemEditorDrawerForm({
   masterAuthorityId,
   canEdit = true,
   currentUserRole,
+  availableReviewingAuthorities,
+  onReviewingAuthorityCreated,
   onSaveSuccess,
   onSaved,
 }: MatrixItemEditorDrawerProps) {
@@ -122,6 +135,48 @@ function MatrixItemEditorDrawerForm({
   const [description, setDescription] = useState(item?.description ?? '');
   const [reviewingAuthority, setReviewingAuthority] =
     useState<ReviewingAuthority>(item?.reviewingAuthority ?? 'DEWA');
+  const [authorityOptions, setAuthorityOptions] = useState<string[]>(() => {
+    if (availableReviewingAuthorities && availableReviewingAuthorities.length > 0) {
+      const names = availableReviewingAuthorities.map((a) => a.name);
+      return Array.from(new Set([...names, ...REVIEWING_AUTHORITIES]));
+    }
+    return REVIEWING_AUTHORITIES;
+  });
+  const [isAddRevAuthOpen, setIsAddRevAuthOpen] = useState(false);
+  const [newRevAuthName, setNewRevAuthName] = useState('');
+  const [isCreatingRevAuth, setIsCreatingRevAuth] = useState(false);
+
+  useEffect(() => {
+    if (availableReviewingAuthorities && availableReviewingAuthorities.length > 0) {
+      setAuthorityOptions((prev) =>
+        Array.from(new Set([...availableReviewingAuthorities.map((a) => a.name), ...prev])),
+      );
+    }
+  }, [availableReviewingAuthorities]);
+
+  const handleCreateReviewingAuthority = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanName = newRevAuthName.trim();
+    if (!cleanName) return;
+
+    setIsCreatingRevAuth(true);
+    const res = await createReviewingAuthority({ name: cleanName });
+    setIsCreatingRevAuth(false);
+
+    if (!res.ok || !res.data) {
+      toast.error(res.error || 'Failed to add reviewing authority');
+      return;
+    }
+
+    const created = res.data;
+    setAuthorityOptions((prev) => (prev.includes(created.name) ? prev : [...prev, created.name]));
+    setReviewingAuthority(created.name as ReviewingAuthority);
+    onReviewingAuthorityCreated?.(created);
+    setIsAddRevAuthOpen(false);
+    setNewRevAuthName('');
+    toast.success(`Reviewing Authority "${created.name}" registered.`);
+  };
+
   const [stage, setStage] = useState<NocStage>(item?.stage ?? 'Design NOC');
   const [submittedBy, setSubmittedBy] = useState<SubmittedBy>(
     item?.submittedBy ?? 'Consultant',
@@ -404,13 +459,25 @@ function MatrixItemEditorDrawerForm({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Reviewing Authority */}
               <div className="space-y-1.5">
-                <Label
-                  htmlFor="matrix-item-authority"
-                  className="text-xs font-semibold"
-                >
-                  Reviewing Authority{' '}
-                  <span className="text-destructive">*</span>
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label
+                    htmlFor="matrix-item-authority"
+                    className="text-xs font-semibold"
+                  >
+                    Reviewing Authority{' '}
+                    <span className="text-destructive">*</span>
+                  </Label>
+                  {effectiveCanEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddRevAuthOpen(true)}
+                      className="text-[11px] font-semibold text-(--site-cyan) hover:underline cursor-pointer flex items-center gap-0.5"
+                    >
+                      <Plus className="h-3 w-3" />
+                      <span>New</span>
+                    </button>
+                  )}
+                </div>
                 <Select
                   value={reviewingAuthority}
                   onValueChange={(val) =>
@@ -425,7 +492,7 @@ function MatrixItemEditorDrawerForm({
                     <SelectValue placeholder="Select authority" />
                   </SelectTrigger>
                   <SelectContent>
-                    {REVIEWING_AUTHORITIES.map((auth) => (
+                    {authorityOptions.map((auth) => (
                       <SelectItem key={auth} value={auth} className="text-xs">
                         {auth}
                       </SelectItem>
@@ -784,6 +851,57 @@ function MatrixItemEditorDrawerForm({
           </footer>
         </form>
       </aside>
+
+      {/* Dialog: Add Reviewing Authority */}
+      <Dialog open={isAddRevAuthOpen} onOpenChange={setIsAddRevAuthOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Register Reviewing Authority</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateReviewingAuthority} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="new-rev-auth-name" className="text-xs font-semibold">
+                Authority Name / Department <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="new-rev-auth-name"
+                placeholder="e.g. Etihad Rail, ADDC, Tadweer"
+                value={newRevAuthName}
+                onChange={(e) => setNewRevAuthName(e.target.value)}
+                required
+                className="h-8 text-xs"
+              />
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddRevAuthOpen(false)}
+                disabled={isCreatingRevAuth}
+                className="text-xs h-8 cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isCreatingRevAuth || !newRevAuthName.trim()}
+                className="bg-(--site-cyan) text-white hover:bg-(--site-cyan-hover) text-xs h-8 cursor-pointer gap-1.5"
+              >
+                {isCreatingRevAuth ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Registering...</span>
+                  </>
+                ) : (
+                  <span>Register Authority</span>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

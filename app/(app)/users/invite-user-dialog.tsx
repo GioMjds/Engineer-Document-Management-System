@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { toast } from 'sonner';
 import { UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,36 +38,58 @@ const ROLE_LABELS: Record<AppRole, string> = {
   dc: 'Document Controller (DC)',
 };
 
+const inviteUserSchema = z.object({
+  email: z.string().trim().email('Valid email address is required.'),
+  fullName: z.string().trim().min(1, 'Full name is required.'),
+  role: z.enum(ROLES),
+});
+
+type InviteUserValues = z.infer<typeof inviteUserSchema>;
+
 export function InviteUserDialog() {
   const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<AppRole>('engineer');
   const [pending, startTransition] = useTransition();
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email || !fullName) {
-      toast.error('Email and full name are required.');
-      return;
-    }
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { errors },
+  } = useForm<InviteUserValues>({
+    resolver: zodResolver(inviteUserSchema),
+    defaultValues: {
+      email: '',
+      fullName: '',
+      role: 'engineer',
+    },
+  });
 
+  function onSubmit(values: InviteUserValues) {
     startTransition(async () => {
-      const res = await inviteUser({ email, full_name: fullName, role });
+      const res = await inviteUser({
+        email: values.email,
+        full_name: values.fullName,
+        role: values.role,
+      });
       if (!res.ok) {
         toast.error(res.error ?? 'Failed to invite user.');
         return;
       }
-      toast.success(`Invitation sent to ${email}.`);
+      toast.success(`Invitation sent to ${values.email}.`);
       setOpen(false);
-      setEmail('');
-      setFullName('');
-      setRole('engineer');
+      reset();
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) reset();
+      }}
+    >
       <DialogTrigger
         render={
           <Button size="sm" className="gap-2 bg-(--site-cyan) hover:bg-(--site-cyan-hover) text-white font-medium">
@@ -74,7 +99,7 @@ export function InviteUserDialog() {
         }
       />
       <DialogContent className="sm:max-w-md">
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit(onSubmit)}>
           <DialogHeader>
             <DialogTitle>Invite New User</DialogTitle>
             <DialogDescription>
@@ -88,10 +113,11 @@ export function InviteUserDialog() {
                 id="email"
                 type="email"
                 placeholder="name@cvtec.ae"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
+                {...register('email')}
               />
+              {errors.email && (
+                <p className="text-xs text-destructive">{errors.email.message}</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="fullName">Full Name</Label>
@@ -99,32 +125,45 @@ export function InviteUserDialog() {
                 id="fullName"
                 type="text"
                 placeholder="First Last"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
+                {...register('fullName')}
               />
+              {errors.fullName && (
+                <p className="text-xs text-destructive">{errors.fullName.message}</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="role">System Role</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
-                <SelectTrigger id="role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ROLES.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {ROLE_LABELS[r]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Controller
+                name="role"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger id="role">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {ROLE_LABELS[r]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.role && (
+                <p className="text-xs text-destructive">{errors.role.message}</p>
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                setOpen(false);
+                reset();
+              }}
               disabled={pending}
             >
               Cancel

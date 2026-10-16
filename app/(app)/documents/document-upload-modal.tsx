@@ -2,8 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { toast } from 'sonner';
-import { Plus, Upload } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -25,6 +28,16 @@ interface ProjectOption {
   code: string;
 }
 
+const documentUploadSchema = z.object({
+  projectId: z.string().min(1, 'Please select a project.'),
+  discipline: z.enum(['mep', 'architect', 'structure', 'civil']),
+  doc_number: z.string().trim().min(1, 'Document number is required.'),
+  title: z.string().trim().min(1, 'Title is required.'),
+  description: z.string(),
+});
+
+type DocumentUploadValues = z.infer<typeof documentUploadSchema>;
+
 export function DocumentUploadModal({
   projects,
 }: {
@@ -32,31 +45,25 @@ export function DocumentUploadModal({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>(
-    projects[0]?.id || '',
-  );
-  const [discipline, setDiscipline] = useState<string>('mep');
-  const [docNumber, setDocNumber] = useState('');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<DocumentUploadValues>({
+    resolver: zodResolver(documentUploadSchema),
+    defaultValues: {
+      projectId: projects[0]?.id || '',
+      discipline: 'mep',
+      doc_number: '',
+      title: '',
+      description: '',
+    },
+  });
 
-    if (!selectedProjectId) {
-      toast.error('Please select a project.');
-      return;
-    }
-    if (!docNumber.trim()) {
-      toast.error('Document number is required.');
-      return;
-    }
-    if (!title.trim()) {
-      toast.error('Title is required.');
-      return;
-    }
+  async function onSubmit(values: DocumentUploadValues) {
     if (!file) {
       toast.error('Please select a file to upload.');
       return;
@@ -66,20 +73,18 @@ export function DocumentUploadModal({
       return;
     }
 
-    setSubmitting(true);
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('doc_number', docNumber.trim());
-    formData.append('title', title.trim());
-    if (description.trim()) {
-      formData.append('description', description.trim());
+    formData.append('doc_number', values.doc_number);
+    formData.append('title', values.title);
+    if (values.description.trim()) {
+      formData.append('description', values.description.trim());
     }
-    if (discipline) {
-      formData.append('discipline', discipline);
+    if (values.discipline) {
+      formData.append('discipline', values.discipline);
     }
 
-    const result = await uploadDocument(selectedProjectId, formData);
-    setSubmitting(false);
+    const result = await uploadDocument(values.projectId, formData);
 
     if (!result.success) {
       toast.error(result.error || 'Upload failed.');
@@ -88,15 +93,22 @@ export function DocumentUploadModal({
 
     toast.success('Document uploaded successfully (Revision R00).');
     setOpen(false);
-    setDocNumber('');
-    setTitle('');
-    setDescription('');
+    reset();
     setFile(null);
     router.refresh();
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) {
+          reset();
+          setFile(null);
+        }
+      }}
+    >
       <DialogTrigger
         render={
           <Button className="bg-[#02a9d3] hover:bg-[#0194b8] text-white">
@@ -113,15 +125,13 @@ export function DocumentUploadModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label htmlFor="project">Project *</Label>
             <select
               id="project"
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
+              {...register('projectId')}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              required
             >
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -129,6 +139,9 @@ export function DocumentUploadModal({
                 </option>
               ))}
             </select>
+            {errors.projectId && (
+              <p className="text-xs text-destructive">{errors.projectId.message}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -136,8 +149,7 @@ export function DocumentUploadModal({
               <Label htmlFor="discipline">Discipline *</Label>
               <select
                 id="discipline"
-                value={discipline}
-                onChange={(e) => setDiscipline(e.target.value)}
+                {...register('discipline')}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 <option value="mep">MEP</option>
@@ -145,6 +157,9 @@ export function DocumentUploadModal({
                 <option value="structure">Structure</option>
                 <option value="civil">Civil</option>
               </select>
+              {errors.discipline && (
+                <p className="text-xs text-destructive">{errors.discipline.message}</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -152,10 +167,11 @@ export function DocumentUploadModal({
               <Input
                 id="doc_number"
                 placeholder="e.g. DWG-STR-001"
-                value={docNumber}
-                onChange={(e) => setDocNumber(e.target.value)}
-                required
+                {...register('doc_number')}
               />
+              {errors.doc_number && (
+                <p className="text-xs text-destructive">{errors.doc_number.message}</p>
+              )}
             </div>
           </div>
 
@@ -164,10 +180,11 @@ export function DocumentUploadModal({
             <Input
               id="title"
               placeholder="e.g. Foundation Structural Layout"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
+              {...register('title')}
             />
+            {errors.title && (
+              <p className="text-xs text-destructive">{errors.title.message}</p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -176,8 +193,7 @@ export function DocumentUploadModal({
               id="description"
               rows={2}
               placeholder="General notes or scope details..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              {...register('description')}
             />
           </div>
 
@@ -196,16 +212,20 @@ export function DocumentUploadModal({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                setOpen(false);
+                reset();
+                setFile(null);
+              }}
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              disabled={submitting}
+              disabled={isSubmitting}
               className="bg-[#02a9d3] hover:bg-[#0194b8] text-white"
             >
-              {submitting ? 'Uploading...' : 'Submit R00'}
+              {isSubmitting ? 'Uploading...' : 'Submit R00'}
             </Button>
           </div>
         </form>

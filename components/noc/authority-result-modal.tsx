@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { toast } from 'sonner';
 import { CheckCircle2, XCircle, Calendar, AlertTriangle, FileCheck } from 'lucide-react';
 import {
@@ -18,6 +20,42 @@ import { Textarea } from '@/components/ui/textarea';
 import { recordAuthorityDecision } from '@/app/actions/noc';
 import type { ProjectNocItem, NocResubmissionEntry } from '@/types/noc';
 
+const authorityResultSchema = z
+  .object({
+    decision: z.enum(['obtained', 'rejected']),
+    expiryDate: z.string(),
+    documentUrl: z.string(),
+    rejectionReason: z.string(),
+  })
+  .superRefine((data, ctx) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (data.decision === 'obtained') {
+      if (!data.expiryDate) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['expiryDate'],
+          message: 'Expiry date is mandatory for obtained NOCs.',
+        });
+      } else if (data.expiryDate <= today) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['expiryDate'],
+          message: 'Expiry date must be in the future.',
+        });
+      }
+    } else if (data.decision === 'rejected') {
+      if (!data.rejectionReason.trim() || data.rejectionReason.trim().length < 5) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['rejectionReason'],
+          message: 'Authority rejection reason must be at least 5 characters.',
+        });
+      }
+    }
+  });
+
+type AuthorityResultValues = z.infer<typeof authorityResultSchema>;
+
 interface AuthorityResultModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -31,41 +69,35 @@ export function AuthorityResultModal({
   noc,
   onDecisionRecorded,
 }: AuthorityResultModalProps) {
-  const [decision, setDecision] = useState<'obtained' | 'rejected'>('obtained');
-  const [expiryDate, setExpiryDate] = useState('');
-  const [documentUrl, setDocumentUrl] = useState('');
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
   const today = new Date().toISOString().split('T')[0];
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<AuthorityResultValues>({
+    resolver: zodResolver(authorityResultSchema),
+    defaultValues: {
+      decision: 'obtained',
+      expiryDate: '',
+      documentUrl: '',
+      rejectionReason: '',
+    },
+  });
 
-    if (decision === 'obtained') {
-      if (!expiryDate) {
-        toast.error('Expiry date is mandatory for obtained NOCs.');
-        return;
-      }
-      if (expiryDate <= today) {
-        toast.error('Expiry date must be in the future.');
-        return;
-      }
-    } else {
-      if (!rejectionReason.trim() || rejectionReason.trim().length < 5) {
-        toast.error('Authority rejection reason must be at least 5 characters.');
-        return;
-      }
-    }
+  const decision = watch('decision');
+  const rejectionReason = watch('rejectionReason');
 
-    setSubmitting(true);
+  async function onSubmit(values: AuthorityResultValues) {
     const res = await recordAuthorityDecision(noc.id, {
-      decision,
-      expiryDate: decision === 'obtained' ? expiryDate : undefined,
-      officialDocumentUrl: decision === 'obtained' ? documentUrl.trim() || undefined : undefined,
-      rejectionReason: decision === 'rejected' ? rejectionReason.trim() : undefined,
+      decision: values.decision,
+      expiryDate: values.decision === 'obtained' ? values.expiryDate : undefined,
+      officialDocumentUrl: values.decision === 'obtained' ? values.documentUrl.trim() || undefined : undefined,
+      rejectionReason: values.decision === 'rejected' ? values.rejectionReason.trim() : undefined,
     });
-    setSubmitting(false);
 
     if (!res.success) {
       toast.error(res.error || 'Failed to record authority decision.');
@@ -73,12 +105,12 @@ export function AuthorityResultModal({
     }
 
     const now = new Date().toISOString();
-    if (decision === 'obtained') {
+    if (values.decision === 'obtained') {
       toast.success('NOC obtained status recorded with automated 14-day expiry tracking.');
       onDecisionRecorded({
         ...noc,
         status: 'Approved',
-        expiryDate,
+        expiryDate: values.expiryDate,
         issuanceDate: now.split('T')[0],
         updatedAt: now,
       });
@@ -89,7 +121,7 @@ export function AuthorityResultModal({
         id: 'resub-' + Date.now(),
         projectNocId: noc.id,
         revision: nextRev,
-        rejectionReason: rejectionReason.trim(),
+        rejectionReason: values.rejectionReason.trim(),
         rejectionDate: now,
         resubmissionDate: now,
         resubmittedBy: 'Authority Engineer',
@@ -100,17 +132,24 @@ export function AuthorityResultModal({
         ...noc,
         status: 'Rejected',
         revision: nextRev,
-        rejectionReason: rejectionReason.trim(),
+        rejectionReason: values.rejectionReason.trim(),
         resubmissionHistory: [...(noc.resubmissionHistory || []), newEntry],
         updatedAt: now,
       });
     }
 
     onOpenChange(false);
+    reset();
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next);
+        if (!next) reset();
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-foreground">
@@ -122,14 +161,14 @@ export function AuthorityResultModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-1">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-1">
           {/* Decision Selector */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold">Authority Determination *</Label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setDecision('obtained')}
+                onClick={() => setValue('decision', 'obtained')}
                 className={`p-2.5 rounded-md border text-xs font-medium flex items-center justify-center gap-2 transition-colors ${
                   decision === 'obtained'
                     ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
@@ -142,7 +181,7 @@ export function AuthorityResultModal({
 
               <button
                 type="button"
-                onClick={() => setDecision('rejected')}
+                onClick={() => setValue('decision', 'rejected')}
                 className={`p-2.5 rounded-md border text-xs font-medium flex items-center justify-center gap-2 transition-colors ${
                   decision === 'rejected'
                     ? 'border-rose-500 bg-rose-50 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300'
@@ -167,12 +206,13 @@ export function AuthorityResultModal({
                     id="decision-expiry"
                     type="date"
                     min={today}
-                    required
-                    value={expiryDate}
-                    onChange={(e) => setExpiryDate(e.target.value)}
+                    {...register('expiryDate')}
                     className="pl-8 text-xs font-mono h-8"
                   />
                 </div>
+                {errors.expiryDate && (
+                  <p className="text-xs text-destructive mt-1">{errors.expiryDate.message}</p>
+                )}
                 <p className="text-[11px] text-muted-foreground mt-1">
                   Triggers automated internal and external alerts 14 days prior to expiration.
                 </p>
@@ -184,8 +224,7 @@ export function AuthorityResultModal({
                 </Label>
                 <Input
                   id="decision-doc"
-                  value={documentUrl}
-                  onChange={(e) => setDocumentUrl(e.target.value)}
+                  {...register('documentUrl')}
                   placeholder="https://... or certificate ref"
                   className="text-xs font-mono h-8 mt-1"
                 />
@@ -199,19 +238,20 @@ export function AuthorityResultModal({
                 </Label>
                 <Textarea
                   id="decision-reason"
-                  required
                   rows={3}
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
+                  {...register('rejectionReason')}
                   placeholder="e.g. Authority returned drawing comments regarding fire egress calculations."
                   className="text-xs mt-1"
                 />
+                {errors.rejectionReason && (
+                  <p className="text-xs text-destructive mt-1">{errors.rejectionReason.message}</p>
+                )}
                 <div className="flex justify-between items-center text-[11px] text-muted-foreground mt-1">
                   <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
                     <AlertTriangle className="h-3 w-3" />
                     Creates next revision in tracker, retaining previous history.
                   </span>
-                  <span>{rejectionReason.trim().length} / 5 chars min</span>
+                  <span>{(rejectionReason || '').trim().length} / 5 chars min</span>
                 </div>
               </div>
             </div>
@@ -222,21 +262,24 @@ export function AuthorityResultModal({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                onOpenChange(false);
+                reset();
+              }}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               size="sm"
-              disabled={submitting}
+              disabled={isSubmitting}
               className={`font-semibold ${
                 decision === 'obtained'
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                   : 'bg-rose-600 hover:bg-rose-700 text-white'
               }`}
             >
-              {submitting ? 'Recording...' : decision === 'obtained' ? 'Confirm Obtained' : 'Confirm Rejection'}
+              {isSubmitting ? 'Recording...' : decision === 'obtained' ? 'Confirm Obtained' : 'Confirm Rejection'}
             </Button>
           </DialogFooter>
         </form>

@@ -390,4 +390,47 @@
   - Verified TypeScript compilation (`npx tsc --noEmit`): 0 errors.
   - Verified Next.js production build (`pnpm run build`): 20/20 routes compiled cleanly with 0 errors.
 
+## Session 2026-10-16
 
+- Audited codebase for hardcoded Master Authorities (Nakheel, Trakhees, DM, DDA) and Reviewing Authorities (DEWA, RTA, DCD, etc.).
+- Selected Option A: In-place dynamic authority management directly in `/noc-matrix` and `/projects/new`.
+- Created database migration `supabase/migrations/20261016020000_dynamic_authorities.sql`:
+  - Augmented `public.master_authorities` with `jurisdiction TEXT`.
+  - Added RLS write policy `master_authorities_admin_manage` restricting master authority creation and updates to `admin`.
+  - Added RLS write policy `reviewing_authorities_manage` granting creation to `admin`, `authority_engineer`, and `dc`.
+- Updated TypeScript definitions:
+  - `types/noc.ts`: Converted `MasterAuthority` and `ReviewingAuthority` to open unions `(string & {})`; defined `MasterAuthorityRecord` and `ReviewingAuthorityRecord`.
+  - `types/database.ts`: Added `jurisdiction: string | null` to `master_authorities` table types.
+- Enhanced core libraries with dynamic lookups and safe fallbacks:
+  - `lib/noc-matrix.ts`: Updated `getAuthorityName` and `getMasterAuthorityId` to accept dynamic lookup maps.
+  - `lib/server/noc-data.ts`: Updated `getNocTrackerData` to query `master_authorities` table alongside `reviewing_authorities` and dynamically map project authority names.
+- Implemented Server Actions in `app/(app)/noc-matrix/actions.ts`:
+  - `getMasterAuthorities()`: Fetches active master authorities from database with static fallback.
+  - `getReviewingAuthorities()`: Fetches active reviewing authorities with static fallback.
+  - `createMasterAuthority(payload)`: Gated strictly to `admin` role with duplicate check and RLS insert.
+  - `createReviewingAuthority(payload)`: Gated to `admin`, `authority_engineer`, and `dc` roles.
+  - `resolveReviewingAuthorityId()`: Self-heals by dynamically inserting unknown reviewing authorities.
+- Updated project creation schema and actions in `app/actions/admin.ts`:
+  - Extended `createProjectSchema` to accept `master_authority_id: z.number().int().positive()`.
+  - Updated `createProject` to store selected `master_authority_id`.
+- Dynamic UI integrations:
+  - `app/(app)/projects/new/page.tsx` & `project-form.tsx`: Replaced hardcoded radio/options with dynamic `<Select>` populated from database master authorities.
+  - `app/(app)/noc-matrix/page.tsx`: Server-fetches dynamic master authorities and reviewing authorities and passes down.
+  - `components/matrix/noc-matrix-workspace.tsx`: Renders dynamic tabs from `masterAuthorities`; provides `+ New Authority` modal button for `admin`.
+  - `components/matrix/matrix-item-editor-drawer.tsx`: Populates reviewing authority dropdown dynamically; provides inline `+ New` button and registration dialog for matrix authors.
+- Verified test suites and build:
+  - Verified `scripts/verify-noc-matrix.ts`: 4/4 passed.
+  - Verified regression suites: `verify-foundation-and-admin.ts` (11/11), `verify-authority-engineer.ts` (11/11), `verify-document-controller.ts` (11/11).
+  - Verified TypeScript compilation (`npx tsc --noEmit`): 0 errors.
+
+## Session 2026-10-16
+
+- Audited codebase forms using legacy `useState` handling.
+- Fixed Zod 4 type discrepancy in `app/(app)/projects/new/project-form.tsx` schema.
+- Unexported private fallback arrays in `app/(app)/noc-matrix/actions.ts` to comply with Next.js Server Actions requirements.
+- Refactored `app/(app)/documents/document-edit-modal.tsx` to `react-hook-form` and Zod resolver.
+- Refactored `app/(app)/users/invite-user-dialog.tsx` to `react-hook-form`, `Controller`, and Zod resolver.
+- Refactored `components/noc/submission-modal.tsx` to `react-hook-form` and Zod resolver.
+- Refactored `components/noc/authority-result-modal.tsx` to `react-hook-form`, Zod `superRefine`, and reactive watchers.
+- Refactored `app/(app)/documents/document-upload-modal.tsx` to `react-hook-form` and Zod resolver with file validations.
+- Verified Next.js production build (`pnpm build`): 20/20 routes compiled, static page generation and typechecking passed with 0 errors.

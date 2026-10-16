@@ -15,24 +15,43 @@ import {
   AlertCircle,
   Building2,
   Search,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import {
   getMatrixTemplates,
   getMatrixRevisions,
+  createMasterAuthority,
 } from '@/app/(app)/noc-matrix/actions';
 import { MatrixItemEditorDrawer } from './matrix-item-editor-drawer';
 import { MatrixRevisionDrawer } from './matrix-revision-drawer';
-import type { NocMatrixItem, NocMatrixRevision, NocStage } from '@/types/noc';
+import type {
+  MasterAuthorityRecord,
+  NocMatrixItem,
+  NocMatrixRevision,
+  NocStage,
+  ReviewingAuthorityRecord,
+} from '@/types/noc';
 
 export interface NocMatrixWorkspaceProps {
   initialAuthorityId: number;
   initialItems: NocMatrixItem[];
   initialRevisions: NocMatrixRevision[];
   currentUserRole: string;
+  initialMasterAuthorities?: MasterAuthorityRecord[];
+  initialReviewingAuthorities?: ReviewingAuthorityRecord[];
 }
 
 const MASTER_AUTHORITIES = [
@@ -104,7 +123,24 @@ export function NocMatrixWorkspace({
   initialItems,
   initialRevisions,
   currentUserRole,
+  initialMasterAuthorities,
+  initialReviewingAuthorities,
 }: NocMatrixWorkspaceProps) {
+  const [masterAuthorities, setMasterAuthorities] = useState<MasterAuthorityRecord[]>(
+    initialMasterAuthorities && initialMasterAuthorities.length > 0
+      ? initialMasterAuthorities
+      : MASTER_AUTHORITIES,
+  );
+  const [reviewingAuthorities, setReviewingAuthorities] = useState<ReviewingAuthorityRecord[]>(
+    initialReviewingAuthorities && initialReviewingAuthorities.length > 0
+      ? initialReviewingAuthorities
+      : [],
+  );
+  const [isAddMasterModalOpen, setIsAddMasterModalOpen] = useState(false);
+  const [newMasterName, setNewMasterName] = useState('');
+  const [newMasterJurisdiction, setNewMasterJurisdiction] = useState('');
+  const [isCreatingMaster, setIsCreatingMaster] = useState(false);
+
   const [selectedAuthorityId, setSelectedAuthorityId] =
     useState<number>(initialAuthorityId);
   const [itemsCache, setItemsCache] = useState<Record<number, NocMatrixItem[]>>(
@@ -127,8 +163,39 @@ export function NocMatrixWorkspace({
 
   const canEdit = CAN_EDIT_ROLES.includes(currentUserRole);
 
+  const currentAuthority =
+    masterAuthorities.find((a) => a.id === selectedAuthorityId) ||
+    masterAuthorities[0];
   const currentItems = itemsCache[selectedAuthorityId] || [];
   const currentRevisions = revisionsCache[selectedAuthorityId] || [];
+
+  const handleCreateMasterAuthority = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanName = newMasterName.trim();
+    if (!cleanName) return;
+
+    setIsCreatingMaster(true);
+    const res = await createMasterAuthority({
+      name: cleanName,
+      jurisdiction: newMasterJurisdiction.trim() || undefined,
+    });
+    setIsCreatingMaster(false);
+
+    if (!res.ok || !res.data) {
+      toast.error(res.error || 'Failed to register master authority');
+      return;
+    }
+
+    const created = res.data;
+    setMasterAuthorities((prev) => [...prev, created]);
+    setSelectedAuthorityId(created.id);
+    setItemsCache((prev) => ({ ...prev, [created.id]: [] }));
+    setRevisionsCache((prev) => ({ ...prev, [created.id]: [] }));
+    setIsAddMasterModalOpen(false);
+    setNewMasterName('');
+    setNewMasterJurisdiction('');
+    toast.success(`Master Authority "${created.name}" registered successfully.`);
+  };
 
   const handleSelectAuthority = (id: number) => {
     setSelectedAuthorityId(id);
@@ -168,10 +235,6 @@ export function NocMatrixWorkspace({
       }
     });
   };
-
-  const currentAuthority = MASTER_AUTHORITIES.find(
-    (a) => a.id === selectedAuthorityId,
-  );
 
   const handleSaveSuccess = (
     savedItem: NocMatrixItem,
@@ -309,9 +372,9 @@ export function NocMatrixWorkspace({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border">
           <nav
             aria-label="Master Authority Blueprints"
-            className="flex space-x-2 overflow-x-auto pb-px"
+            className="flex items-center space-x-2 overflow-x-auto pb-px"
           >
-            {MASTER_AUTHORITIES.map((auth) => {
+            {masterAuthorities.map((auth) => {
               const isActive = selectedAuthorityId === auth.id;
               return (
                 <button
@@ -334,19 +397,33 @@ export function NocMatrixWorkspace({
                     )}
                   />
                   <span>{auth.name}</span>
-                  <span
-                    className={cn(
-                      'rounded px-1.5 py-0.2 font-mono text-[10px] border',
-                      isActive
-                        ? 'border-(--site-cyan)/40 bg-(--site-cyan)/10 text-(--site-cyan)'
-                        : 'border-border bg-muted text-muted-foreground',
-                    )}
-                  >
-                    {auth.jurisdiction}
-                  </span>
+                  {auth.jurisdiction && (
+                    <span
+                      className={cn(
+                        'rounded px-1.5 py-0.2 font-mono text-[10px] border',
+                        isActive
+                          ? 'border-(--site-cyan)/40 bg-(--site-cyan)/10 text-(--site-cyan)'
+                          : 'border-border bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {auth.jurisdiction}
+                    </span>
+                  )}
                 </button>
               );
             })}
+
+            {currentUserRole === 'admin' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddMasterModalOpen(true)}
+                className="h-7 my-auto gap-1 text-[11px] font-medium cursor-pointer shrink-0 ml-1 border-dashed"
+              >
+                <Plus className="h-3 w-3" />
+                <span>New Authority</span>
+              </Button>
+            )}
           </nav>
 
           {/* Quick Search */}
@@ -555,6 +632,12 @@ export function NocMatrixWorkspace({
         masterAuthorityId={selectedAuthorityId}
         canEdit={canEdit}
         currentUserRole={currentUserRole}
+        availableReviewingAuthorities={reviewingAuthorities}
+        onReviewingAuthorityCreated={(created) =>
+          setReviewingAuthorities((prev) =>
+            prev.some((a) => a.id === created.id) ? prev : [...prev, created],
+          )
+        }
         onSaveSuccess={handleSaveSuccess}
       />
 
@@ -566,6 +649,69 @@ export function NocMatrixWorkspace({
         masterAuthorityName={currentAuthority?.name || 'Master Authority'}
         revisions={currentRevisions}
       />
+
+      {/* Dialog: Add Master Authority */}
+      <Dialog open={isAddMasterModalOpen} onOpenChange={setIsAddMasterModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Register Master Authority</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateMasterAuthority} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="new-master-name" className="text-xs font-semibold">
+                Authority Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="new-master-name"
+                placeholder="e.g. Abu Dhabi Municipality, Meydan, Aldar"
+                value={newMasterName}
+                onChange={(e) => setNewMasterName(e.target.value)}
+                required
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="new-master-jurisdiction" className="text-xs font-semibold">
+                Jurisdiction / Free Zone
+              </Label>
+              <Input
+                id="new-master-jurisdiction"
+                placeholder="e.g. Abu Dhabi Mainland & Coastal Zones"
+                value={newMasterJurisdiction}
+                onChange={(e) => setNewMasterJurisdiction(e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddMasterModalOpen(false)}
+                disabled={isCreatingMaster}
+                className="text-xs h-8 cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isCreatingMaster || !newMasterName.trim()}
+                className="bg-(--site-cyan) text-white hover:bg-(--site-cyan-hover) text-xs h-8 cursor-pointer gap-1.5"
+              >
+                {isCreatingMaster ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Registering...</span>
+                  </>
+                ) : (
+                  <span>Register Jurisdiction</span>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

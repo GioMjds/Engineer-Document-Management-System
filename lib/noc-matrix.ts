@@ -372,8 +372,18 @@ export function getAvailablePrerequisites(
     .sort((a, b) => a.sequenceNo - b.sequenceNo);
 }
 
-// Maps master authority numeric ID to human-readable MasterAuthority name.
-export function getAuthorityName(masterAuthorityId: number): MasterAuthority {
+// Maps master authority numeric ID to human-readable MasterAuthority name with optional dynamic map.
+export function getAuthorityName(
+  masterAuthorityId: number,
+  dynamicMap?: Map<number, string> | Record<number, string>
+): MasterAuthority {
+  if (dynamicMap) {
+    const val =
+      dynamicMap instanceof Map
+        ? dynamicMap.get(masterAuthorityId)
+        : dynamicMap[masterAuthorityId];
+    if (val) return val;
+  }
   switch (masterAuthorityId) {
     case 1:
       return 'Nakheel and Trakhees';
@@ -382,12 +392,22 @@ export function getAuthorityName(masterAuthorityId: number): MasterAuthority {
     case 3:
       return 'Dubai Development Authority';
     default:
-      return 'Dubai Development Authority';
+      return `Authority #${masterAuthorityId}`;
   }
 }
 
-// Maps MasterAuthority name to its corresponding master authority numeric ID.
-export function getMasterAuthorityId(authorityName: MasterAuthority): number {
+// Maps MasterAuthority name to its corresponding master authority numeric ID with optional dynamic map.
+export function getMasterAuthorityId(
+  authorityName: MasterAuthority,
+  dynamicMap?: Map<string, number> | Record<string, number>
+): number {
+  if (dynamicMap) {
+    const val =
+      dynamicMap instanceof Map
+        ? dynamicMap.get(authorityName)
+        : dynamicMap[authorityName];
+    if (val !== undefined) return val;
+  }
   switch (authorityName) {
     case 'Nakheel and Trakhees':
       return 1;
@@ -396,6 +416,6 @@ export function getMasterAuthorityId(authorityName: MasterAuthority): number {
     case 'Dubai Development Authority':
       return 3;
     default:
-      return 3;
+      return 1;
   }
 }

@@ -4,15 +4,14 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser, requireRole } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import {
-  SEED_MATRIX_TEMPLATES,
-  getAvailablePrerequisites,
-} from '@/lib/noc-matrix';
+import { SEED_MATRIX_TEMPLATES } from '@/lib/noc-matrix';
 import type {
+  MasterAuthorityRecord,
   NocMatrixItem,
   NocMatrixRevision,
   NocStage,
   ReviewingAuthority,
+  ReviewingAuthorityRecord,
   SubmittedBy,
 } from '@/types/noc';
 import type { Database, Json } from '@/types/database';
@@ -38,7 +37,9 @@ const updateMatrixItemSchema = z.object({
   defaultFee: z.number().min(0, 'Default fee must be non-negative'),
   validityDays: z.number().int().min(1, 'Validity days must be at least 1'),
   requirements: z.array(matrixRequirementSchema).default([]),
-  changeSummary: z.string().min(5, 'Change summary must be at least 5 characters'),
+  changeSummary: z
+    .string()
+    .min(5, 'Change summary must be at least 5 characters'),
 });
 
 const createMatrixItemSchema = z.object({
@@ -54,12 +55,16 @@ const createMatrixItemSchema = z.object({
   defaultFee: z.number().min(0, 'Default fee must be non-negative'),
   validityDays: z.number().int().min(1, 'Validity days must be at least 1'),
   requirements: z.array(matrixRequirementSchema).default([]),
-  changeSummary: z.string().min(5, 'Change summary must be at least 5 characters'),
+  changeSummary: z
+    .string()
+    .min(5, 'Change summary must be at least 5 characters'),
 });
 
 const deleteMatrixItemSchema = z.object({
   matrixItemId: z.string().min(1, 'Matrix item ID is required'),
-  changeSummary: z.string().min(5, 'Change summary must be at least 5 characters'),
+  changeSummary: z
+    .string()
+    .min(5, 'Change summary must be at least 5 characters'),
 });
 
 export type UpdateMatrixItemInput = z.infer<typeof updateMatrixItemSchema>;
@@ -99,7 +104,9 @@ function fromDbStage(stage: string): NocStage {
   return 'Design NOC';
 }
 
-function toDbSubmitter(submitter: string): Database['public']['Enums']['noc_submitter'] {
+function toDbSubmitter(
+  submitter: string,
+): Database['public']['Enums']['noc_submitter'] {
   const lower = submitter.toLowerCase();
   if (lower.includes('client')) return 'client';
   if (lower.includes('contractor')) return 'contractor';
@@ -117,18 +124,28 @@ function fromDbSubmitter(submitter: string): SubmittedBy {
 
 async function resolveReviewingAuthorityId(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  name: string
+  name: string,
 ): Promise<number> {
+  const cleanName = name.trim();
   try {
     const { data } = await supabase
       .from('reviewing_authorities')
       .select('id, name')
-      .ilike('name', name.trim())
+      .ilike('name', cleanName)
       .maybeSingle();
 
     if (data?.id) return data.id;
+
+    // Dynamically insert newly encountered reviewing authority
+    const { data: inserted } = await supabase
+      .from('reviewing_authorities')
+      .insert({ name: cleanName })
+      .select('id')
+      .single();
+
+    if (inserted?.id) return inserted.id;
   } catch {
-    // Fall back to dictionary if database lookup fails.
+    // Fall back to dictionary if database lookup or insert fails.
   }
 
   return REVIEWING_AUTHORITY_NAME_TO_ID[name] || 1;
@@ -143,7 +160,8 @@ const SEED_REVISIONS: Record<number, NocMatrixRevision[]> = {
       changedBy: 'system',
       changedByName: 'Engr. Rasha (Authority Engineer)',
       changedByRole: 'authority_engineer',
-      changeSummary: 'Baseline Nakheel and Trakhees statutory matrix configuration initialized with CED and EHS sequencing.',
+      changeSummary:
+        'Baseline Nakheel and Trakhees statutory matrix configuration initialized with CED and EHS sequencing.',
       previousData: null,
       newData: { defaultFee: 5000, validityDays: 365 },
       propagatedProjectsCount: 1,
@@ -159,7 +177,8 @@ const SEED_REVISIONS: Record<number, NocMatrixRevision[]> = {
       changedBy: 'system',
       changedByName: 'Engr. Rasha (Authority Engineer)',
       changedByRole: 'authority_engineer',
-      changeSummary: 'Baseline Dubai Municipality matrix initialized with Al Safat and DM Structural Permit prerequisites.',
+      changeSummary:
+        'Baseline Dubai Municipality matrix initialized with Al Safat and DM Structural Permit prerequisites.',
       previousData: null,
       newData: { defaultFee: 8000, validityDays: 365 },
       propagatedProjectsCount: 1,
@@ -175,7 +194,8 @@ const SEED_REVISIONS: Record<number, NocMatrixRevision[]> = {
       changedBy: 'system',
       changedByName: 'Engr. Rasha (Authority Engineer)',
       changedByRole: 'authority_engineer',
-      changeSummary: 'Baseline Dubai Development Authority matrix initialized with RTA TIS and DEWA Substation sequencing.',
+      changeSummary:
+        'Baseline Dubai Development Authority matrix initialized with RTA TIS and DEWA Substation sequencing.',
       previousData: null,
       newData: { defaultFee: 3500, validityDays: 365 },
       propagatedProjectsCount: 1,
@@ -186,13 +206,14 @@ const SEED_REVISIONS: Record<number, NocMatrixRevision[]> = {
 };
 
 export async function getMatrixTemplates(
-  masterAuthorityId: number
+  masterAuthorityId: number,
 ): Promise<{ ok: boolean; data: NocMatrixItem[]; error?: string }> {
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from('noc_matrix_items')
-      .select(`
+      .select(
+        `
         id,
         master_authority_id,
         sequence_no,
@@ -216,7 +237,8 @@ export async function getMatrixTemplates(
           mandatory,
           sort_order
         )
-      `)
+      `,
+      )
       .eq('master_authority_id', masterAuthorityId)
       .eq('active', true)
       .order('sequence_no', { ascending: true });
@@ -229,15 +251,20 @@ export async function getMatrixTemplates(
     }
 
     const items: NocMatrixItem[] = data.map((item) => {
-      const reviewingAuthorityData = item.reviewing_authorities as { id: number; name: string } | null;
-      const reviewingAuthority = (reviewingAuthorityData?.name as ReviewingAuthority) || 'DEWA';
-      const rawReqs = (item.requirements as Array<{
-        id: string;
-        matrix_item_id: string;
-        title: string;
-        mandatory: boolean;
-        sort_order: number;
-      }>) || [];
+      const reviewingAuthorityData = item.reviewing_authorities as {
+        id: number;
+        name: string;
+      } | null;
+      const reviewingAuthority =
+        (reviewingAuthorityData?.name as ReviewingAuthority) || 'DEWA';
+      const rawReqs =
+        (item.requirements as Array<{
+          id: string;
+          matrix_item_id: string;
+          title: string;
+          mandatory: boolean;
+          sort_order: number;
+        }>) || [];
 
       return {
         id: item.id,
@@ -267,7 +294,8 @@ export async function getMatrixTemplates(
 
     return { ok: true, data: items };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch matrix templates';
+    const message =
+      err instanceof Error ? err.message : 'Failed to fetch matrix templates';
     return {
       ok: true,
       data: SEED_MATRIX_TEMPLATES[masterAuthorityId] || [],
@@ -277,13 +305,14 @@ export async function getMatrixTemplates(
 }
 
 export async function getMatrixRevisions(
-  masterAuthorityId: number
+  masterAuthorityId: number,
 ): Promise<{ ok: boolean; data: NocMatrixRevision[]; error?: string }> {
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from('noc_matrix_revisions')
-      .select(`
+      .select(
+        `
         id,
         master_authority_id,
         matrix_item_id,
@@ -299,7 +328,8 @@ export async function getMatrixRevisions(
           full_name,
           role
         )
-      `)
+      `,
+      )
       .eq('master_authority_id', masterAuthorityId)
       .order('created_at', { ascending: false });
 
@@ -311,7 +341,10 @@ export async function getMatrixRevisions(
     }
 
     const revisions: NocMatrixRevision[] = data.map((rev) => {
-      const profile = rev.profiles as { full_name: string; role: string } | null;
+      const profile = rev.profiles as {
+        full_name: string;
+        role: string;
+      } | null;
       return {
         id: rev.id,
         masterAuthorityId: rev.master_authority_id,
@@ -331,7 +364,8 @@ export async function getMatrixRevisions(
 
     return { ok: true, data: revisions };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch matrix revisions';
+    const message =
+      err instanceof Error ? err.message : 'Failed to fetch matrix revisions';
     return {
       ok: true,
       data: SEED_REVISIONS[masterAuthorityId] || [],
@@ -340,19 +374,23 @@ export async function getMatrixRevisions(
   }
 }
 
-export async function saveMatrixItem(
-  input: unknown
-): Promise<{ ok: boolean; data?: { projectsUpdated: number; nocsUpdated: number }; error?: string }> {
+export async function saveMatrixItem(input: unknown): Promise<{
+  ok: boolean;
+  data?: { projectsUpdated: number; nocsUpdated: number };
+  error?: string;
+}> {
   const user = await requireRole(['admin', 'authority_engineer', 'dc']);
 
   const parsed = updateMatrixItemSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message || 'Invalid matrix item input' };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message || 'Invalid matrix item input',
+    };
   }
 
   const {
     matrixItemId,
-    masterAuthorityId,
     description,
     stage,
     reviewingAuthority,
@@ -366,10 +404,16 @@ export async function saveMatrixItem(
 
   try {
     const supabase = await createClient();
-    const reviewingAuthorityId = await resolveReviewingAuthorityId(supabase, reviewingAuthority);
+    const reviewingAuthorityId = await resolveReviewingAuthorityId(
+      supabase,
+      reviewingAuthority,
+    );
     const dbStage = toDbStage(stage);
     const dbSubmitter = toDbSubmitter(submittedBy);
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(matrixItemId);
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        matrixItemId,
+      );
 
     let projectsUpdated = 0;
     let nocsUpdated = 0;
@@ -389,7 +433,7 @@ export async function saveMatrixItem(
           p_blocking_seq: blockingSequenceNo ?? null,
           p_default_fee: defaultFee,
           p_validity_days: validityDays,
-        }
+        },
       );
 
       if (rpcError) {
@@ -411,7 +455,10 @@ export async function saveMatrixItem(
           })
           .eq('id', matrixItemId);
       } else if (rpcResult && typeof rpcResult === 'object') {
-        const res = rpcResult as { projects_updated?: number; nocs_updated?: number };
+        const res = rpcResult as {
+          projects_updated?: number;
+          nocs_updated?: number;
+        };
         projectsUpdated = res.projects_updated ?? 0;
         nocsUpdated = res.nocs_updated ?? 0;
       }
@@ -446,19 +493,24 @@ export async function saveMatrixItem(
       data: { projectsUpdated, nocsUpdated },
     };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to save matrix item';
+    const message =
+      err instanceof Error ? err.message : 'Failed to save matrix item';
     return { ok: false, error: message };
   }
 }
 
 export async function createMatrixItem(
-  input: unknown
+  input: unknown,
 ): Promise<{ ok: boolean; data?: NocMatrixItem; error?: string }> {
   const user = await requireRole(['admin', 'authority_engineer', 'dc']);
 
   const parsed = createMatrixItemSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message || 'Invalid create matrix item input' };
+    return {
+      ok: false,
+      error:
+        parsed.error.issues[0]?.message || 'Invalid create matrix item input',
+    };
   }
 
   const {
@@ -476,7 +528,10 @@ export async function createMatrixItem(
 
   try {
     const supabase = await createClient();
-    const reviewingAuthorityId = await resolveReviewingAuthorityId(supabase, reviewingAuthority);
+    const reviewingAuthorityId = await resolveReviewingAuthorityId(
+      supabase,
+      reviewingAuthority,
+    );
     const dbStage = toDbStage(stage);
     const dbSubmitter = toDbSubmitter(submittedBy);
 
@@ -490,7 +545,10 @@ export async function createMatrixItem(
       .maybeSingle();
 
     const seedItems = SEED_MATRIX_TEMPLATES[masterAuthorityId] || [];
-    const seedMax = seedItems.length > 0 ? Math.max(...seedItems.map((s) => s.sequenceNo)) : 0;
+    const seedMax =
+      seedItems.length > 0
+        ? Math.max(...seedItems.map((s) => s.sequenceNo))
+        : 0;
     const dbMax = maxSeqData?.sequence_no ?? 0;
     const finalSeq = Math.max(dbMax, seedMax) + 1;
 
@@ -603,25 +661,35 @@ export async function createMatrixItem(
 
     return { ok: true, data: resultData };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to create matrix item';
+    const message =
+      err instanceof Error ? err.message : 'Failed to create matrix item';
     return { ok: false, error: message };
   }
 }
 
 export async function deleteMatrixItem(
   matrixItemId: string,
-  changeSummary: string
+  changeSummary: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await requireRole(['admin', 'authority_engineer', 'dc']);
 
-  const parsed = deleteMatrixItemSchema.safeParse({ matrixItemId, changeSummary });
+  const parsed = deleteMatrixItemSchema.safeParse({
+    matrixItemId,
+    changeSummary,
+  });
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message || 'Invalid delete request' };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message || 'Invalid delete request',
+    };
   }
 
   try {
     const supabase = await createClient();
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(matrixItemId);
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        matrixItemId,
+      );
 
     if (isUuid) {
       const { data: existing } = await supabase
@@ -671,14 +739,15 @@ export async function deleteMatrixItem(
 
     return { ok: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to delete matrix item';
+    const message =
+      err instanceof Error ? err.message : 'Failed to delete matrix item';
     return { ok: false, error: message };
   }
 }
 
 export async function reorderMatrixSequences(
   masterAuthorityId: number,
-  orderedIds: string[]
+  orderedIds: string[],
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await requireRole(['admin', 'authority_engineer', 'dc']);
 
@@ -691,7 +760,10 @@ export async function reorderMatrixSequences(
 
     for (let i = 0; i < orderedIds.length; i++) {
       const id = orderedIds[i];
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id,
+        );
       if (isUuid) {
         await supabase
           .from('noc_matrix_items')
@@ -717,7 +789,208 @@ export async function reorderMatrixSequences(
 
     return { ok: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to reorder matrix sequences';
+    const message =
+      err instanceof Error ? err.message : 'Failed to reorder matrix sequences';
+    return { ok: false, error: message };
+  }
+}
+
+const DEFAULT_MASTER_AUTHORITIES: MasterAuthorityRecord[] = [
+  { id: 1, name: 'Nakheel & Trakhees', jurisdiction: 'JAFZA & Coastal Zones' },
+  {
+    id: 2,
+    name: 'Dubai Municipality',
+    jurisdiction: 'Mainland Dubai & Al Safat',
+  },
+  {
+    id: 3,
+    name: 'Dubai Development Authority',
+    jurisdiction: 'TECOM & Free Zones',
+  },
+];
+
+export async function getMasterAuthorities(): Promise<{
+  ok: boolean;
+  data: MasterAuthorityRecord[];
+  error?: string;
+}> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('master_authorities')
+      .select('id, name, jurisdiction')
+      .order('id', { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      return { ok: true, data: DEFAULT_MASTER_AUTHORITIES };
+    }
+
+    return { ok: true, data };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : 'Failed to fetch master authorities';
+    return { ok: true, data: DEFAULT_MASTER_AUTHORITIES, error: message };
+  }
+}
+
+// Another hardcoded list of reviewing authorities to fall back on if database fetch fails.
+// To remove this hardcoded list, ensure that the reviewing_authorities table is populated with all required authorities.
+const DEFAULT_REVIEWING_AUTHORITIES: ReviewingAuthorityRecord[] = [
+  { id: 1, name: 'Trakhees' },
+  { id: 2, name: 'Nakheel' },
+  { id: 3, name: 'DEWA' },
+  { id: 4, name: 'Empower' },
+  { id: 5, name: 'RTA' },
+  { id: 6, name: 'EHS' },
+  { id: 7, name: 'DCAA' },
+  { id: 8, name: 'DM' },
+  { id: 9, name: 'DU' },
+  { id: 10, name: 'Etisalat' },
+  { id: 11, name: 'Green Building' },
+  { id: 12, name: 'Third Party' },
+  { id: 13, name: 'DCD' },
+  { id: 14, name: 'DDA' },
+];
+
+export async function getReviewingAuthorities(): Promise<{
+  ok: boolean;
+  data: ReviewingAuthorityRecord[];
+  error?: string;
+}> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('reviewing_authorities')
+      .select('id, name')
+      .order('name', { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      return { ok: true, data: DEFAULT_REVIEWING_AUTHORITIES };
+    }
+
+    return { ok: true, data };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : 'Failed to fetch reviewing authorities';
+    return { ok: true, data: DEFAULT_REVIEWING_AUTHORITIES, error: message };
+  }
+}
+
+const createMasterAuthoritySchema = z.object({
+  name: z.string().trim().min(2, 'Master Authority name is required'),
+  jurisdiction: z.string().trim().optional(),
+});
+
+export type CreateMasterAuthorityInput = z.infer<
+  typeof createMasterAuthoritySchema
+>;
+
+export async function createMasterAuthority(
+  input: CreateMasterAuthorityInput,
+): Promise<{ ok: boolean; data?: MasterAuthorityRecord; error?: string }> {
+  try {
+    const caller = await requireUser();
+    if (caller.role !== 'admin') {
+      return {
+        ok: false,
+        error:
+          'Unauthorized: strictly Admin role can register Master Authorities.',
+      };
+    }
+
+    const parsed = createMasterAuthoritySchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message || 'Invalid input',
+      };
+    }
+
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('master_authorities')
+      .insert({
+        name: parsed.data.name,
+        jurisdiction: parsed.data.jurisdiction || null,
+      })
+      .select('id, name, jurisdiction')
+      .single();
+
+    if (error || !data) {
+      return {
+        ok: false,
+        error: error?.message || 'Failed to create Master Authority',
+      };
+    }
+
+    revalidatePath('/noc-matrix');
+    revalidatePath('/projects/new');
+    return { ok: true, data };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Server error';
+    return { ok: false, error: message };
+  }
+}
+
+const createReviewingAuthoritySchema = z.object({
+  name: z.string().trim().min(2, 'Reviewing Authority name is required'),
+});
+
+export type CreateReviewingAuthorityInput = z.infer<
+  typeof createReviewingAuthoritySchema
+>;
+
+export async function createReviewingAuthority(
+  input: CreateReviewingAuthorityInput,
+): Promise<{ ok: boolean; data?: ReviewingAuthorityRecord; error?: string }> {
+  try {
+    const caller = await requireUser();
+    if (!['admin', 'authority_engineer', 'dc'].includes(caller.role)) {
+      return {
+        ok: false,
+        error:
+          'Unauthorized: only Admin, Authority Engineer, or DC can add Reviewing Authorities.',
+      };
+    }
+
+    const parsed = createReviewingAuthoritySchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message || 'Invalid input',
+      };
+    }
+
+    const supabase = await createClient();
+    const { data: existing } = await supabase
+      .from('reviewing_authorities')
+      .select('id, name')
+      .ilike('name', parsed.data.name)
+      .maybeSingle();
+
+    if (existing) {
+      return { ok: true, data: existing };
+    }
+
+    const { data, error } = await supabase
+      .from('reviewing_authorities')
+      .insert({ name: parsed.data.name })
+      .select('id, name')
+      .single();
+
+    if (error || !data) {
+      return {
+        ok: false,
+        error: error?.message || 'Failed to create Reviewing Authority',
+      };
+    }
+
+    revalidatePath('/noc-matrix');
+    return { ok: true, data };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Server error';
     return { ok: false, error: message };
   }
 }

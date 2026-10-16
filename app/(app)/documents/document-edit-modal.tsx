@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -15,6 +17,15 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { editDocument } from '@/app/actions/documents';
+
+const documentEditSchema = z.object({
+  doc_number: z.string().trim().min(1, 'Document number is required.'),
+  title: z.string().trim().min(1, 'Title is required.'),
+  description: z.string(),
+  discipline: z.enum(['mep', 'architect', 'structure', 'civil']),
+});
+
+type DocumentEditValues = z.infer<typeof documentEditSchema>;
 
 interface DocumentEditModalProps {
   open: boolean;
@@ -34,38 +45,28 @@ export function DocumentEditModal({
   document,
 }: DocumentEditModalProps) {
   const router = useRouter();
-  const [submitting, setSubmitting] = useState(false);
-  const [docNumber, setDocNumber] = useState(document.doc_number);
-  const [title, setTitle] = useState(document.title);
-  const [description, setDescription] = useState(document.description || '');
-  const [discipline, setDiscipline] = useState<string>(
-    document.discipline || 'mep',
-  );
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!docNumber.trim()) {
-      toast.error('Document number is required.');
-      return;
-    }
-    if (!title.trim()) {
-      toast.error('Title is required.');
-      return;
-    }
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<DocumentEditValues>({
+    resolver: zodResolver(documentEditSchema),
+    values: {
+      doc_number: document.doc_number,
+      title: document.title,
+      description: document.description || '',
+      discipline: (document.discipline || 'mep') as DocumentEditValues['discipline'],
+    },
+  });
 
-    setSubmitting(true);
-    const validDiscipline = ['mep', 'architect', 'structure', 'civil'].includes(discipline)
-      ? (discipline as 'mep' | 'architect' | 'structure' | 'civil')
-      : undefined;
-
+  async function onSubmit(values: DocumentEditValues) {
     const result = await editDocument(document.id, {
-      doc_number: docNumber.trim(),
-      title: title.trim(),
-      description: description.trim() || undefined,
-      discipline: validDiscipline,
+      doc_number: values.doc_number,
+      title: values.title,
+      description: values.description.trim() || undefined,
+      discipline: values.discipline,
     });
-
-    setSubmitting(false);
 
     if (!result.success) {
       toast.error(result.error || 'Failed to edit document.');
@@ -87,14 +88,13 @@ export function DocumentEditModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="edit-discipline">Discipline</Label>
               <select
                 id="edit-discipline"
-                value={discipline}
-                onChange={(e) => setDiscipline(e.target.value)}
+                {...register('discipline')}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 <option value="mep">MEP</option>
@@ -102,16 +102,20 @@ export function DocumentEditModal({
                 <option value="structure">Structure</option>
                 <option value="civil">Civil</option>
               </select>
+              {errors.discipline && (
+                <p className="text-xs text-destructive">{errors.discipline.message}</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="edit-doc_number">Doc Number *</Label>
               <Input
                 id="edit-doc_number"
-                value={docNumber}
-                onChange={(e) => setDocNumber(e.target.value)}
-                required
+                {...register('doc_number')}
               />
+              {errors.doc_number && (
+                <p className="text-xs text-destructive">{errors.doc_number.message}</p>
+              )}
             </div>
           </div>
 
@@ -119,10 +123,11 @@ export function DocumentEditModal({
             <Label htmlFor="edit-title">Title *</Label>
             <Input
               id="edit-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
+              {...register('title')}
             />
+            {errors.title && (
+              <p className="text-xs text-destructive">{errors.title.message}</p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -130,8 +135,7 @@ export function DocumentEditModal({
             <Textarea
               id="edit-description"
               rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              {...register('description')}
             />
           </div>
 
@@ -145,10 +149,10 @@ export function DocumentEditModal({
             </Button>
             <Button
               type="submit"
-              disabled={submitting}
+              disabled={isSubmitting}
               className="bg-[#02a9d3] hover:bg-[#0194b8] text-white"
             >
-              {submitting ? 'Saving...' : 'Save Changes'}
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </form>

@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { toast } from 'sonner';
 import { Send, FileText, Calendar, Link as LinkIcon } from 'lucide-react';
 import {
@@ -17,6 +19,14 @@ import { Label } from '@/components/ui/label';
 import { submitNocApplication } from '@/app/actions/noc';
 import type { ProjectNocItem } from '@/types/noc';
 
+const submissionSchema = z.object({
+  referenceNo: z.string().trim().min(1, 'Authority tracking / reference number is required.'),
+  submissionDate: z.string().min(1, 'Submission date is required.'),
+  proofUrl: z.string(),
+});
+
+type SubmissionFormValues = z.infer<typeof submissionSchema>;
+
 interface SubmissionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -30,31 +40,25 @@ export function SubmissionModal({
   noc,
   onSubmitted,
 }: SubmissionModalProps) {
-  const [referenceNo, setReferenceNo] = useState(noc.referenceNumber || '');
-  const [submissionDate, setSubmissionDate] = useState(
-    new Date().toISOString().split('T')[0],
-  );
-  const [proofUrl, setProofUrl] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<SubmissionFormValues>({
+    resolver: zodResolver(submissionSchema),
+    values: {
+      referenceNo: noc.referenceNumber || '',
+      submissionDate: new Date().toISOString().split('T')[0],
+      proofUrl: '',
+    },
+  });
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!referenceNo.trim()) {
-      toast.error('Authority tracking / reference number is required.');
-      return;
-    }
-    if (!submissionDate) {
-      toast.error('Submission date is required.');
-      return;
-    }
-
-    setSubmitting(true);
+  async function onSubmit(values: SubmissionFormValues) {
     const res = await submitNocApplication(noc.id, {
-      authorityReference: referenceNo.trim(),
-      submittedAt: submissionDate,
-      submissionProofUrl: proofUrl.trim() || undefined,
+      authorityReference: values.referenceNo,
+      submittedAt: values.submissionDate,
+      submissionProofUrl: values.proofUrl.trim() || undefined,
     });
-    setSubmitting(false);
 
     if (!res.success) {
       toast.error(res.error || 'Failed to submit application.');
@@ -65,9 +69,9 @@ export function SubmissionModal({
     onSubmitted({
       ...noc,
       status: 'Submitted',
-      referenceNumber: referenceNo.trim(),
-      applyDate: submissionDate,
-      receiptFileUrl: proofUrl.trim() || noc.receiptFileUrl,
+      referenceNumber: values.referenceNo,
+      applyDate: values.submissionDate,
+      receiptFileUrl: values.proofUrl.trim() || noc.receiptFileUrl,
       updatedAt: new Date().toISOString(),
     });
     onOpenChange(false);
@@ -87,7 +91,7 @@ export function SubmissionModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-3.5 py-1">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5 py-1">
           <div>
             <Label htmlFor="sub-ref" className="text-xs font-medium">
               Authority Tracking / Reference # *
@@ -96,13 +100,14 @@ export function SubmissionModal({
               <FileText className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 id="sub-ref"
-                required
-                value={referenceNo}
-                onChange={(e) => setReferenceNo(e.target.value)}
+                {...register('referenceNo')}
                 placeholder="e.g. DM-2026-NOC-88912"
                 className="pl-8 text-xs font-mono h-8"
               />
             </div>
+            {errors.referenceNo && (
+              <p className="text-xs text-destructive mt-1">{errors.referenceNo.message}</p>
+            )}
           </div>
 
           <div>
@@ -114,12 +119,13 @@ export function SubmissionModal({
               <Input
                 id="sub-date"
                 type="date"
-                required
-                value={submissionDate}
-                onChange={(e) => setSubmissionDate(e.target.value)}
+                {...register('submissionDate')}
                 className="pl-8 text-xs font-mono h-8"
               />
             </div>
+            {errors.submissionDate && (
+              <p className="text-xs text-destructive mt-1">{errors.submissionDate.message}</p>
+            )}
           </div>
 
           <div>
@@ -130,8 +136,7 @@ export function SubmissionModal({
               <LinkIcon className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 id="sub-proof"
-                value={proofUrl}
-                onChange={(e) => setProofUrl(e.target.value)}
+                {...register('proofUrl')}
                 placeholder="https://... or receipt ref"
                 className="pl-8 text-xs font-mono h-8"
               />
@@ -150,10 +155,10 @@ export function SubmissionModal({
             <Button
               type="submit"
               size="sm"
-              disabled={submitting}
+              disabled={isSubmitting}
               className="bg-primary text-primary-foreground font-semibold"
             >
-              {submitting ? 'Submitting...' : 'Confirm Submission'}
+              {isSubmitting ? 'Submitting...' : 'Confirm Submission'}
             </Button>
           </DialogFooter>
         </form>
