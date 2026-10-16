@@ -15,29 +15,28 @@ export const ROLES = [
 export type AppRole = (typeof ROLES)[number];
 
 /** Legacy values still present in lib/auth.ts and old profile rows. */
-const LEGACY_ROLES: Record<string, AppRole> = {
+const LEGACY_ROLES = {
   doc_controller: 'dc',
   manager: 'area_manager',
-};
+} satisfies Record<string, AppRole>;
 
 export function normalizeRole(role: string | null | undefined): AppRole | null {
   if (!role) return null;
   if ((ROLES as readonly string[]).includes(role)) return role as AppRole;
-  return LEGACY_ROLES[role] ?? null;
+  return LEGACY_ROLES[role as keyof typeof LEGACY_ROLES] ?? null;
 }
-
-// ---------------------------------------------------------------------------
-// Capabilities (the matrix)
-// ---------------------------------------------------------------------------
 
 const ALL = ROLES;
 
 export const PERMISSIONS = {
-  // Scope: roles that see every project. Everyone else only sees assigned projects.
   'project.viewAll': ['admin', 'ceo', 'area_manager'],
   'project.create': ['admin'],
   // Sets the client and contractor contact emails on a project (proposed: Admin only).
   'project.contacts.manage': ['admin'],
+
+  // Adds or removes master and reviewing authorities
+  'authority.master.manage': ['admin'],
+  'authority.reviewing.manage': ['admin', 'authority_engineer', 'dc'],
 
   // Navigation
   'dashboard.view': ALL,

@@ -26,7 +26,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { submitResidentEngineerReview } from '@/app/actions/reviews';
+import {
+  submitResidentEngineerReview,
+  submitAreaManagerReview,
+} from '@/app/actions/reviews';
 import { getDownloadUrl } from '@/app/actions/documents';
 import { formatSize } from '@/utils/formatters';
 
@@ -48,6 +51,7 @@ export interface ReviewDocument {
   description: string | null;
   discipline: 'mep' | 'architect' | 'structure' | 'civil' | null;
   revision: string;
+  status?: string;
   file_name: string;
   file_size: number | null;
   projectName?: string;
@@ -55,6 +59,8 @@ export interface ReviewDocument {
   authorName?: string;
   createdAt: string;
   reviews?: ReviewItem[];
+  escalationNote?: string | null;
+  escalatedBy?: string | null;
 }
 
 const DISCIPLINE_COLORS: Record<string, string> = {
@@ -66,17 +72,21 @@ const DISCIPLINE_COLORS: Record<string, string> = {
 
 export function DrawingReviewModal({
   document,
+  userRole,
 }: {
   document: ReviewDocument;
+  userRole?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [pendingAction, setPendingAction] = useState<
-    'approve_direct' | 'approve_escalate' | 'reject' | null
+    'approve_direct' | 'approve_escalate' | 'reject' | 'approve_am' | null
   >(null);
   const [downloading, setDownloading] = useState(false);
+
+  const isAM = userRole === 'area_manager';
 
   async function handleDownload() {
     setDownloading(true);
@@ -138,6 +148,26 @@ export function DrawingReviewModal({
     router.refresh();
   }
 
+  async function handleApproveAM() {
+    setPendingAction('approve_am');
+    const res = await submitAreaManagerReview({
+      documentId: document.id,
+      decision: 'approve',
+    });
+    setPendingAction(null);
+
+    if (!res.success) {
+      toast.error(res.error || 'Area Manager approval failed.');
+      return;
+    }
+
+    toast.success(
+      `${document.doc_number} approved by Area Manager: Ready for Authority Submission.`,
+    );
+    setOpen(false);
+    router.refresh();
+  }
+
   async function handleReject() {
     if (!comment || comment.trim().length < 5) {
       toast.error('Rejection comment must be at least 5 characters.');
@@ -145,11 +175,17 @@ export function DrawingReviewModal({
     }
 
     setPendingAction('reject');
-    const res = await submitResidentEngineerReview({
-      documentId: document.id,
-      decision: 'reject',
-      comment: comment.trim(),
-    });
+    const res = isAM
+      ? await submitAreaManagerReview({
+          documentId: document.id,
+          decision: 'reject',
+          comment: comment.trim(),
+        })
+      : await submitResidentEngineerReview({
+          documentId: document.id,
+          decision: 'reject',
+          comment: comment.trim(),
+        });
     setPendingAction(null);
 
     if (!res.success) {
@@ -226,6 +262,23 @@ export function DrawingReviewModal({
               Description / Scope:
             </span>
             {document.description}
+          </div>
+        )}
+
+        {/* RE Escalation Rationale Banner */}
+        {(document.status === 'escalated' || document.escalatedBy) && (
+          <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-lg space-y-1">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>
+                Escalated by Resident Engineer {document.escalatedBy ? `(${document.escalatedBy})` : ''}
+              </span>
+            </div>
+            {document.escalationNote && (
+              <p className="text-xs text-amber-800 dark:text-amber-300 italic pl-5">
+                &quot;{document.escalationNote}&quot;
+              </p>
+            )}
           </div>
         )}
 
@@ -367,30 +420,46 @@ export function DrawingReviewModal({
                 Reject Drawing
               </Button>
 
-              <Button
-                type="button"
-                variant="outline"
-                disabled={pendingAction !== null}
-                onClick={handleApproveEscalate}
-                className="gap-1.5 border-amber-500/50 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-              >
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                {pendingAction === 'approve_escalate'
-                  ? 'Escalating...'
-                  : 'Approve & Escalate (AM)'}
-              </Button>
+              {isAM ? (
+                <Button
+                  type="button"
+                  disabled={pendingAction !== null}
+                  onClick={handleApproveAM}
+                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  {pendingAction === 'approve_am'
+                    ? 'Approving...'
+                    : 'Approve (Ready for Authority)'}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={pendingAction !== null}
+                    onClick={handleApproveEscalate}
+                    className="gap-1.5 border-amber-500/50 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                  >
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    {pendingAction === 'approve_escalate'
+                      ? 'Escalating...'
+                      : 'Approve & Escalate (AM)'}
+                  </Button>
 
-              <Button
-                type="button"
-                disabled={pendingAction !== null}
-                onClick={handleApproveDirect}
-                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                {pendingAction === 'approve_direct'
-                  ? 'Approving...'
-                  : 'Approve (Direct)'}
-              </Button>
+                  <Button
+                    type="button"
+                    disabled={pendingAction !== null}
+                    onClick={handleApproveDirect}
+                    className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    {pendingAction === 'approve_direct'
+                      ? 'Approving...'
+                      : 'Approve (Direct)'}
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </div>

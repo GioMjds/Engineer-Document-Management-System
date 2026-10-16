@@ -32,7 +32,12 @@ import { AttentionTiles, type QueueFilter } from './attention-tiles';
 import { PortfolioTable } from './portfolio-table';
 import { ProjectDisciplineCard } from './project-discipline-card';
 import { useDashboardData } from './use-dashboard-data';
-import { EngineerSummaryCards } from './engineer-summary-cards'; 
+import { EngineerSummaryCards } from './engineer-summary-cards';
+import { ExecutiveSummaryCards } from './executive-summary-cards';
+import { FinancialPortfolioWidget } from './financial-portfolio-widget';
+import { AreaManagerSummaryCards } from './area-manager-summary-cards';
+import type { ExecutiveKpiSummary } from '@/app/loaders/ceo';
+import { can } from '@/lib/permissions';
 
 interface ExecutiveDashboardClientProps {
   projects: AssignedProject[];
@@ -43,6 +48,10 @@ interface ExecutiveDashboardClientProps {
     underReview: number;
     requiringRevision: number;
   };
+  initialAreaManagerStats?: {
+    escalatedDrawingsCount: number;
+  };
+  executiveSummary?: ExecutiveKpiSummary;
 }
 
 /** Dev-only. Set NEXT_PUBLIC_ENABLE_ROLE_PREVIEW=true in .env.local to show it. */
@@ -94,6 +103,8 @@ export function ExecutiveDashboardClient({
   initialNocs,
   currentUserRole,
   initialEngineerStats,
+  initialAreaManagerStats,
+  executiveSummary,
 }: ExecutiveDashboardClientProps) {
   // NOTE: `projects` must already be scoped to the user's assignments on the
   // server (getNocTrackerData + RLS). Client-side filtering is not a security boundary.
@@ -120,6 +131,46 @@ export function ExecutiveDashboardClient({
     currentRole === 'architect_engineer' ||
     currentRole === 'structure_engineer' ||
     currentRole === 'mep_engineer';
+  const isCeo = currentRole === 'ceo';
+  const isAreaManager = currentRole === 'area_manager';
+  const canViewFinancials = can(currentRole, 'amount.consultant.view');
+
+  const activeExecutiveSummary = useMemo<ExecutiveKpiSummary>(() => {
+    if (executiveSummary && currentRole === currentUserRole) {
+      return executiveSummary;
+    }
+    const totalProjects = projectList.length;
+    const totalNocs = nocItems.length;
+    const approvedNocs = nocItems.filter((n) => n.status === 'Approved').length;
+    const completionPct = totalNocs > 0 ? Math.round((approvedNocs / totalNocs) * 100) : 0;
+    const criticalDelays = data.delayItems.length;
+    const expiring = data.expiringNocs.length;
+    const financials = projectList.map((p) => ({
+      projectId: p.code,
+      projectName: p.name,
+      stage: p.lifecycleStage || 'Pre-Construction',
+      contractorAmount: p.clientContractorAmount || 0,
+      consultantAmount: p.code === '23015' ? 3200000 : p.code === '23016' ? 8500000 : 0,
+    }));
+    return {
+      activeProjectsCount: totalProjects,
+      nocCompletionPercentage: completionPct,
+      criticalDelaysCount: criticalDelays,
+      expiringNocsCount: expiring,
+      reviewBacklogCount: 1,
+      totalContractorAmount: financials.reduce((s, f) => s + f.contractorAmount, 0),
+      totalConsultantAmount: financials.reduce((s, f) => s + f.consultantAmount, 0),
+      projectFinancials: financials,
+    };
+  }, [
+    executiveSummary,
+    currentRole,
+    currentUserRole,
+    projectList,
+    nocItems,
+    data.delayItems.length,
+    data.expiringNocs.length,
+  ]);
 
   const engineerStats = useMemo(() => {
     if (initialEngineerStats && currentRole === currentUserRole) {
@@ -359,6 +410,33 @@ export function ExecutiveDashboardClient({
         />
       )}
 
+      {isCeo && (
+        <ExecutiveSummaryCards
+          activeProjectsCount={activeExecutiveSummary.activeProjectsCount}
+          nocCompletionPercentage={activeExecutiveSummary.nocCompletionPercentage}
+          criticalDelaysCount={activeExecutiveSummary.criticalDelaysCount}
+          expiringNocsCount={activeExecutiveSummary.expiringNocsCount}
+          reviewBacklogCount={activeExecutiveSummary.reviewBacklogCount}
+        />
+      )}
+
+      {isAreaManager && (
+        <AreaManagerSummaryCards
+          totalActiveProjects={data.scopedProjects.length}
+          escalatedDrawingsCount={
+            initialAreaManagerStats?.escalatedDrawingsCount ??
+            activeExecutiveSummary.reviewBacklogCount
+          }
+          pendingAuthorityApprovals={
+            data.scopedNocs.filter(
+              (n) => n.status === 'Submitted' || n.status === 'Pending for Payment',
+            ).length
+          }
+          totalContractorAmount={activeExecutiveSummary.totalContractorAmount}
+          totalConsultantAmount={activeExecutiveSummary.totalConsultantAmount}
+        />
+      )}
+
       <AttentionTiles
         totalProjects={data.scopedProjects.length}
         delayedCount={data.delayItems.length}
@@ -372,6 +450,14 @@ export function ExecutiveDashboardClient({
         activeFilter={queueFilter}
         onSelectFilter={setQueueFilter}
       />
+
+      {(canViewFinancials || isCeo) && (
+        <FinancialPortfolioWidget
+          totalContractorAmount={activeExecutiveSummary.totalContractorAmount}
+          totalConsultantAmount={activeExecutiveSummary.totalConsultantAmount}
+          projectFinancials={activeExecutiveSummary.projectFinancials}
+        />
+      )}
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">

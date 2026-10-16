@@ -48,6 +48,7 @@ import type {
   NocResubmissionEntry,
 } from '@/types/noc';
 import { calculateDaysRemaining } from '@/lib/noc-tracker';
+import { can } from '@/lib/permissions';
 import {
   recordNocFeePayment,
   resubmitNocRevision,
@@ -160,13 +161,9 @@ export function NocInspectorDrawer({
 
   async function handleSaveFeePayment() {
     if (!item) return;
-    if (
-      !['admin', 'authority_engineer', 'dc', 'area_manager'].includes(
-        currentUserRole,
-      )
-    ) {
+    if (!can(currentUserRole, 'noc.tracker.update')) {
       toast.error(
-        'Only Document Controllers, Authority Engineers, Area Managers, or Admins can record fee payments.',
+        'Only Document Controllers, Authority Engineers, or Admins can record fee payments.',
       );
       return;
     }
@@ -200,13 +197,9 @@ export function NocInspectorDrawer({
 
   function handleTogglePaid() {
     if (!item) return;
-    if (
-      !['admin', 'authority_engineer', 'dc', 'area_manager'].includes(
-        currentUserRole,
-      )
-    ) {
+    if (!can(currentUserRole, 'noc.tracker.update')) {
       toast.error(
-        'Only Document Controllers, Authority Engineers, Area Managers, or Admins can record fee payments.',
+        'Only Document Controllers, Authority Engineers, or Admins can record fee payments.',
       );
       return;
     }
@@ -550,16 +543,18 @@ export function NocInspectorDrawer({
                       <Copy className="h-3.5 w-3.5" />
                     )}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRefInput(item.referenceNumber);
-                      setIsEditingRef(true);
-                    }}
-                    className="text-xs text-primary hover:underline ml-1"
-                  >
-                    Edit
-                  </button>
+                  {can(currentUserRole, 'noc.tracker.update') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRefInput(item.referenceNumber);
+                        setIsEditingRef(true);
+                      }}
+                      className="text-xs text-primary hover:underline ml-1"
+                    >
+                      Edit
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -709,37 +704,39 @@ export function NocInspectorDrawer({
                   <span className="text-lg font-bold font-mono">
                     AED {item.paymentFee.toLocaleString()}
                   </span>
-                  <div className="flex items-center gap-1.5">
-                    {item.isPaid ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 text-xs text-muted-foreground hover:text-foreground"
-                          onClick={() => setIsEditingFee(true)}
-                        >
-                          Edit
-                        </Button>
+                  {can(currentUserRole, 'noc.tracker.update') && (
+                    <div className="flex items-center gap-1.5">
+                      {item.isPaid ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() => setIsEditingFee(true)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={handleTogglePaid}
+                          >
+                            Mark as Unpaid
+                          </Button>
+                        </>
+                      ) : (
                         <Button
                           size="sm"
                           variant="outline"
                           className="h-7 text-xs"
                           onClick={handleTogglePaid}
                         >
-                          Mark as Unpaid
+                          Record Payment
                         </Button>
-                      </>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs"
-                        onClick={handleTogglePaid}
-                      >
-                        Record Payment
-                      </Button>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {item.isPaid && (

@@ -149,3 +149,159 @@ export async function submitResidentEngineerReview(
 
   return { success: true, newStatus };
 }
+
+export interface AreaManagerReviewInput {
+  documentId: string;
+  revisionId?: string;
+  decision: 'approve' | 'reject';
+  comment?: string;
+}
+
+const amReviewInputSchema = z
+  .object({
+    documentId: z.string().uuid(),
+    revisionId: z.string().optional(),
+    decision: z.enum(['approve', 'reject']),
+    comment: z.string().trim().optional(),
+  })
+  .refine(
+    (val) => {
+      if (val.decision === 'reject') {
+        return !!val.comment && val.comment.trim().length >= 5;
+      }
+      return true;
+    },
+    {
+      message: 'A rejection comment must be at least 5 characters.',
+      path: ['comment'],
+    },
+  );
+
+// Checks if Resident Engineer is absent from the project members.
+export async function isResidentEngineerAbsent(
+  projectId: string | null | undefined,
+): Promise<boolean> {
+  if (!projectId) return true;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('project_members')
+    .select(`
+      user_id,
+      profiles:profiles!project_members_user_id_fkey (
+        role
+      )
+    `)
+    .eq('project_id', projectId);
+
+  if (error || !data) return true;
+
+  const hasRE = data.some((m) => {
+    const prof = m.profiles as { role: string } | null;
+    return prof?.role === 'resident_engineer';
+  });
+
+  return !hasRE;
+}
+
+// Second-level drawing review decision action by Area Manager or Admin.
+export async function submitAreaManagerReview(
+  input: AreaManagerReviewInput,
+): Promise<{ success: boolean; newStatus?: string; error?: string }> {
+  // 1. Require review.decide capability
+  const user = await requireCan('review.decide');
+
+  // 2. Verify caller has role 'area_manager' or 'admin'
+  if (user.role !== 'area_manager' && user.role !== 'admin') {
+    return {
+      success: false,
+      error: 'Access denied: Only Area Managers and Admins can perform second-level reviews.',
+    };
+  }
+
+  // 3. Validate input payload
+  const parsed = amReviewInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Invalid review submission data',
+    };
+  }
+
+  const supabase = await createClient();
+
+  // 4. Query document and verify existence
+  const { data: doc, error: fetchError } = await supabase
+    .from('documents')
+    .select('id, project_id, status, revision')
+    .eq('id', parsed.data.documentId)
+    .maybeSingle();
+
+  if (fetchError || !doc) {
+    return { success: false, error: 'Document not found or access denied.' };
+  }
+
+  // 5. Verify document status is either 'escalated' OR ('submitted' and RE absent)
+  const isEscalated = doc.status === 'escalated';
+  const isSubmitted = doc.status === 'submitted';
+
+  if (!isEscalated && !isSubmitted) {
+    return {
+      success: false,
+      error: `Document cannot be reviewed in status '${doc.status}'.`,
+    };
+  }
+
+  if (isSubmitted) {
+    const reAbsent = await isResidentEngineerAbsent(doc.project_id);
+    if (!reAbsent) {
+      return {
+        success: false,
+        error:
+          'Drawing requires first-level review by the assigned Resident Engineer before Area Manager review.',
+      };
+    }
+  }
+
+  // 6. Compute target status
+  const newStatus: 'rejected' | 'ready_for_authority' =
+    parsed.data.decision === 'reject' ? 'rejected' : 'ready_for_authority';
+
+  // 7. Update document status
+  const { error: updateError } = await supabase
+    .from('documents')
+    .update({
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', doc.id);
+
+  if (updateError) {
+    return { success: false, error: updateError.message };
+  }
+
+  // 8. Insert review audit record into document_reviews at 'am' level
+  const reviewLevel: 'am' | 'admin' =
+    user.role === 'admin' ? 'admin' : 'am';
+
+  const { error: reviewError } = await supabase.from('document_reviews').insert({
+    document_id: doc.id,
+    revision_label: doc.revision || 'R00',
+    reviewer_id: user.id,
+    level: reviewLevel,
+    decision: parsed.data.decision,
+    comment: parsed.data.comment?.trim() || null,
+  });
+
+  if (reviewError) {
+    return { success: false, error: reviewError.message };
+  }
+
+  // 9. Revalidate paths
+  revalidatePath('/review');
+  revalidatePath('/reviews');
+  revalidatePath('/documents');
+  revalidatePath('/dashboard');
+  revalidatePath('/');
+
+  return { success: true, newStatus };
+}

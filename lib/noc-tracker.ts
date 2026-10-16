@@ -8,6 +8,9 @@ export const SEED_PROJECTS: AssignedProject[] = [
     projectType: 'Residential',
     location: 'Palm Jumeirah, Frond N',
     contractType: 'Design & Supervision',
+    contractorName: 'Arabian Construction Co.',
+    clientContractorAmount: 45000000,
+    clientConsultantAmount: 3200000,
     currentStage: 'Pre-Construction',
     lifecycleStage: 'Pre-Construction',
     assignedRoles: {
@@ -28,6 +31,9 @@ export const SEED_PROJECTS: AssignedProject[] = [
     projectType: 'Commercial',
     location: 'Al Kifaf, Dubai',
     contractType: 'Supervision',
+    contractorName: 'Al Naboodah Construction',
+    clientContractorAmount: 120000000,
+    clientConsultantAmount: 8500000,
     currentStage: 'Construction(supervision)',
     lifecycleStage: 'Construction',
     assignedRoles: {

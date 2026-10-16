@@ -59,3 +59,13 @@ export function getStageMilestoneDate(
       );
   }
 }
+
+// Format numeric values as UAE Dirhams (AED) currency string.
+export function formatCurrencyAED(amount?: number | null): string {
+  if (amount == null) return 'AED 0';
+  return new Intl.NumberFormat('en-AE', {
+    style: 'currency',
+    currency: 'AED',
+    maximumFractionDigits: 0,
+  }).format(amount);
+}

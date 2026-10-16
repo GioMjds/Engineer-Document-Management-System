@@ -17,6 +17,7 @@ import {
   DrawingReviewModal,
   type ReviewDocument,
 } from './drawing-review-modal';
+import { EscalationBadge } from './escalation-badge';
 import { getDownloadUrl } from '@/app/actions/documents';
 import { toast } from 'sonner';
 
@@ -29,8 +30,10 @@ const DISCIPLINE_COLORS: Record<string, string> = {
 
 export function ReviewQueueTable({
   documents,
+  currentUserRole,
 }: {
   documents: ReviewDocument[];
+  currentUserRole?: string;
 }) {
   const [search, setSearch] = useState('');
   const [disciplineFilter, setDisciplineFilter] = useState<string>('all');
@@ -175,6 +178,14 @@ export function ReviewQueueTable({
                         {doc.description}
                       </div>
                     )}
+                    {doc.status === 'escalated' && (
+                      <div className="mt-1">
+                        <EscalationBadge
+                          reviewerName={doc.escalatedBy}
+                          notes={doc.escalationNote}
+                        />
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell>
                     {doc.discipline ? (
@@ -213,7 +224,10 @@ export function ReviewQueueTable({
                       >
                         <Download className="h-3.5 w-3.5" />
                       </Button>
-                      <DrawingReviewModal document={doc} />
+                      <DrawingReviewModal
+                        document={doc}
+                        userRole={currentUserRole}
+                      />
                     </div>
                   </TableCell>
                 </TableRow>

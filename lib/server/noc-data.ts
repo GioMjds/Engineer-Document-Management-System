@@ -97,6 +97,7 @@ interface RawDbNoc {
 function mapDbProjectToAssigned(
   p: RawDbProject,
   masterAuth: MasterAuthority,
+  clientConsultantAmount?: number,
 ): AssignedProject {
   const seed = SEED_PROJECTS.find((sp) => sp.code === p.code);
   const roles: AssignedProject['assignedRoles'] = {
@@ -163,8 +164,13 @@ function mapDbProjectToAssigned(
     projectType: 'Commercial & Residential',
     location: 'Dubai, UAE',
     contractType: 'Design & Supervision',
-    contractorName: p.contractor_name || undefined,
-    clientContractorAmount: Number(p.client_contractor_amount) || 0,
+    contractorName: p.contractor_name || seed?.contractorName || undefined,
+    clientContractorAmount:
+      p.client_contractor_amount != null
+        ? Number(p.client_contractor_amount)
+        : seed?.clientContractorAmount ?? 0,
+    clientConsultantAmount:
+      clientConsultantAmount ?? seed?.clientConsultantAmount ?? undefined,
     currentStage: p.stage
       ? p.stage.charAt(0).toUpperCase() + p.stage.slice(1)
       : 'Pre-Construction',
@@ -310,13 +316,29 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
       }
     }
 
-    // 3. Map projects to AssignedProject
+    // 3. Fetch confidential consultant amounts if caller has permission
+    const { data: confidentialRows } = await supabase
+      .from('project_confidential')
+      .select('project_id, client_consultant_amount');
+
+    const confidentialMap = new Map<string, number>();
+    if (confidentialRows) {
+      for (const row of confidentialRows) {
+        confidentialMap.set(
+          row.project_id,
+          Number(row.client_consultant_amount) || 0,
+        );
+      }
+    }
+
+    // 4. Map projects to AssignedProject
     const projectMap = new Map<string, AssignedProject>();
     const projectDbIdToCode = new Map<string, string>();
 
     for (const rawProj of dbProjects as unknown as RawDbProject[]) {
       const masterAuth = getAuthorityName(rawProj.master_authority_id);
-      const assigned = mapDbProjectToAssigned(rawProj, masterAuth);
+      const consultantAmt = confidentialMap.get(rawProj.id);
+      const assigned = mapDbProjectToAssigned(rawProj, masterAuth, consultantAmt);
       projectMap.set(rawProj.code, assigned);
       projectDbIdToCode.set(rawProj.id, rawProj.code);
     }

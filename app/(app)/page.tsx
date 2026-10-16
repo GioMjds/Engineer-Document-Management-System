@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { ExecutiveDashboardClient } from '@/components/dashboard/executive-dashboard-client';
 import { getNocTrackerData } from '@/lib/server/noc-data';
+import { getExecutiveDashboardSummary } from '@/app/loaders/ceo';
 
 export const metadata: Metadata = {
   title: 'Executive Command Deck',
@@ -12,7 +13,10 @@ export const metadata: Metadata = {
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const { projects, nocs } = await getNocTrackerData();
+  const [{ projects, nocs }, executiveSummary] = await Promise.all([
+    getNocTrackerData(),
+    getExecutiveDashboardSummary(),
+  ]);
 
   let initialEngineerStats;
   if (user.role === 'engineer') {
@@ -35,6 +39,19 @@ export default async function DashboardPage() {
     }
   }
 
+  let initialAreaManagerStats;
+  if (user.role === 'area_manager') {
+    const supabase = await createClient();
+    const { count } = await supabase
+      .from('documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'escalated');
+
+    initialAreaManagerStats = {
+      escalatedDrawingsCount: count ?? 0,
+    };
+  }
+
   return (
     <div className="py-2">
       <ExecutiveDashboardClient
@@ -42,6 +59,8 @@ export default async function DashboardPage() {
         initialNocs={nocs}
         currentUserRole={user.role}
         initialEngineerStats={initialEngineerStats}
+        initialAreaManagerStats={initialAreaManagerStats}
+        executiveSummary={executiveSummary}
       />
     </div>
   );

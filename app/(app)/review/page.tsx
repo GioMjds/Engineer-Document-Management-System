@@ -7,12 +7,15 @@ import type { ReviewDocument } from '@/components/review/drawing-review-modal';
 
 export const metadata: Metadata = {
   title: 'Review Queue',
-  description: 'First-level technical review of submitted engineering drawings',
+  description: 'First and second-level technical review of engineering drawings',
 };
 
 export default async function ReviewPage() {
   const user = await requireCan('review.queue');
   const supabase = await createClient();
+
+  const isAreaManager = user.role === 'area_manager';
+  const isResidentEngineer = user.role === 'resident_engineer';
 
   // If user does not have global project visibility, restrict to assigned projects
   let assignedProjectIds: string[] | null = null;
@@ -25,7 +28,33 @@ export default async function ReviewPage() {
     assignedProjectIds = (members || []).map((m) => m.project_id);
   }
 
-  // Base query for submitted drawings
+  // Find all projects that have an active Resident Engineer assigned
+  const projectsWithRe = new Set<string>();
+  if (isAreaManager) {
+    const { data: reMembers } = await supabase
+      .from('project_members')
+      .select(`
+        project_id,
+        profiles:profiles!project_members_user_id_fkey (
+          role
+        )
+      `);
+
+    if (reMembers) {
+      for (const m of reMembers) {
+        const prof = m.profiles as { role: string } | null;
+        if (prof?.role === 'resident_engineer' && m.project_id) {
+          projectsWithRe.add(m.project_id);
+        }
+      }
+    }
+  }
+
+  // Base query for drawings waiting for review
+  const targetStatuses: ('submitted' | 'escalated')[] = isResidentEngineer
+    ? ['submitted']
+    : ['submitted', 'escalated'];
+
   let query = supabase
     .from('documents')
     .select(`
@@ -36,6 +65,7 @@ export default async function ReviewPage() {
       description,
       discipline,
       revision,
+      status,
       file_name,
       file_size,
       created_at,
@@ -60,7 +90,7 @@ export default async function ReviewPage() {
         )
       )
     `)
-    .eq('status', 'submitted')
+    .in('status', targetStatuses)
     .order('created_at', { ascending: true });
 
   if (assignedProjectIds !== null) {
@@ -91,7 +121,20 @@ export default async function ReviewPage() {
     console.error('Failed to fetch review queue:', error.message);
   }
 
-  const mappedDocuments: ReviewDocument[] = (pending || []).map((d) => {
+  // Filter queue for Area Manager: status='escalated' OR (status='submitted' and RE absent)
+  const filteredDocs = (pending || []).filter((d) => {
+    if (isAreaManager) {
+      if (d.status === 'escalated') return true;
+      if (d.status === 'submitted') {
+        const reAbsent = !d.project_id || !projectsWithRe.has(d.project_id);
+        return reAbsent;
+      }
+      return false;
+    }
+    return true;
+  });
+
+  const mappedDocuments: ReviewDocument[] = filteredDocs.map((d) => {
     const proj = d.projects as { id: string; code: string; description: string } | null;
     const uploader = d.uploader as { full_name: string } | null;
     const revs = d.reviews as Array<{
@@ -104,6 +147,9 @@ export default async function ReviewPage() {
       reviewer: { full_name: string } | null;
     }> | null;
 
+    // Find latest RE escalation record if present
+    const escalationReview = (revs || []).find((r) => r.level === 're');
+
     return {
       id: d.id,
       project_id: d.project_id,
@@ -112,12 +158,15 @@ export default async function ReviewPage() {
       description: d.description,
       discipline: d.discipline as ReviewDocument['discipline'],
       revision: d.revision || 'R00',
+      status: d.status,
       file_name: d.file_name,
       file_size: d.file_size,
       projectName: proj?.description,
       projectCode: proj?.code,
       authorName: uploader?.full_name || 'Engineer',
       createdAt: d.created_at,
+      escalationNote: escalationReview?.comment || null,
+      escalatedBy: escalationReview?.reviewer?.full_name || null,
       reviews: (revs || []).map((r) => ({
         id: r.id,
         revision_label: r.revision_label,
@@ -143,12 +192,17 @@ export default async function ReviewPage() {
             )}
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Technical compliance evaluation for submitted drawings across assigned projects.
+            {isAreaManager
+              ? 'Second-level technical review for escalated drawings and projects without assigned Resident Engineers.'
+              : 'Technical compliance evaluation for submitted drawings across assigned projects.'}
           </p>
         </div>
       </div>
 
-      <ReviewQueueTable documents={mappedDocuments} />
+      <ReviewQueueTable
+        documents={mappedDocuments}
+        currentUserRole={user.role}
+      />
     </div>
   );
 }

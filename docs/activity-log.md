@@ -321,3 +321,73 @@
   - Calculated fallback stats across scoped discipline statuses for dev role preview mode.
   - Rendered `EngineerSummaryCards` above `AttentionTiles` when `isEngineer` is active.
   - Re-verified TypeScript compilation (`tsc --noEmit`): 0 errors.
+
+- Implemented Chief Executive Officer (CEO) role per `docs/specs/roles/07-ceo.md`:
+  - Created database migration `supabase/migrations/20261016020000_ceo_role_rls.sql`:
+    - Added RLS policy `ceo_projects_select` on `public.projects` granting read-only visibility across all projects (`private.has_role(ARRAY['ceo'])`).
+    - Added RLS policy `ceo_confidential_select` on `public.project_confidential` granting confidential consultant amount visibility.
+    - Added RLS policy `ceo_documents_select` on `public.documents` granting read-only visibility across all drawings.
+    - Added RLS policy `ceo_noc_select` on `public.project_nocs` granting read-only visibility across all statutory milestones.
+    - Added RLS policy `ceo_reviews_select` on `public.document_reviews` granting read-only audit visibility.
+    - Enforced zero INSERT, UPDATE, or DELETE policies for CEO across all tables and buckets.
+  - Created Executive Data Loader in `app/loaders/ceo.ts`:
+    - Defined `ExecutiveKpiSummary` interface covering active projects, completion rate, critical delays, 14-day expiries, review backlog, contractor sum, consultant sum, and per-project financials.
+    - Implemented `getExecutiveDashboardSummary()` querying live database with resilient fallback to seed financials.
+  - Built Executive UI components:
+    - Created `components/dashboard/executive-summary-cards.tsx` rendering 5 high-density KPI cards (Active Projects, NOC Completion Rate, Critical Delays, 14-Day Expiries, Review Backlog).
+    - Created `components/dashboard/financial-portfolio-widget.tsx` rendering Contractor Contract Sum, Consultant Contract Sum, Combined Portfolio Value, and per-project commercial breakdown table.
+  - Wired executive dashboard in `app/(app)/page.tsx` and `components/dashboard/executive-dashboard-client.tsx`:
+    - Loaded `executiveSummary` via `getExecutiveDashboardSummary()`.
+    - Rendered `ExecutiveSummaryCards` and `FinancialPortfolioWidget` for CEO role and executive financial visibility.
+    - Added route aliases `app/(app)/dashboard/page.tsx` redirecting to `/` and `app/(app)/noc/page.tsx` redirecting to `/noc-tracker`.
+  - Enforced strict read-only DOM gating:
+    - Gated authority reference number edit button in `components/noc/noc-inspector-drawer.tsx` with `noc.tracker.update`.
+    - Gated NOC fee editing and payment recording in `components/noc/noc-inspector-drawer.tsx` with `noc.tracker.update`.
+    - Gated technical report attachment and approval in `components/dashboard/third-party-specialist-drawer.tsx` to omit mutation controls for CEO.
+  - Created automated acceptance test suite `scripts/verify-ceo.ts`:
+    - Automated tests covering TC-CEO-01 through TC-CEO-10 plus executive loader contract.
+    - Executed and verified: 10/10 tests passed.
+  - Verified regression test suites:
+    - `scripts/verify-foundation-and-admin.ts`: 11/11 passed.
+    - `scripts/verify-document-controller.ts`: 11/11 passed.
+    - `scripts/verify-authority-engineer.ts`: 11/11 passed.
+    - `scripts/verify-resident-engineer.ts`: 10/10 passed.
+    - `scripts/verify-ceo.ts`: 10/10 passed.
+  - Verified TypeScript compilation (`npx tsc --noEmit`): 0 errors.
+  - Verified Next.js production build (`pnpm run build`): 20/20 routes compiled cleanly with 0 errors.
+
+- Implemented Area Manager (AM) role per `docs/specs/roles/06-area-manager.md`:
+  - Created database migration `supabase/migrations/20261016010000_area_manager_role_rls.sql`:
+    - Added RLS policy `am_projects_select` on `public.projects` granting cross-project view (`project.viewAll`).
+    - Added RLS policy `am_confidential_select` on `public.project_confidential` granting confidential consultant amount access.
+    - Added RLS policy `am_documents_select` on `public.documents` granting read visibility across all projects.
+    - Added RLS policy `am_reviews_insert` on `public.document_reviews` for second-level reviews (`level = 'am'`).
+    - Added RLS policy `am_documents_status_update` on `public.documents` permitting transition to `ready_for_authority` or `rejected` for escalated drawings or RE absent projects.
+    - Enforced zero upload, edit, archive, or NOC fee payment capabilities.
+  - Implemented Server Actions & Helpers in `app/actions/reviews.ts`:
+    - `isResidentEngineerAbsent(projectId)`: Validates if Resident Engineer is unassigned from project members.
+    - `submitAreaManagerReview`: Validates `review.decide` capability, `area_manager` role, target statuses (`escalated` or `submitted` with RE absent), mandatory >= 5 character rejection comments, and inserts audit records into `document_reviews`.
+  - Updated Review Queue components:
+    - Created `components/review/escalation-badge.tsx` displaying "Escalated by RE [Name]" with escalation notes.
+    - Updated `components/review/review-queue-table.tsx` to render `EscalationBadge` and pass `userRole`.
+    - Updated `components/review/drawing-review-modal.tsx` with second-level review decision panel (Approve directly to `ready_for_authority`, Reject with >= 5 character comment, omitting escalation button, and displaying RE escalation rationale banner).
+    - Updated `app/(app)/review/page.tsx` to query cross-project drawings for Area Manager with `status = 'escalated'` or (`status = 'submitted'` with RE absent).
+  - Built Dashboard Regional & Financial Overview components:
+    - Added `formatCurrencyAED` in `utils/formatters.ts`.
+    - Extended `AssignedProject` in `types/noc.ts` and `SEED_PROJECTS` in `lib/noc-tracker.ts` with `clientConsultantAmount`.
+    - Updated `lib/server/noc-data.ts` to query `project_confidential` and attach consultant contract amounts for authorized roles.
+    - Created `components/dashboard/area-manager-summary-cards.tsx` rendering Regional Operations Overview (Active Projects, Escalated Drawings, Pending Authority Approvals) and Financial Overview (Contractor Amount vs Consultant Amount side-by-side).
+    - Wired `AreaManagerSummaryCards` in `components/dashboard/executive-dashboard-client.tsx` and computed `initialAreaManagerStats` in `app/(app)/page.tsx`.
+  - Created route aliases:
+    - `app/(app)/dashboard/page.tsx` redirecting to `/`.
+    - `app/(app)/noc/page.tsx` redirecting to `/noc-tracker`.
+  - Hardened NOC inspector drawer:
+    - Gated fee payments in `components/noc/noc-inspector-drawer.tsx` strictly with `can(currentUserRole, 'noc.tracker.update')`.
+  - Created automated acceptance test suite `scripts/verify-area-manager.ts`:
+    - Verified TC-AM-01 through TC-AM-10 (10/10 passed).
+  - Executed regression suites:
+    - RE (10/10), AE (11/11), DC (11/11), Foundation/Admin (11/11), Matrix (4/4), CEO (10/10).
+  - Verified TypeScript compilation (`npx tsc --noEmit`): 0 errors.
+  - Verified Next.js production build (`pnpm run build`): 20/20 routes compiled cleanly with 0 errors.
+
+

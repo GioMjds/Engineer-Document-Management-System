@@ -20,6 +20,7 @@ interface ThirdPartySpecialistDrawerProps {
   projectCode: string;
   projectName: string;
   specialists: ThirdPartySpecialistRecord[];
+  userRole?: string;
   onUploadSpecialistFile: (type: ThirdPartySpecialistType, fileName: string, fileSize: string) => void;
   onApproveSpecialistFile: (type: ThirdPartySpecialistType) => void;
 }
@@ -38,10 +39,12 @@ export function ThirdPartySpecialistDrawer({
   projectCode,
   projectName,
   specialists,
+  userRole,
   onUploadSpecialistFile,
   onApproveSpecialistFile,
 }: ThirdPartySpecialistDrawerProps) {
   const [selectedType, setSelectedType] = useState<ThirdPartySpecialistType | null>(null);
+  const isReadOnly = userRole === 'ceo';
 
   const getRecord = (type: ThirdPartySpecialistType) => {
     return specialists.find((s) => s.type === type) || {
@@ -125,20 +128,9 @@ export function ThirdPartySpecialistDrawer({
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {isPending && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5 text-xs"
-                      onClick={() => handleSimulateUpload(type)}
-                    >
-                      <Upload className="h-3.5 w-3.5" />
-                      Attach Report
-                    </Button>
-                  )}
-                  {isUploaded && (
-                    <>
+                {!isReadOnly && (
+                  <div className="flex items-center gap-2">
+                    {isPending && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -146,29 +138,42 @@ export function ThirdPartySpecialistDrawer({
                         onClick={() => handleSimulateUpload(type)}
                       >
                         <Upload className="h-3.5 w-3.5" />
-                        Replace
+                        Attach Report
                       </Button>
+                    )}
+                    {isUploaded && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-xs"
+                          onClick={() => handleSimulateUpload(type)}
+                        >
+                          <Upload className="h-3.5 w-3.5" />
+                          Replace
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700"
+                          onClick={() => onApproveSpecialistFile(type)}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Approve
+                        </Button>
+                      </>
+                    )}
+                    {isApproved && (
                       <Button
                         size="sm"
-                        className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700"
-                        onClick={() => onApproveSpecialistFile(type)}
+                        variant="ghost"
+                        className="gap-1.5 text-xs text-slate-500"
+                        onClick={() => handleSimulateUpload(type)}
                       >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Approve
+                        Upload Revision
                       </Button>
-                    </>
-                  )}
-                  {isApproved && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="gap-1.5 text-xs text-slate-500"
-                      onClick={() => handleSimulateUpload(type)}
-                    >
-                      Upload Revision
-                    </Button>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

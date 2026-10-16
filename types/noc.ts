@@ -187,6 +187,7 @@ export interface AssignedProject {
   contractType: string;
   contractorName?: string;
   clientContractorAmount?: number;
+  clientConsultantAmount?: number;
   currentStage: string;
   lifecycleStage: ProjectLifecycleStage;
   milestones?: StageMilestoneDates;

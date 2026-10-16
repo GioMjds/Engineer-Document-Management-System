@@ -26,29 +26,29 @@ Following the execution of the **Shared Foundation Migration**, **Role-Gated Sec
 
 ### A. CVTEC Business Reality (`BUSINESS_BRIEF_INFO.md`) vs. Phase 1 Scope
 
-| Business Factor | CVTEC Operational Profile | Phase 1 Scope Specification | Current Implementation Assessment |
-| :--- | :--- | :--- | :--- |
-| **Three Specialist Arms** | 1. **CVTEC Archiplanners™**<br>2. **CVTEC EngiLab™**<br>3. **CVTEC Project™** | Covers 5 discipline roles (Authority, MEP, Architect, Structure, Civil). Excludes dedicated PM role in initial phase. | **Aligned**: 7-role system maps Area Manager and Resident Engineer to project oversight; engineering disciplines assigned per-project on `project_members.discipline`. |
-| **Project Jurisdictions** | $4.2B landmark Dubai portfolio: Nakheel, Trakhees, DM, DDA. Waterfront and infrastructure developments. | Covers top Dubai statutory authorities: Nakheel & Trakhees, Dubai Municipality, Dubai Development Authority. | **Aligned**: Standard authority matrix templates operational for all 3 master jurisdictions with atomic propagation. |
-| **BIM Modeling Workflow** | Central federated models (LOD 300/400) integrating Arch, Struct, and MEP as single source of truth. | Free-tier Supabase (50 MB limit); heavy BIM federation deferred to subsequent phases. | **Partially Aligned**: Handles statutory 2D drawings and drawing PDFs. Deep CAD/BIM model federation deferred. |
-| **Project Lifecycle** | **Pre-Construction (Info & Design) → Construction → Handover** | Tracks Design and Supervision contracts; Handover NOC stage included. | **Fully Aligned**: 3-stage lifecycle engine operational across NOC Tracker, Executive Dashboard, and Project Creation. |
+| Business Factor           | CVTEC Operational Profile                                                                               | Phase 1 Scope Specification                                                                                           | Current Implementation Assessment                                                                                                                                      |
+| :------------------------ | :------------------------------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Three Specialist Arms** | 1. **CVTEC Archiplanners™**<br>2. **CVTEC EngiLab™**<br>3. **CVTEC Project™**                           | Covers 5 discipline roles (Authority, MEP, Architect, Structure, Civil). Excludes dedicated PM role in initial phase. | **Aligned**: 7-role system maps Area Manager and Resident Engineer to project oversight; engineering disciplines assigned per-project on `project_members.discipline`. |
+| **Project Jurisdictions** | $4.2B landmark Dubai portfolio: Nakheel, Trakhees, DM, DDA. Waterfront and infrastructure developments. | Covers top Dubai statutory authorities: Nakheel & Trakhees, Dubai Municipality, Dubai Development Authority.          | **Aligned**: Standard authority matrix templates operational for all 3 master jurisdictions with atomic propagation.                                                   |
+| **BIM Modeling Workflow** | Central federated models (LOD 300/400) integrating Arch, Struct, and MEP as single source of truth.     | Free-tier Supabase (50 MB limit); heavy BIM federation deferred to subsequent phases.                                 | **Partially Aligned**: Handles statutory 2D drawings and drawing PDFs. Deep CAD/BIM model federation deferred.                                                         |
+| **Project Lifecycle**     | **Pre-Construction (Info & Design) → Construction → Handover**                                          | Tracks Design and Supervision contracts; Handover NOC stage included.                                                 | **Fully Aligned**: 3-stage lifecycle engine operational across NOC Tracker, Executive Dashboard, and Project Creation.                                                 |
 
 ---
 
 ### B. Phase 1 Scope vs. Current Codebase Implementation
 
-| Feature / Deliverable | Phase 1 Scope Specification | Current Codebase Implementation | Status |
-| :--- | :--- | :--- | :--- |
-| **NOC Matrix Template Editor** | Editor for Authority Engineer and DC; cascade changes to unobtained NOCs without mutating approved NOCs. | `/noc-matrix` workspace with dynamic checklist builder, acyclic prerequisite picker, revision timeline, and atomic RPC propagation (`propagate_matrix_item_change`). | **Completed & Verified** |
-| **Prerequisite Blocking Sequence** | Applied status blocked until prerequisite NOC approved; Admin can override with logged reason. | Visual lock badges; `NocInspectorDrawer` enforces gates; role-gated Admin sequence override modal with mandatory justification (>= 15 chars). | **Completed & Verified** |
-| **NOC Fee & Receipt Tracking** | Track fee amount, payer (`Client`, `Contractor`, `Consultant Advance`), paid toggle, receipt link. | `NocInspectorDrawer` and `app/actions/noc.ts` (`recordNocFeePayment`) record fee, payer, receipt number, and receipt reference link. | **Completed & Verified** |
-| **Resubmission Audit History** | Rejected NOC resubmission (`R00` → `R01`) keeps prior rejection reasons and dates. | Resubmission workflow retains prior rejection comments, advances revision tag, logs to `noc_resubmission_history`, and displays historical accordion. | **Completed & Verified** |
-| **3-Stage Project Lifecycle & Gates** | Pre-Construction, Construction, Handover with milestone tracking and prerequisite checklists. | 3-stage sequential stepper and slide-over stage gate inspector with role-gated advance logic across NOC Tracker and Executive Dashboard. | **Completed & Verified** |
-| **Dual-Axis Project Scoping (RLS)** | Engineers and DCs view assigned projects only; Admin, CEO, Area Manager see all. | Enforced in database via `private.can_see_project(project_id)` and in server queries via `lib/server/noc-data.ts`. | **Completed & Verified** |
-| **Project Setup Workspace** | Register new project, assign authority template, generate code, configure team members. | `/projects/new` created with `ProjectRegistrationForm` and `app/actions/admin.ts: createProject`. Template NOC instantiation and auto-counter pending. | **In Progress (Partial)** |
-| **Two-Tier Drawing Review** | RE performs Level-1 review (approve, escalate, reject); AM performs Level-2 review. | UI page `/review` exists with `ReviewDialog`. Backend inserts into legacy `reviews` table and fails to update document status. | **Critical Gap (Broken)** |
-| **Automated Expiry & 14-Day Alerts** | Auto-flip to `Expired` on expiry date; email DC and Authority Engineer 14 days prior. | UI badge and KPI table identify upcoming expiries. Automated server cron (`pg_cron`) and email dispatcher (Resend) pending. | **Pending** |
-| **External Stakeholder Alerts** | Email client and contractor on `noc.obtained`, `noc.expiring`, `noc.rejected` (no login). | Stakeholder contact emails captured on `projects`; event taxonomy defined in `lib/permissions.ts`. Delivery worker pending. | **Pending** |
+| Feature / Deliverable                 | Phase 1 Scope Specification                                                                              | Current Codebase Implementation                                                                                                                                      | Status                    |
+| :------------------------------------ | :------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------ |
+| **NOC Matrix Template Editor**        | Editor for Authority Engineer and DC; cascade changes to unobtained NOCs without mutating approved NOCs. | `/noc-matrix` workspace with dynamic checklist builder, acyclic prerequisite picker, revision timeline, and atomic RPC propagation (`propagate_matrix_item_change`). | **Completed & Verified**  |
+| **Prerequisite Blocking Sequence**    | Applied status blocked until prerequisite NOC approved; Admin can override with logged reason.           | Visual lock badges; `NocInspectorDrawer` enforces gates; role-gated Admin sequence override modal with mandatory justification (>= 15 chars).                        | **Completed & Verified**  |
+| **NOC Fee & Receipt Tracking**        | Track fee amount, payer (`Client`, `Contractor`, `Consultant Advance`), paid toggle, receipt link.       | `NocInspectorDrawer` and `app/actions/noc.ts` (`recordNocFeePayment`) record fee, payer, receipt number, and receipt reference link.                                 | **Completed & Verified**  |
+| **Resubmission Audit History**        | Rejected NOC resubmission (`R00` → `R01`) keeps prior rejection reasons and dates.                       | Resubmission workflow retains prior rejection comments, advances revision tag, logs to `noc_resubmission_history`, and displays historical accordion.                | **Completed & Verified**  |
+| **3-Stage Project Lifecycle & Gates** | Pre-Construction, Construction, Handover with milestone tracking and prerequisite checklists.            | 3-stage sequential stepper and slide-over stage gate inspector with role-gated advance logic across NOC Tracker and Executive Dashboard.                             | **Completed & Verified**  |
+| **Dual-Axis Project Scoping (RLS)**   | Engineers and DCs view assigned projects only; Admin, CEO, Area Manager see all.                         | Enforced in database via `private.can_see_project(project_id)` and in server queries via `lib/server/noc-data.ts`.                                                   | **Completed & Verified**  |
+| **Project Setup Workspace**           | Register new project, assign authority template, generate code, configure team members.                  | `/projects/new` created with `ProjectRegistrationForm` and `app/actions/admin.ts: createProject`. Template NOC instantiation and auto-counter pending.               | **In Progress (Partial)** |
+| **Two-Tier Drawing Review**           | RE performs Level-1 review (approve, escalate, reject); AM performs Level-2 review.                      | UI page `/review` exists with `ReviewDialog`. Backend inserts into legacy `reviews` table and fails to update document status.                                       | **Critical Gap (Broken)** |
+| **Automated Expiry & 14-Day Alerts**  | Auto-flip to `Expired` on expiry date; email DC and Authority Engineer 14 days prior.                    | UI badge and KPI table identify upcoming expiries. Automated server cron (`pg_cron`) and email dispatcher (Resend) pending.                                          | **Pending**               |
+| **External Stakeholder Alerts**       | Email client and contractor on `noc.obtained`, `noc.expiring`, `noc.rejected` (no login).                | Stakeholder contact emails captured on `projects`; event taxonomy defined in `lib/permissions.ts`. Delivery worker pending.                                          | **Pending**               |
 
 ---
 
@@ -116,26 +116,31 @@ Following the execution of the **Shared Foundation Migration**, **Role-Gated Sec
 The following architectural and runtime points are vulnerable to failure and require immediate remediation:
 
 ### 1. The Review Queue Black Hole (`app/(app)/review/actions.ts`)
+
 - **Problem**: `submitReview` inserts into a deprecated table named `reviews`, rather than `document_reviews`.
 - **Break Point**: It **never updates `documents.status`**. When an engineer uploads a drawing (`status = 'submitted'`), any approval or rejection executed in `/review` leaves the document in `submitted` forever.
 - **Impact**: Authority Engineers filter for `ready_for_authority` drawings to submit to Dubai authorities. Because the review action never sets `ready_for_authority`, statutory submissions are permanently blocked.
 
 ### 2. New Project Empty NOC Tracker (`app/actions/admin.ts: createProject`)
+
 - **Problem**: `createProject` inserts a row into `projects` and `project_confidential`, but does **not instantiate `project_nocs`** from `noc_matrix_items`.
 - **Break Point**: Any project created through `/projects/new` contains 0 NOC records.
 - **Impact**: When users navigate to `/noc-tracker` for the new project, the tracker displays no NOCs. Furthermore, `master_authority_id` is hardcoded to 1, preventing projects from selecting Dubai Municipality or Dubai Development Authority.
 
 ### 3. Mock Fallback Mutation Blackhole (`lib/server/noc-data.ts` & `app/actions/noc.ts`)
+
 - **Problem**: When a project has no database NOC rows, `lib/server/noc-data.ts` falls back to `SEED_PROJECTS` (hardcoded 23015/23016 with IDs like `noc-1`).
 - **Break Point**: In `app/actions/noc.ts`, mutations validate if `nocId` is a UUID. If not, they return `{ success: true }` without executing any database update.
 - **Impact**: Users interact with mock records, receive success toast notifications, but changes are discarded silently on page reload.
 
 ### 4. Unenforced Discipline Scope on Document Upload
+
 - **Problem**: `uploadDocument` in `app/actions/documents.ts` accepts any discipline from the client form (`mep`, `architect`, `structure`, `civil`).
 - **Break Point**: The server action does not verify that the user's `project_members.discipline` matches the uploaded drawing's discipline.
 - **Impact**: An MEP engineer can upload structural or civil drawings, violating discipline ownership boundaries.
 
 ### 5. Absence of Background Expiry Engine
+
 - **Problem**: Expiration is calculated on-the-fly in the UI based on `expiry_date < today`.
 - **Break Point**: No backend process (`pg_cron` or Edge Function) mutates `status_code` to `'expired'` in `project_nocs`.
 - **Impact**: Database queries filtering by `status_code = 'expired'` return zero rows. External webhook triggers and reporting metrics based on stored status fail.
@@ -183,6 +188,7 @@ flowchart TD
 ```
 
 ### 1. Admin Workflow (`/projects/new`, `/users`, `/archive`)
+
 1. **User Management**: Navigates to `/users`, clicks **Invite User**, enters email, name, and assigns canonical role.
 2. **Project Initialization**: Navigates to `/projects/new`, selects Master Authority (e.g. Nakheel & Trakhees), enters project code, name, client/contractor contact emails, and contract values (contractor sum and confidential consultant sum).
 3. **Team Assignment**: Assigns discipline engineers (MEP, Architect, Structure, Civil), Resident Engineer, Authority Engineer, and Document Controller.
@@ -190,12 +196,14 @@ flowchart TD
 5. **Permanent Purge**: Navigates to `/archive` to inspect soft-deleted documents; executes permanent purge only after typing confirmation phrase.
 
 ### 2. Engineer Workflow (`/documents`, `/dashboard`)
+
 1. **Project Navigation**: Logs in, views assigned projects on Dashboard.
 2. **Drawing Upload (R00)**: Navigates to `/documents`, clicks **Upload Drawing**, selects assigned project and discipline, attaches PDF/DWG file, enters sheet number and title. File is uploaded as `R00` with status `submitted`.
 3. **Review Monitoring**: Monitors review status via high-contrast badges: `submitted` (Under Review - RE) or `escalated` (Under Review - AM).
 4. **Handling Rejections**: If rejected, inspects reviewer's comment in `RejectionFeedbackCard`, resolves comments in CAD/BIM, clicks **Upload Revision**, and submits `R01`. Status resets to `submitted`.
 
 ### 3. Resident Engineer (RE) Workflow (`/review`)
+
 1. **Queue Inspection**: Navigates to `/review`, sees drawings with status `submitted` across assigned projects.
 2. **Technical Review**: Opens drawing in viewer, inspects sheet specifications against compliance standards.
 3. **Decision Execution**:
@@ -204,18 +212,21 @@ flowchart TD
    - **Rejection**: Enters mandatory technical feedback describing deficiency; clicks **Reject**; status transitions to `rejected`.
 
 ### 4. Area Manager (AM) Workflow (`/review`, `/dashboard`, `/noc-tracker`)
+
 1. **Level-2 Review**: Navigates to `/review`, filters for drawings marked `escalated` or unassigned project drawings (RE absent).
 2. **Determination**: Evaluates design rationale and RE notes; approves (`ready_for_authority`) or rejects with mandatory feedback (`rejected`).
 3. **Portfolio Oversight**: Reviews Dashboard across all projects (`project.viewAll`), auditing contractor amounts, confidential consultant amounts, milestone progress, and delay KPIs.
 4. **NOC Oversight**: Inspects `/noc-tracker` in read-only mode to monitor statutory bottlenecks.
 
 ### 5. Document Controller (DC) Workflow (`/documents`, `/archive`, `/noc-tracker`, `/noc-matrix`)
+
 1. **Drawing Library Maintenance**: Navigates to `/documents`, reviews metadata, updates drawing indexing, and uploads new revisions on behalf of team members.
 2. **Archive Management**: Soft-deletes superseded or obsolete files (`document.archive`); navigates to `/archive` to restore erroneously archived files.
 3. **NOC Fee Tracking**: Opens `/noc-tracker`, clicks NOC item, enters authority fee amount, selects fee payer (`Client`, `Contractor`, `Consultant Advance`), toggles paid status, and records receipt reference link.
 4. **Matrix Maintenance**: Navigates to `/noc-matrix`, proposes template adjustments with mandatory justification; propagation cascades to unobtained project NOCs.
 
 ### 6. Authority Engineer Workflow (`/noc-tracker`, `/documents`, `/noc-matrix`)
+
 1. **Package Preparation**: Navigates to `/documents`, filters by `ready_for_authority` to retrieve approved technical drawings for submission.
 2. **Prerequisite Verification**: Opens `/noc-tracker`, checks prerequisite sequence status. If blocked, coordinates with team or requests Admin override.
 3. **Application Submission**: Clicks **Submit Application**, enters authority submission reference number, submission date, and uploads submission proof slip. Status updates to `submitted`.
@@ -224,6 +235,7 @@ flowchart TD
    - **Rejected**: Clicks **Record Decision** -> **Rejected**, enters authority rejection reason (>= 5 characters). Revision advances (`R00` -> `R01`), rejection history is logged, and status updates to `rejected`.
 
 ### 7. Chief Executive Officer (CEO) Workflow (`/dashboard`, `/noc-tracker`, `/documents`)
+
 1. **Command Deck Oversight**: Logs in, reviews Executive KPI ribbon (active projects, clearance rate, critical delays, upcoming expiries, review backlog).
 2. **Financial Portfolio Audit**: Audits total contractor and confidential consultant contract sums across all active projects.
 3. **Permitting Progress Tracking**: Monitors 3-stage lifecycle progress and NOC clearance percentages.

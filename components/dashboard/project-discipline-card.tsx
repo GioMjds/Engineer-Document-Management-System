@@ -240,6 +240,7 @@ export function ProjectDisciplineCard({
         projectCode={project.code}
         projectName={project.name}
         specialists={statusRecord.specialists}
+        userRole={userRole}
         onUploadSpecialistFile={(type, fileName, fileSize) =>
           onUploadSpecialistFile(project.code, type, fileName, fileSize)
         }
