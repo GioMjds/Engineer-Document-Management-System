@@ -1,10 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import Link from 'next/link';
-import { Search, Filter, ShieldCheck, Building2, MapPin, FolderPlus } from 'lucide-react';
-import { buttonVariants } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { Search, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -16,6 +13,7 @@ import {
 import { NocAlertBanner } from './noc-alert-banner';
 import { NocDataTable } from './noc-data-table';
 import { NocInspectorDrawer } from './noc-inspector-drawer';
+import { NocProjectHeader } from './noc-project-header';
 import { ProjectLifecycleStepper } from '@/components/lifecycle/project-lifecycle-stepper';
 import { StageGateDrawer } from '@/components/lifecycle/stage-gate-drawer';
 import {
@@ -23,6 +21,7 @@ import {
   INITIAL_PROJECT_MILESTONES,
 } from '@/lib/project-lifecycle';
 import { INITIAL_PROJECT_DISCIPLINE_STATUS } from '@/lib/project-status';
+import { matchesUrgentFilter } from '@/lib/noc-summary';
 import type {
   AssignedProject,
   ProjectNocItem,
@@ -31,10 +30,11 @@ import type {
   ProjectLifecycleStage,
   StageMilestoneDates,
 } from '@/types/noc';
-import { isExpiringSoon, isPlanDueOrAtRisk } from '@/lib/noc-tracker';
 
 interface NocTrackerClientProps {
-  projects: AssignedProject[];
+  /** The project from the URL (/noc-tracker/[projectId]). */
+  project: AssignedProject;
+  /** NOCs for this project only (filtered on the server). */
   initialNocs: ProjectNocItem[];
   currentUserRole: string;
 }
@@ -46,337 +46,135 @@ const STAGES = [
   'Handover NOC',
 ] satisfies NocStage[];
 
+const ALL_AUTHORITIES = 'all';
+
+const tabClass = (active: boolean) =>
+  `flex h-9 items-center gap-1.5 whitespace-nowrap rounded border px-3 text-xs font-medium transition-colors motion-reduce:transition-none ${
+    active
+      ? 'border-primary bg-primary text-primary-foreground shadow-xs'
+      : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
+  }`;
+
+const countClass = (active: boolean) =>
+  `rounded px-1.5 py-0.5 font-mono text-xs ${
+    active
+      ? 'bg-primary-foreground/20 text-primary-foreground'
+      : 'bg-muted text-muted-foreground'
+  }`;
+
 export function NocTrackerClient({
-  projects,
+  project,
   initialNocs,
   currentUserRole,
 }: NocTrackerClientProps) {
-  const [projectList, setProjectList] = useState<AssignedProject[]>(projects);
-  const [milestonesMap, setMilestonesMap] =
-    useState<Record<string, StageMilestoneDates>>(INITIAL_PROJECT_MILESTONES);
-  const [isGateDrawerOpen, setIsGateDrawerOpen] = useState(false);
-  const [selectedProjectCode, setSelectedProjectCode] = useState<string>(
-    projects[0]?.code || '23016',
+  const [lifecycleStage, setLifecycleStage] = useState<ProjectLifecycleStage>(
+    project.lifecycleStage || 'Pre-Construction',
   );
+  const [milestones, setMilestones] = useState(
+    INITIAL_PROJECT_MILESTONES[project.code] ?? project.milestones,
+  );
+  const [isGateDrawerOpen, setIsGateDrawerOpen] = useState(false);
   const [nocItems, setNocItems] = useState<ProjectNocItem[]>(initialNocs);
   const [activeStage, setActiveStage] = useState<string>('Design NOC');
   const [searchQuery, setSearchQuery] = useState('');
-  const [authorityFilter, setAuthorityFilter] = useState<string>('all');
+  const [authorityFilter, setAuthorityFilter] =
+    useState<string>(ALL_AUTHORITIES);
   const [urgentFilter, setUrgentFilter] = useState<string | null>(null);
   const [selectedNoc, setSelectedNoc] = useState<ProjectNocItem | null>(null);
 
-  const currentProject = useMemo(() => {
-    const proj =
-      projectList.find((p) => p.code === selectedProjectCode) || projectList[0];
-    if (!proj) return proj;
-    return {
-      ...proj,
-      milestones: milestonesMap[proj.code] || proj.milestones,
-    };
-  }, [projectList, selectedProjectCode, milestonesMap]);
+  const currentProject = useMemo(
+    () => ({ ...project, lifecycleStage, milestones }),
+    [project, lifecycleStage, milestones],
+  );
 
-  const currentGateReadiness = useMemo(() => {
-    if (!currentProject) {
-      return {
-        stage: 'Pre-Construction' as ProjectLifecycleStage,
-        nextStage: 'Construction' as ProjectLifecycleStage,
-        totalPrerequisites: 0,
-        satisfiedPrerequisites: 0,
-        readinessPercentage: 0,
-        isGateReady: false,
-        prerequisites: [],
-      };
-    }
-    return evaluateStageGateReadiness(
-      currentProject,
-      nocItems,
-      INITIAL_PROJECT_DISCIPLINE_STATUS[currentProject.code],
-    );
-  }, [currentProject, nocItems]);
-
-  const projectNocs = useMemo(
-    () => nocItems.filter((i) => i.projectCode === selectedProjectCode),
-    [nocItems, selectedProjectCode],
+  const currentGateReadiness = useMemo(
+    () =>
+      evaluateStageGateReadiness(
+        currentProject,
+        nocItems,
+        INITIAL_PROJECT_DISCIPLINE_STATUS[currentProject.code],
+      ),
+    [currentProject, nocItems],
   );
 
   const filteredNocs = useMemo(() => {
-    return projectNocs.filter((item) => {
-      // Stage tab filter
-      if (activeStage !== 'all' && item.stage !== activeStage) {
+    const query = searchQuery.trim().toLowerCase();
+    return nocItems.filter((item) => {
+      if (activeStage !== 'all' && item.stage !== activeStage) return false;
+      if (urgentFilter && !matchesUrgentFilter(item, urgentFilter))
         return false;
-      }
-
-      // Urgent filter from ribbon
-      if (urgentFilter === 'expiring') {
-        if (!isExpiringSoon(item.expiryDate) || item.status === 'Approved')
-          return false;
-      } else if (urgentFilter === 'rejected') {
-        if (item.status !== 'Rejected') return false;
-      } else if (urgentFilter === 'pending-payment') {
-        if (item.status !== 'Pending for Payment') return false;
-      } else if (urgentFilter === 'due-risk') {
-        if (
-          !(
-            (item.status === 'Not Started' || !item.applyDate) &&
-            item.status !== 'Approved' &&
-            item.status !== 'Not Needed' &&
-            isPlanDueOrAtRisk(item.planDate)
-          )
-        ) {
-          return false;
-        }
-      }
-
-      // Reviewing authority filter
       if (
-        authorityFilter !== 'all' &&
+        authorityFilter !== ALL_AUTHORITIES &&
         item.reviewingAuthority !== authorityFilter
       ) {
         return false;
       }
-
-      // Search query filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const matchesDesc = item.description.toLowerCase().includes(query);
-        const matchesAuth = item.reviewingAuthority
-          .toLowerCase()
-          .includes(query);
-        const matchesRef = item.referenceNumber.toLowerCase().includes(query);
-        const matchesSubmitter = item.submittedBy.toLowerCase().includes(query);
-        const matchesPayer = item.payerType
-          ? item.payerType.toLowerCase().includes(query)
-          : false;
-        const matchesOverride = item.overrideReason
-          ? item.overrideReason.toLowerCase().includes(query)
-          : false;
-        if (
-          !matchesDesc &&
-          !matchesAuth &&
-          !matchesRef &&
-          !matchesSubmitter &&
-          !matchesPayer &&
-          !matchesOverride
-        ) {
+      if (query) {
+        const haystack = [
+          item.description,
+          item.reviewingAuthority,
+          item.referenceNumber,
+          item.submittedBy,
+          item.payerType,
+          item.overrideReason,
+        ];
+        if (!haystack.some((v) => v?.toLowerCase().includes(query))) {
           return false;
         }
       }
-
       return true;
     });
-  }, [projectNocs, activeStage, urgentFilter, authorityFilter, searchQuery]);
+  }, [nocItems, activeStage, urgentFilter, authorityFilter, searchQuery]);
+
+  const authorityItems = useMemo(() => {
+    const set = new Set<ReviewingAuthority>();
+    nocItems.forEach((n) => set.add(n.reviewingAuthority));
+    return [
+      { value: ALL_AUTHORITIES, label: 'All authorities' },
+      ...Array.from(set)
+        .sort()
+        .map((a) => ({ value: a as string, label: a as string })),
+    ];
+  }, [nocItems]);
 
   function handleUpdateNoc(updated: ProjectNocItem) {
     setNocItems((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
-    if (selectedNoc?.id === updated.id) {
-      setSelectedNoc(updated);
-    }
+    if (selectedNoc?.id === updated.id) setSelectedNoc(updated);
   }
 
-  // Advance project lifecycle stage and close gate drawer.
   function handleAdvanceStage(newStage: ProjectLifecycleStage) {
-    if (!currentProject) return;
-    setProjectList((prev) =>
-      prev.map((p) =>
-        p.code === currentProject.code
-          ? { ...p, lifecycleStage: newStage }
-          : p,
-      ),
-    );
+    setLifecycleStage(newStage);
     setIsGateDrawerOpen(false);
   }
 
-  // Update regulatory milestone dates for current project.
-  function handleUpdateMilestones(updatedMilestones: StageMilestoneDates) {
-    if (!currentProject) return;
-    setMilestonesMap((prev) => ({
-      ...prev,
-      [currentProject.code]: updatedMilestones,
-    }));
-    setProjectList((prev) =>
-      prev.map((p) =>
-        p.code === currentProject.code
-          ? { ...p, milestones: updatedMilestones }
-          : p,
-      ),
-    );
-  }
-
-  const distinctAuthorities = useMemo(() => {
-    const set = new Set<ReviewingAuthority>();
-    projectNocs.forEach((n) => set.add(n.reviewingAuthority));
-    return Array.from(set).sort();
-  }, [projectNocs]);
-
-  if (!currentProject) {
-    return (
-      <div className="p-12 text-center border rounded-lg bg-card space-y-4">
-        <Building2 className="mx-auto h-12 w-12 text-muted-foreground/60" />
-        <h2 className="text-lg font-semibold">No Projects Registered</h2>
-        <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          There are currently no active projects. {currentUserRole === 'admin' ? 'Create a new project to get started.' : 'Contact an administrator to assign you to a project.'}
-        </p>
-        {currentUserRole === 'admin' && (
-          <Link
-            href="/projects/new"
-            className={cn(buttonVariants({ size: 'default' }), 'gap-1.5')}
-          >
-            <FolderPlus className="size-4" />
-            New Project
-          </Link>
-        )}
-      </div>
-    );
+  function handleUpdateMilestones(updated: StageMilestoneDates) {
+    setMilestones(updated);
   }
 
   return (
     <div className="space-y-4">
-      {/* Top Project Context Header */}
-      <section className="p-4 border rounded bg-card space-y-3">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b pb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm font-bold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-2 py-0.5 rounded">
-                Project {currentProject.code}
-              </span>
-              <h1 className="text-lg font-semibold tracking-tight">
-                {currentProject.name}
-              </h1>
-              <span className="text-[11px] px-2 py-0.5 rounded font-medium border bg-muted text-muted-foreground uppercase tracking-wider">
-                {currentUserRole.replace('_', ' ')}
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1">
-              <span className="flex items-center gap-1">
-                <ShieldCheck className="h-3.5 w-3.5 text-zinc-500" />
-                Master Authority:{' '}
-                <strong className="text-foreground">
-                  {currentProject.masterAuthority}
-                </strong>
-              </span>
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5 text-zinc-500" />
-                {currentProject.location}
-              </span>
-              <span className="flex items-center gap-1">
-                <Building2 className="h-3.5 w-3.5 text-zinc-500" />
-                Type: {currentProject.projectType} · Contract:{' '}
-                {currentProject.contractType}
-              </span>
-            </div>
-          </div>
+      <NocProjectHeader project={currentProject} />
 
-          {/* Project Switcher */}
-          <div className="flex items-center gap-2 self-start md:self-auto">
-            <span className="text-xs text-muted-foreground font-medium">
-              Switch Project:
-            </span>
-            <Select
-              value={selectedProjectCode}
-              onValueChange={(val) => {
-                if (val) {
-                  setSelectedProjectCode(val);
-                  setSelectedNoc(null);
-                }
-              }}
-            >
-              <SelectTrigger className="w-45 h-8 text-xs font-mono">
-                <SelectValue placeholder="Select project" />
-              </SelectTrigger>
-              <SelectContent>
-                {projectList.map((p) => (
-                  <SelectItem
-                    key={p.code}
-                    value={p.code}
-                    className="text-xs font-mono"
-                  >
-                    {p.code} - {p.name.substring(0, 20)}...
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+      <ProjectLifecycleStepper
+        currentStage={lifecycleStage}
+        readiness={currentGateReadiness}
+        milestones={milestones}
+        onOpenGateDetails={() => setIsGateDrawerOpen(true)}
+      />
 
-        {/* Assigned Discipline Engineers Bar */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-          <span>
-            Authority:{' '}
-            <strong className="text-foreground">
-              {currentProject.assignedRoles.authorityEngineer}
-            </strong>
-          </span>
-          <span>
-            Architect:{' '}
-            <strong className="text-foreground">
-              {currentProject.assignedRoles.architectEngineer}
-            </strong>
-          </span>
-          <span>
-            MEP:{' '}
-            <strong className="text-foreground">
-              {currentProject.assignedRoles.mepEngineer}
-            </strong>
-          </span>
-          <span>
-            Structure:{' '}
-            <strong className="text-foreground">
-              {currentProject.assignedRoles.structureEngineer}
-            </strong>
-          </span>
-          <span>
-            Civil:{' '}
-            <strong className="text-foreground">
-              {currentProject.assignedRoles.civilEngineer}
-            </strong>
-          </span>
-          <span>
-            RE:{' '}
-            <strong className="text-foreground">
-              {currentProject.assignedRoles.residentEngineer}
-            </strong>
-          </span>
-          <span>
-            AM:{' '}
-            <strong className="text-foreground">
-              {currentProject.assignedRoles.areaManager}
-            </strong>
-          </span>
-          <span>
-            DC:{' '}
-            <strong className="text-foreground">
-              {currentProject.assignedRoles.docController}
-            </strong>
-          </span>
-        </div>
-      </section>
-
-      {/* Project lifecycle stepper ribbon. */}
-      {currentProject && (
-        <ProjectLifecycleStepper
-          currentStage={currentProject.lifecycleStage || 'Pre-Construction'}
-          readiness={currentGateReadiness}
-          milestones={currentProject.milestones}
-          onOpenGateDetails={() => setIsGateDrawerOpen(true)}
-        />
-      )}
-
-      {/* Urgent Action Alert Ribbon */}
       <NocAlertBanner
-        items={projectNocs}
+        items={nocItems}
         activeFilter={urgentFilter}
         onSelectFilter={setUrgentFilter}
       />
 
-      {/* Stage Tab Navigation & Toolbar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-1">
-        {/* Stage Tabs */}
+      <div className="flex flex-col items-stretch justify-between gap-3 pt-1 md:flex-row md:items-center">
         <div
           className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0"
           role="tablist"
+          aria-label="NOC stage"
         >
           {STAGES.map((st) => {
-            const count = projectNocs.filter((n) => n.stage === st).length;
             const isActive = activeStage === st;
             return (
               <button
@@ -388,26 +186,15 @@ export function NocTrackerClient({
                   setActiveStage(st);
                   setUrgentFilter(null);
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground border-primary shadow-xs'
-                    : 'bg-card text-muted-foreground border-border hover:bg-muted hover:text-foreground'
-                }`}
+                className={tabClass(isActive)}
               >
                 <span>{st}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
-                    isActive
-                      ? 'bg-primary-foreground/20 text-primary-foreground'
-                      : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {count}
+                <span className={countClass(isActive)}>
+                  {nocItems.filter((n) => n.stage === st).length}
                 </span>
               </button>
             );
           })}
-
           <button
             type="button"
             role="tab"
@@ -416,46 +203,57 @@ export function NocTrackerClient({
               setActiveStage('all');
               setUrgentFilter(null);
             }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
-              activeStage === 'all'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-card text-muted-foreground border-border hover:bg-muted hover:text-foreground'
-            }`}
+            className={tabClass(activeStage === 'all')}
           >
             <span>All Stages</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-muted text-muted-foreground">
-              {projectNocs.length}
+            <span className={countClass(activeStage === 'all')}>
+              {nocItems.length}
             </span>
           </button>
         </div>
 
-        {/* Search & Filter Toolbar */}
         <div className="flex items-center gap-2">
-          <div className="relative flex-1 md:w-56">
-            <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+          <div className="relative flex-1 md:w-64">
+            <label htmlFor="noc-search" className="sr-only">
+              Search NOCs
+            </label>
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
             <Input
+              id="noc-search"
+              type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search NOCs, ref, submitter..."
-              className="pl-8 h-8 text-xs bg-card"
+              placeholder="Search ref, authority, submitter…"
+              className="h-9 bg-card pl-8 text-xs"
             />
           </div>
 
           <Select
             value={authorityFilter}
-            onValueChange={(val) => setAuthorityFilter(val || 'all')}
+            items={authorityItems}
+            onValueChange={(val) => setAuthorityFilter(val ?? ALL_AUTHORITIES)}
           >
-            <SelectTrigger className="w-35 h-8 text-xs bg-card">
-              <Filter className="h-3 w-3 mr-1 text-muted-foreground" />
-              <SelectValue placeholder="All Authorities" />
+            <SelectTrigger
+              aria-label="Filter by reviewing authority"
+              className="h-9 w-44 bg-card text-xs"
+            >
+              <Filter
+                className="mr-1 size-3 text-muted-foreground"
+                aria-hidden
+              />
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all" className="text-xs">
-                All Authorities
-              </SelectItem>
-              {distinctAuthorities.map((auth) => (
-                <SelectItem key={auth} value={auth} className="text-xs">
-                  {auth}
+              {authorityItems.map((item) => (
+                <SelectItem
+                  key={item.value}
+                  value={item.value}
+                  className="text-xs"
+                >
+                  {item.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -463,7 +261,6 @@ export function NocTrackerClient({
         </div>
       </div>
 
-      {/* Main Tabular Data Grid */}
       <NocDataTable
         items={filteredNocs}
         allNocs={nocItems}
@@ -471,7 +268,6 @@ export function NocTrackerClient({
         onSelectNoc={(item) => setSelectedNoc(item)}
       />
 
-      {/* Slide-Over Inspector Drawer */}
       <NocInspectorDrawer
         item={selectedNoc}
         allNocs={nocItems}
@@ -481,18 +277,15 @@ export function NocTrackerClient({
         onUpdateNoc={handleUpdateNoc}
       />
 
-      {/* Stage gate verification and readiness drawer. */}
-      {currentProject && (
-        <StageGateDrawer
-          project={currentProject}
-          readiness={currentGateReadiness}
-          currentUserRole={currentUserRole}
-          isOpen={isGateDrawerOpen}
-          onClose={() => setIsGateDrawerOpen(false)}
-          onAdvanceStage={handleAdvanceStage}
-          onUpdateMilestones={handleUpdateMilestones}
-        />
-      )}
+      <StageGateDrawer
+        project={currentProject}
+        readiness={currentGateReadiness}
+        currentUserRole={currentUserRole}
+        isOpen={isGateDrawerOpen}
+        onClose={() => setIsGateDrawerOpen(false)}
+        onAdvanceStage={handleAdvanceStage}
+        onUpdateMilestones={handleUpdateMilestones}
+      />
     </div>
   );
 }

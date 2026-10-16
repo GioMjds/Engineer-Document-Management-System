@@ -458,5 +458,17 @@
   - Added audit logging with `instantiated_nocs_count` to `public.audit_log`.
   - Revalidated `/projects`, `/noc-tracker`, `/noc`, and `/dashboard`.
   - Verified across all test suites with 100% pass rate.
-  - Verified regression test suites (68/68 tests passed) and Next.js production build (20/20 routes passed).
-
+  - Applied pending schema migrations and resolved review queue relationship error:
+  - Discovered `public.documents` was missing `project_id`, `discipline`, `revision`, and `archived_at` columns, and `public.document_reviews` was missing in live Supabase database.
+  - Adjusted `20261001000000_noc_matrix_and_downstream.sql` with idempotent `DROP POLICY IF EXISTS`.
+  - Adjusted `private.can_see_project` in `20261014000000_shared_foundation.sql` to preserve existing function parameter name `p_project`.
+  - Cast enum values to text in `20261016000000_resident_engineer_role_rls.sql` and `20261016010000_area_manager_role_rls.sql` to avoid transaction enum addition error 55P04.
+  - Resolved migration version timestamp collision between CEO and dynamic authorities migrations by renaming to `20261016023000_dynamic_authorities.sql`.
+  - Applied all migrations (`20261001000000` through `20261016030000`) cleanly to remote Supabase via `supabase db push`.
+  - Verified live Supabase review queue query execution (`documents` join `projects`, `profiles`, `document_reviews`): 100% success with zero errors.
+  - Executed acceptance and regression test suites (`verify-area-manager.ts`, `verify-resident-engineer.ts`): 100% passed.
+- Refactored blueprint propagation policy card in `components/matrix/matrix-item-editor-drawer.tsx`:
+  - Replaced incongruent pastel `border-sky-300 bg-sky-50` styling with Engineering Command Deck tokens (`border-border`, `bg-muted/40`, `text-(--site-cyan)` icon).
+  - Added monospace `Policy` badge and clean status emphasis tags.
+  - Added `pb-6` bottom padding to scroll container to eliminate text clipping against sticky footer.
+  - Verified TypeScript compilation and NOC matrix verification suite (100% pass).

@@ -41,7 +41,7 @@ const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
   name: 'CVTEC Engineer CMS',
-  url: 'https://docu-collab-three.vercel.app/',
+  url: 'https://cvtec-edms.vercel.app/',
   description: 'Collaborative document management and review application.',
   // Add more as needed
 };
@@ -57,7 +57,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       </head>
       <body
         className={cn(
-          'min-h-svh',
+          'min-h-dvh',
           manrope.variable,
           manrope.className,
           jakarta.variable,

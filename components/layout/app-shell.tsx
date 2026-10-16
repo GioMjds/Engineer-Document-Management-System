@@ -17,6 +17,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
+import { AppBreadcrumbs } from '@/components/layout/app-breadcrumbs';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { navFor, type Capability } from '@/lib/permissions';
@@ -68,11 +69,17 @@ export function AppShell({
       href: item.href as Route,
       group: meta?.group ?? 'More',
       icon: meta?.icon ?? FileText,
+      // Match on a segment boundary so '/review' doesn't light up on
+      // '/reviews' and '/noc' doesn't light up on '/noc-tracker'.
       active:
-        item.href === '/' ? pathname === '/' : pathname.startsWith(item.href),
+        item.href === '/'
+          ? pathname === '/'
+          : pathname === item.href || pathname.startsWith(`${item.href}/`),
     };
   });
-  const currentLabel = items.find((i) => i.active)?.label ?? 'CVTEC EDMS';
+  const navLabels = Object.fromEntries(
+    items.map((i) => [i.href as string, i.label]),
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -122,8 +129,8 @@ export function AppShell({
           >
             <Menu className="size-5" />
           </Button>
-          <p className="text-sm font-semibold">{currentLabel}</p>
-          <div className="ml-auto flex items-center gap-2">
+          <AppBreadcrumbs navLabels={navLabels} />
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <ThemeToggle />
           </div>
         </header>

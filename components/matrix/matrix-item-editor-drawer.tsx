@@ -431,7 +431,7 @@ function MatrixItemEditorDrawerForm({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+          <div className="flex-1 overflow-y-auto p-4 pb-6 space-y-4 text-xs">
             {/* Description */}
             <div className="space-y-1.5">
               <Label
@@ -794,18 +794,28 @@ function MatrixItemEditorDrawerForm({
               </p>
             </div>
 
-            {/* Propagation Alert Notice */}
-            <div className="rounded-lg border border-sky-300 bg-sky-50/70 p-3 text-xs text-sky-950 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-300">
+            {/* Blueprint Propagation Policy Card */}
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-xs space-y-1.5">
               <div className="flex items-start gap-2.5">
-                <Info className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-semibold text-xs text-sky-900 dark:text-sky-200">
-                    Automatic Project Propagation Notice
-                  </p>
-                  <p className="text-[11px] leading-relaxed text-sky-800/90 dark:text-sky-300/80">
-                    Saving will automatically propagate to unobtained NOCs (Not
-                    Started, Pending, Rejected) across all active projects under
-                    this Master Authority. Approved NOCs will NOT be modified.
+                <Info className="h-4 w-4 shrink-0 text-(--site-cyan) mt-0.5" />
+                <div className="space-y-1 min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-xs text-foreground">
+                      Automatic Project Propagation
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className="font-mono text-[10px] h-4.5 px-1.5 border-border bg-card text-muted-foreground uppercase tracking-wider"
+                    >
+                      Policy
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Saving automatically updates unobtained NOCs (
+                    <span className="text-foreground font-medium">Not Started</span>,{' '}
+                    <span className="text-foreground font-medium">Pending</span>,{' '}
+                    <span className="text-foreground font-medium">Rejected</span>
+                    ) across all active projects under this Master Authority. Approved certificates remain locked and unchanged.
                   </p>
                 </div>
               </div>
