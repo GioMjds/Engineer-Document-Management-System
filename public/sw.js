@@ -1,4 +1,4 @@
-const CACHE_NAME = 'docu-collab-cache-v2';
+const CACHE_NAME = 'docu-collab-cache-v3';
 const OFFLINE_URL = '/offline';
 const PUBLIC_ASSETS = [
   OFFLINE_URL,
