@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   X,
   CheckCircle2,
@@ -157,7 +157,7 @@ function getMilestoneFieldsForStage(
   }
 }
 
-export function StageGateDrawer({
+function StageGateDrawerContent({
   project,
   readiness,
   currentUserRole,
@@ -170,14 +170,6 @@ export function StageGateDrawer({
   const [draftMilestones, setDraftMilestones] = useState<StageMilestoneDates>(
     project.milestones || INITIAL_PROJECT_MILESTONES[project.code] || {},
   );
-
-  // Sync draft milestones when project changes or drawer opens.
-  useEffect(() => {
-    setDraftMilestones(
-      project.milestones || INITIAL_PROJECT_MILESTONES[project.code] || {},
-    );
-    setIsEditingMilestones(false);
-  }, [project.milestones, project.code, isOpen]);
 
   // Handle Escape key to dismiss drawer.
   useEffect(() => {
@@ -628,6 +620,20 @@ export function StageGateDrawer({
         </footer>
       </aside>
     </>
+  );
+}
+
+export function StageGateDrawer(props: StageGateDrawerProps) {
+  const { project, isOpen } = props;
+  const milestonesKey = JSON.stringify(
+    project.milestones || INITIAL_PROJECT_MILESTONES[project.code] || {},
+  );
+
+  return (
+    <StageGateDrawerContent
+      key={`${project.code}-${isOpen ? 'open' : 'closed'}-${milestonesKey}`}
+      {...props}
+    />
   );
 }
 

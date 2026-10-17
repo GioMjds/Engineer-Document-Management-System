@@ -106,6 +106,7 @@ export function NocInspectorDrawer({
 
   useEffect(() => {
     if (item) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFeeAmount(item.paymentFee);
       setFeePayer(item.payerType || 'client');
       setReceiptRef(item.receiptFileUrl || '');

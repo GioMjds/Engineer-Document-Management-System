@@ -13,6 +13,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { NocMatrixRevision } from '@/types/noc';
+import {
+  formatRevisionDate,
+  formatRoleName,
+  getActionBadgeStyle,
+} from './noc-matrix-utils';
 
 export interface MatrixRevisionDrawerProps {
   isOpen: boolean;
@@ -21,53 +26,6 @@ export interface MatrixRevisionDrawerProps {
   masterAuthorityName?: string;
   masterAuthorityId?: number;
   onRollback?: (revisionId: string) => void;
-}
-
-function formatRevisionDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr);
-    return new Intl.DateTimeFormat('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(d);
-  } catch {
-    return dateStr;
-  }
-}
-
-function getActionBadgeStyle(action: NocMatrixRevision['action']): string {
-  switch (action) {
-    case 'CREATE':
-      return 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
-    case 'UPDATE':
-      return 'bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
-    case 'DELETE':
-      return 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800';
-    case 'REORDER':
-      return 'bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800';
-    default:
-      return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
-  }
-}
-
-function formatRoleName(role?: string): string {
-  switch (role) {
-    case 'authority_engineer':
-      return 'Authority Engineer';
-    case 'dc':
-      return 'Document Controller';
-    case 'admin':
-      return 'Administrator';
-    case 'manager':
-      return 'Project Manager';
-    case 'engineer':
-      return 'Project Engineer';
-    default:
-      return role || 'Authority Engineer';
-  }
 }
 
 export function MatrixRevisionDrawer({

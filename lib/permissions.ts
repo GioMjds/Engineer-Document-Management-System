@@ -82,6 +82,7 @@ export const PERMISSIONS = {
 
   // Administration
   'users.manage': ['admin'], // invite users, change roles, assign people to projects
+  'audit.view': ['admin'],
 
   // Notifications
   'expiry.notify': ['authority_engineer', 'engineer', 'dc'],
@@ -201,6 +202,7 @@ export const NAV_ITEMS: ReadonlyArray<{
   { href: '/review', label: 'Review', capability: 'review.queue' },
   { href: '/archive', label: 'Archive', capability: 'archive.view' },
   { href: '/users', label: 'Users', capability: 'users.manage' },
+  { href: '/audit-logs', label: 'Audit Logs', capability: 'audit.view' },
 ];
 
 export function navFor(role: string | null | undefined) {

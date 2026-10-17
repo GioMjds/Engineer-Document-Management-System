@@ -97,7 +97,7 @@ export async function inviteUser(input: {
   full_name: string;
   role: AppRole;
 }): Promise<{ ok: boolean; error?: string }> {
-  await requireCan('users.manage');
+  const caller = await requireCan('users.manage');
 
   const parsed = inviteUserSchema.safeParse(input);
   if (!parsed.success) {
@@ -133,6 +133,18 @@ export async function inviteUser(input: {
     })
     .eq('id', data.user.id);
 
+  await adminClient.from('audit_log').insert({
+    actor_id: caller.id,
+    action: 'USER_INVITE',
+    entity: 'profiles',
+    entity_id: data.user.id,
+    metadata: {
+      email: parsed.data.email,
+      role: parsed.data.role,
+      full_name: parsed.data.full_name,
+    },
+  });
+
   revalidatePath('/users');
   return { ok: true };
 }
@@ -160,7 +172,7 @@ export async function updateUserRole(input: {
   // Guard 2: Prevent demoting the last active Admin
   const { data: targetProfile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, email, full_name')
     .eq('id', user_id)
     .single();
 
@@ -188,6 +200,19 @@ export async function updateUserRole(input: {
     return { ok: false, error: error.message };
   }
 
+  await supabase.from('audit_log').insert({
+    actor_id: caller.id,
+    action: 'USER_ROLE_UPDATE',
+    entity: 'profiles',
+    entity_id: user_id,
+    metadata: {
+      target_email: targetProfile?.email,
+      target_name: targetProfile?.full_name,
+      previous_role: targetProfile?.role,
+      new_role: role,
+    },
+  });
+
   revalidatePath('/users');
   return { ok: true };
 }
@@ -206,7 +231,7 @@ export async function deactivateUser(
   // Guard: Cannot deactivate the last admin
   const { data: targetProfile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, email, full_name')
     .eq('id', userId)
     .single();
 
@@ -233,6 +258,18 @@ export async function deactivateUser(
   if (error) {
     return { ok: false, error: error.message };
   }
+
+  await supabase.from('audit_log').insert({
+    actor_id: caller.id,
+    action: 'USER_DEACTIVATE',
+    entity: 'profiles',
+    entity_id: userId,
+    metadata: {
+      target_email: targetProfile?.email,
+      target_name: targetProfile?.full_name,
+      role: targetProfile?.role,
+    },
+  });
 
   revalidatePath('/users');
   return { ok: true };
@@ -480,7 +517,7 @@ export async function updateProjectMembers(
     discipline?: 'mep' | 'architect' | 'structure' | 'civil';
   }>,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireCan('users.manage');
+  const caller = await requireCan('users.manage');
 
   const supabase = await createClient();
 
@@ -499,6 +536,17 @@ export async function updateProjectMembers(
       return { ok: false, error: error.message };
     }
   }
+
+  await supabase.from('audit_log').insert({
+    actor_id: caller.id,
+    action: 'PROJECT_MEMBERS_UPDATE',
+    entity: 'projects',
+    entity_id: projectId,
+    metadata: {
+      members_count: members.length,
+      members,
+    },
+  });
 
   revalidatePath(`/projects/${projectId}`);
   return { ok: true };

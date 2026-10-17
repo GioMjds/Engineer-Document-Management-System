@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -56,30 +56,30 @@ export type Database = {
         Row: {
           comment: string | null
           created_at: string
-          decision: "approve" | "reject"
+          decision: string
           document_id: string
           id: string
-          level: "re" | "am" | "admin"
+          level: string
           reviewer_id: string
           revision_label: string
         }
         Insert: {
           comment?: string | null
           created_at?: string
-          decision: "approve" | "reject"
+          decision: string
           document_id: string
           id?: string
-          level: "re" | "am" | "admin"
+          level: string
           reviewer_id: string
           revision_label?: string
         }
         Update: {
           comment?: string | null
           created_at?: string
-          decision?: "approve" | "reject"
+          decision?: string
           document_id?: string
           id?: string
-          level?: "re" | "am" | "admin"
+          level?: string
           reviewer_id?: string
           revision_label?: string
         }
@@ -100,39 +100,13 @@ export type Database = {
           },
         ]
       }
-      project_confidential: {
-        Row: {
-          client_consultant_amount: number
-          project_id: string
-          updated_at: string
-        }
-        Insert: {
-          client_consultant_amount?: number
-          project_id: string
-          updated_at?: string
-        }
-        Update: {
-          client_consultant_amount?: number
-          project_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_confidential_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: true
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       documents: {
         Row: {
           archived_at: string | null
           archived_by: string | null
           created_at: string
           description: string | null
-          discipline: "mep" | "architect" | "structure" | "civil" | null
+          discipline: string | null
           doc_number: string
           file_name: string
           file_path: string
@@ -154,7 +128,7 @@ export type Database = {
           archived_by?: string | null
           created_at?: string
           description?: string | null
-          discipline?: "mep" | "architect" | "structure" | "civil" | null
+          discipline?: string | null
           doc_number: string
           file_name: string
           file_path: string
@@ -176,7 +150,7 @@ export type Database = {
           archived_by?: string | null
           created_at?: string
           description?: string | null
-          discipline?: "mep" | "architect" | "structure" | "civil" | null
+          discipline?: string | null
           doc_number?: string
           file_name?: string
           file_path?: string
@@ -434,6 +408,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "noc_resubmission_history_project_noc_id_fkey"
+            columns: ["project_noc_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_nocs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "noc_resubmission_history_resubmitted_by_fkey"
             columns: ["resubmitted_by"]
             isOneToOne: false
@@ -505,22 +486,48 @@ export type Database = {
         }
         Relationships: []
       }
+      project_confidential: {
+        Row: {
+          client_consultant_amount: number
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_consultant_amount?: number
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_consultant_amount?: number
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_confidential_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_members: {
         Row: {
           assigned_at: string
-          discipline: "mep" | "architect" | "structure" | "civil" | null
+          discipline: string | null
           project_id: string
           user_id: string
         }
         Insert: {
           assigned_at?: string
-          discipline?: "mep" | "architect" | "structure" | "civil" | null
+          discipline?: string | null
           project_id: string
           user_id: string
         }
         Update: {
           assigned_at?: string
-          discipline?: "mep" | "architect" | "structure" | "civil" | null
+          discipline?: string | null
           project_id?: string
           user_id?: string
         }
@@ -575,6 +582,13 @@ export type Database = {
             columns: ["project_noc_id"]
             isOneToOne: false
             referencedRelation: "project_nocs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_noc_requirements_project_noc_id_fkey"
+            columns: ["project_noc_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_nocs"
             referencedColumns: ["id"]
           },
           {
@@ -940,6 +954,23 @@ export type Database = {
       }
     }
     Functions: {
+      create_matrix_item_atomic: {
+        Args: {
+          p_blocking_seq: number | null
+          p_caller_id: string
+          p_change_summary: string
+          p_default_fee: number
+          p_description: string
+          p_master_authority_id: number
+          p_requirements?: Json
+          p_reviewing_authority_id: number
+          p_stage: Database["public"]["Enums"]["noc_stage"]
+          p_submitted_by: Database["public"]["Enums"]["noc_submitter"]
+          p_validity_days: number
+        }
+        Returns: Json
+      }
+      example: { Args: never; Returns: undefined }
       next_project_code: { Args: never; Returns: string }
       propagate_matrix_item_change: {
         Args: {
@@ -949,6 +980,22 @@ export type Database = {
           p_default_fee: number
           p_description: string
           p_matrix_item_id: string
+          p_reviewing_authority_id: number
+          p_stage: Database["public"]["Enums"]["noc_stage"]
+          p_submitted_by: Database["public"]["Enums"]["noc_submitter"]
+          p_validity_days: number
+        }
+        Returns: Json
+      }
+      save_matrix_item_atomic: {
+        Args: {
+          p_blocking_seq: number | null
+          p_caller_id: string
+          p_change_summary: string
+          p_default_fee: number
+          p_description: string
+          p_matrix_item_id: string
+          p_requirements?: Json
           p_reviewing_authority_id: number
           p_stage: Database["public"]["Enums"]["noc_stage"]
           p_submitted_by: Database["public"]["Enums"]["noc_submitter"]

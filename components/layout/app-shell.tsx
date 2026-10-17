@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  ScrollText,
   ShieldCheck,
   Users,
   X,
@@ -24,9 +25,7 @@ import { navFor, type Capability } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 
 /** Nav grouping + icons live here; navFor() still decides WHO sees WHAT. */
-const NAV_META: Partial<
-  Record<Capability, { group: string; icon: LucideIcon }>
-> = {
+const NAV_META = {
   'dashboard.view': { group: 'Overview', icon: LayoutDashboard },
   'noc.view': { group: 'Authorities', icon: ShieldCheck },
   'noc.matrix.view': { group: 'Authorities', icon: Layers },
@@ -34,7 +33,9 @@ const NAV_META: Partial<
   'review.queue': { group: 'Documents', icon: CheckSquare },
   'archive.view': { group: 'Documents', icon: Archive },
   'users.manage': { group: 'Administration', icon: Users },
-};
+  'audit.view': { group: 'Administration', icon: ScrollText },
+} satisfies Partial<Record<Capability, { group: string; icon: LucideIcon }>>;
+
 const GROUP_ORDER = [
   'Overview',
   'Authorities',
@@ -63,7 +64,7 @@ export function AppShell({
   const [open, setOpen] = useState(false);
 
   const items = navFor(user.role).map((item) => {
-    const meta = NAV_META[item.capability];
+    const meta = NAV_META[item.capability as keyof typeof NAV_META];
     return {
       label: item.label,
       href: item.href as Route,

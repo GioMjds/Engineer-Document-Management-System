@@ -132,6 +132,7 @@ export interface NocMatrixItem {
   masterAuthorityId: number;
   sequenceNo: number;
   stage: NocStage;
+  reviewingAuthorityId: number;
   reviewingAuthority: ReviewingAuthority;
   description: string;
   submittedBy: SubmittedBy;

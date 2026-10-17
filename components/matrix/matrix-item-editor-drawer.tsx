@@ -66,6 +66,8 @@ export interface MatrixItemEditorDrawerProps {
   onSaved?: () => void;
 }
 
+// Hardcoded reviewing authorities, stages, and submitters for selection in the NOC blueprint editor form.
+// This may be set by the admin.
 const REVIEWING_AUTHORITIES: ReviewingAuthority[] = [
   'DEWA',
   'RTA',
@@ -83,19 +85,19 @@ const REVIEWING_AUTHORITIES: ReviewingAuthority[] = [
   'DDA',
 ];
 
-const STAGES: NocStage[] = [
+const STAGES = [
   'Design NOC',
   'Construction NOC',
   'Information NOC',
   'Handover NOC',
-];
+] satisfies NocStage[];
 
-const SUBMITTERS: SubmittedBy[] = [
+const SUBMITTERS = [
   'Consultant',
   'Client',
   'Contractor',
   'Specialists',
-];
+] satisfies SubmittedBy[];
 
 interface DraftRequirement {
   id?: string;
@@ -135,24 +137,17 @@ function MatrixItemEditorDrawerForm({
   const [description, setDescription] = useState(item?.description ?? '');
   const [reviewingAuthority, setReviewingAuthority] =
     useState<ReviewingAuthority>(item?.reviewingAuthority ?? 'DEWA');
-  const [authorityOptions, setAuthorityOptions] = useState<string[]>(() => {
-    if (availableReviewingAuthorities && availableReviewingAuthorities.length > 0) {
-      const names = availableReviewingAuthorities.map((a) => a.name);
-      return Array.from(new Set([...names, ...REVIEWING_AUTHORITIES]));
-    }
-    return REVIEWING_AUTHORITIES;
-  });
+  const [createdAuthorities, setCreatedAuthorities] = useState<string[]>([]);
+  const authorityOptions = Array.from(
+    new Set([
+      ...(availableReviewingAuthorities || []).map((a) => a.name),
+      ...createdAuthorities,
+      ...REVIEWING_AUTHORITIES,
+    ]),
+  );
   const [isAddRevAuthOpen, setIsAddRevAuthOpen] = useState(false);
   const [newRevAuthName, setNewRevAuthName] = useState('');
   const [isCreatingRevAuth, setIsCreatingRevAuth] = useState(false);
-
-  useEffect(() => {
-    if (availableReviewingAuthorities && availableReviewingAuthorities.length > 0) {
-      setAuthorityOptions((prev) =>
-        Array.from(new Set([...availableReviewingAuthorities.map((a) => a.name), ...prev])),
-      );
-    }
-  }, [availableReviewingAuthorities]);
 
   const handleCreateReviewingAuthority = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,7 +164,9 @@ function MatrixItemEditorDrawerForm({
     }
 
     const created = res.data;
-    setAuthorityOptions((prev) => (prev.includes(created.name) ? prev : [...prev, created.name]));
+    setCreatedAuthorities((prev) =>
+      prev.includes(created.name) ? prev : [...prev, created.name],
+    );
     setReviewingAuthority(created.name as ReviewingAuthority);
     onReviewingAuthorityCreated?.(created);
     setIsAddRevAuthOpen(false);
@@ -281,6 +278,11 @@ function MatrixItemEditorDrawerForm({
         sortOrder: i + 1,
       }));
 
+      const selectedRevAuth = (availableReviewingAuthorities || []).find(
+        (a) => a.name.toLowerCase() === reviewingAuthority.toLowerCase(),
+      );
+      const revAuthId = selectedRevAuth?.id ?? item?.reviewingAuthorityId;
+
       if (item) {
         // Edit existing blueprint item.
         const res = await saveMatrixItem({
@@ -288,6 +290,7 @@ function MatrixItemEditorDrawerForm({
           masterAuthorityId,
           description: trimmedDescription,
           stage,
+          reviewingAuthorityId: revAuthId,
           reviewingAuthority,
           submittedBy,
           blockingSequenceNo: parsedBlocking,
@@ -310,6 +313,7 @@ function MatrixItemEditorDrawerForm({
           ...item,
           description: trimmedDescription,
           stage,
+          reviewingAuthorityId: revAuthId ?? item.reviewingAuthorityId ?? 0,
           reviewingAuthority,
           submittedBy,
           blockingSequenceNo: parsedBlocking,
@@ -340,6 +344,7 @@ function MatrixItemEditorDrawerForm({
           masterAuthorityId,
           description: trimmedDescription,
           stage,
+          reviewingAuthorityId: revAuthId,
           reviewingAuthority,
           submittedBy,
           blockingSequenceNo: parsedBlocking,

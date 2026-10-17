@@ -45,9 +45,10 @@ try {
   const pushCmd = `npx supabase db push --project-ref "${projectRef}" --password "${password}" --include-all`;
   const pushOut = execSync(pushCmd, { stdio: 'pipe', encoding: 'utf8' });
   console.log(pushOut);
-} catch (err: any) {
-  console.error('Push error status:', err.status);
-  console.error('stdout:', err.stdout);
-  console.error('stderr:', err.stderr);
+} catch (err: unknown) {
+  const e = err as { status?: number; stdout?: string; stderr?: string };
+  console.error('Push error status:', e.status);
+  console.error('stdout:', e.stdout);
+  console.error('stderr:', e.stderr);
   process.exit(1);
 }

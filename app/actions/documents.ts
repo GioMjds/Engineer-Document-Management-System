@@ -150,6 +150,21 @@ export async function uploadDocument(
     return { success: false, error: insertError.message };
   }
 
+  await supabase.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'DOCUMENT_UPLOAD',
+    entity: 'documents',
+    entity_id: insertedDoc.id,
+    metadata: {
+      title,
+      doc_number: docNumber,
+      revision: 'R00',
+      project_id: projectId,
+      file_name: file.name,
+      file_size: file.size,
+    },
+  });
+
   revalidatePath('/documents');
   revalidatePath('/review');
   return { success: true, documentId: insertedDoc.id };
@@ -198,7 +213,7 @@ export async function editDocument(
 
   const { data: doc } = await supabase
     .from('documents')
-    .select('id, project_id, uploaded_by')
+    .select('id, project_id, uploaded_by, title, doc_number')
     .eq('id', documentId)
     .maybeSingle();
 
@@ -252,6 +267,18 @@ export async function editDocument(
     return { success: false, error: error.message };
   }
 
+  await supabase.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'DOCUMENT_EDIT',
+    entity: 'documents',
+    entity_id: documentId,
+    metadata: {
+      doc_number: doc.doc_number,
+      title: doc.title,
+      updates: parsed.data,
+    },
+  });
+
   revalidatePath('/documents');
   return { success: true };
 }
@@ -268,7 +295,7 @@ export async function uploadDocumentRevision(
 
   const { data: doc } = await supabase
     .from('documents')
-    .select('id, project_id, revision, status, uploaded_by')
+    .select('id, project_id, revision, status, uploaded_by, title, doc_number')
     .eq('id', documentId)
     .maybeSingle();
 
@@ -352,6 +379,21 @@ export async function uploadDocumentRevision(
     return { success: false, error: updateError.message };
   }
 
+  await supabase.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'DOCUMENT_REVISION_UPLOAD',
+    entity: 'documents',
+    entity_id: documentId,
+    metadata: {
+      title: doc.title,
+      doc_number: doc.doc_number,
+      previous_revision: doc.revision,
+      new_revision: nextRevision,
+      file_name: file.name,
+      file_size: file.size,
+    },
+  });
+
   revalidatePath('/documents');
   revalidatePath('/review');
   return { success: true, newRevision: nextRevision };
@@ -368,7 +410,7 @@ export async function archiveDocument(
 
   const { data: doc } = await supabase
     .from('documents')
-    .select('id, project_id, status')
+    .select('id, project_id, status, title, doc_number')
     .eq('id', documentId)
     .maybeSingle();
 
@@ -403,6 +445,19 @@ export async function archiveDocument(
     return { success: false, error: error.message };
   }
 
+  await supabase.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'DOCUMENT_ARCHIVE',
+    entity: 'documents',
+    entity_id: documentId,
+    metadata: {
+      title: doc.title,
+      doc_number: doc.doc_number,
+      previous_status: doc.status,
+      project_id: doc.project_id,
+    },
+  });
+
   revalidatePath('/documents');
   revalidatePath('/archive');
   revalidatePath('/review');
@@ -420,7 +475,7 @@ export async function restoreDocument(
 
   const { data: doc } = await supabase
     .from('documents')
-    .select('id, project_id, status, status_before_archive')
+    .select('id, project_id, status, status_before_archive, title, doc_number')
     .eq('id', documentId)
     .maybeSingle();
 
@@ -454,6 +509,19 @@ export async function restoreDocument(
   if (error) {
     return { success: false, error: error.message };
   }
+
+  await supabase.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'DOCUMENT_RESTORE',
+    entity: 'documents',
+    entity_id: documentId,
+    metadata: {
+      title: doc.title,
+      doc_number: doc.doc_number,
+      restored_status: doc.status_before_archive ?? 'submitted',
+      project_id: doc.project_id,
+    },
+  });
 
   revalidatePath('/documents');
   revalidatePath('/archive');

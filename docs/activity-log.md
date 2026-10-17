@@ -1,5 +1,32 @@
 # Activity Log
 
+## Session 2026-10-17
+
+- Initiated UI redesign ideation for Authority NOC Matrix in `app/(app)/noc-matrix`.
+- Invoked `superpowers:brainstorming` (Architectural path).
+- Explored project context, `PRODUCT.md`, `DESIGN.md`, and current `NocMatrixWorkspace` implementation.
+- Collaborated with user on layout style: selected Master-Detail Split Workbench (2-pane Command Deck).
+- Aligned on Dual-mode Deliverables Inspector connecting blueprints with `/documents` and `/noc-tracker`.
+- Designed component architecture, tokens, data flow, error handling, and test strategy.
+- Created design spec at `docs/superpowers/specs/2026-10-17-noc-matrix-ui-redesign-design.md`.
+- Removed mock fallbacks and fake success paths in `app/(app)/noc-matrix/actions.ts`.
+- Removed `DEFAULT_MASTER_AUTHORITIES`, `DEFAULT_REVIEWING_AUTHORITIES`, and `SEED_REVISIONS`.
+- Created `supabase/seed.sql` for statutory authorities with identity resets.
+- Typed statutory closed sets against database enums in `lib/noc-constants.ts`.
+- Derived badge colors from authority ID hash into a consistent palette.
+- Created and applied migration `20261017000000_atomic_noc_matrix_rpcs.sql` to remote database.
+- Added lowercase unique indexes on master and reviewing authority names.
+- Added unique index on active matrix item sequences per master authority.
+- Added check constraint on `noc_matrix_revisions.action` restricted to `CREATE`, `UPDATE`, `DELETE`, `REORDER`.
+- Created atomic PostgreSQL functions `save_matrix_item_atomic` and `create_matrix_item_atomic`.
+- Integrated atomic RPCs into `actions.ts` to execute mutations, propagation, and checklist updates in single transactions.
+- Regenerated TypeScript schema definitions in `types/database.ts`.
+- Implemented Task 1: Built `components/matrix/noc-matrix-header.tsx` with master authority selector, revision log trigger, and role-gated creation controls.
+- Implemented Task 2: Built `components/matrix/noc-matrix-sidebar.tsx` with search, authority filters, stage grouping, and arrow key navigation.
+- Implemented Task 3: Built `components/matrix/noc-matrix-inspector.tsx` with prerequisite links, statutory checklists, document connectors, and scoped audit history.
+- Implemented Task 4: Refactored `components/matrix/noc-matrix-workspace.tsx` into dual-pane Engineering Command Deck workbench, verified with `npx tsc --noEmit`.
+- Implemented Task 5: Verified production build (`pnpm build`) passing across all 21 routes and `pnpm lint` passing with 0 errors. Addressed final review findings (uniform 1px borders, modal keydown guard, shadow-none on tabs, and action badge function consolidation).
+
 ## Session 2026-09-29
 
 - Started session for `/impeccable init` using context from `D:\Downloads\Data-workflow.pdf`.
@@ -472,3 +499,34 @@
   - Added monospace `Policy` badge and clean status emphasis tags.
   - Added `pb-6` bottom padding to scroll container to eliminate text clipping against sticky footer.
   - Verified TypeScript compilation and NOC matrix verification suite (100% pass).
+
+## Session 2026-10-17
+
+- Authored comprehensive role action and visibility guide `docs/role-guides.md`:
+  - Defined system-wide master visibility and permission matrix across all 7 canonical roles (`admin`, `ceo`, `area_manager`, `resident_engineer`, `authority_engineer`, `engineer`, `dc`) and 4 disciplines (`mep`, `architect`, `structure`, `civil`).
+  - Documented complete entity lifecycles and state transitions:
+    - Project visibility isolation (`private.can_see_project`) and automated statutory NOC template cloning.
+    - Engineering drawing review state machine: initial upload (R00, `submitted`), RE 1st-level review (approve direct -> `ready_for_authority`, approve & escalate -> `escalated`, reject -> `rejected`), AM 2nd-level review, revision resubmission (R01+), soft-delete archiving, and permanent purge.
+    - Statutory NOC tracking: Master vs Reviewing authorities, portal submission references, fee and payer recording, approval with mandatory expiry, authority rejection handling, and prerequisite sequence blocking with Admin override.
+    - Financial confidentiality split: public contractor amount vs confidential consultant amount in `public.project_confidential` protected by RLS.
+  - Produced dedicated, step-by-step UI click guides for each of the 7 roles detailing exact navigation routes, buttons, modals, input fields, confirmation steps, and role-specific UI guardrails/restrictions.
+  - Documented 5 cross-role operational scenarios for pairing and production workflows.
+
+- Cleared seed data from NOC Matrix:
+  - Emptied `SEED_MATRIX_TEMPLATES` in `lib/noc-matrix.ts` and `SEED_REVISIONS` in `app/(app)/noc-matrix/actions.ts`.
+  - Updated `getMatrixTemplates` and `getMatrixRevisions` in `app/(app)/noc-matrix/actions.ts` to cleanly return empty arrays instead of resurrecting hardcoded seed items and revision history.
+  - Added clean industrial empty state in `components/matrix/noc-matrix-workspace.tsx` when no statutory NOC blueprints exist for a master authority, providing an "Add Standard NOC" action for authorized roles (`admin`, `authority_engineer`, `dc`).
+  - Added dedicated no-match empty state when search query yields 0 results.
+  - Verified project creation in `app/actions/admin.ts` does not auto-populate mock NOCs when matrix items are empty.
+  - Verified TypeScript compilation (`npx tsc --noEmit`) and full production build (`pnpm run build`): all 20 routes compiled with 0 errors.
+
+- Implemented Admin Audit Log and Compliance Ledger:
+  - Added `audit.view` capability restricted exclusively to `admin` in `lib/permissions.ts`.
+  - Added `/audit-logs` route to Admin navigation menu in `lib/permissions.ts` and `components/layout/app-shell.tsx` with `ScrollText` icon.
+  - Instrumented audit log writes in `app/actions/documents.ts`: `DOCUMENT_UPLOAD`, `DOCUMENT_EDIT`, `DOCUMENT_REVISION_UPLOAD`, `DOCUMENT_ARCHIVE`, and `DOCUMENT_RESTORE`.
+  - Instrumented audit log writes in `app/actions/admin.ts`: `USER_INVITE`, `USER_ROLE_UPDATE`, `USER_DEACTIVATE`, and `PROJECT_MEMBERS_UPDATE`.
+  - Created `app/(app)/audit-logs/page.tsx` server route protected by `requireCan('audit.view')`.
+  - Created `app/(app)/audit-logs/audit-logs-workspace.tsx` with search, entity filtering, action category tabs, KPI metrics, CSV export, and raw payload inspection modal.
+  - Authored acceptance test suite `scripts/verify-audit-logs.ts` verifying permissions, navigation isolation, database insertion, and actor profile relationship queries.
+  - Verified regression test suites (`verify-foundation-and-admin.ts`, `verify-document-controller.ts`, `verify-resident-engineer.ts`, `verify-ceo.ts`): 100% pass rate.
+

@@ -17,24 +17,24 @@ The **Resident Engineer (RE)** serves as the **first-level technical reviewer** 
 
 Inherits foundation contracts from [00-foundation.md](./00-foundation.md).
 
-| Capability                |     Allowed      | Constraint / Note                                             |
-| ------------------------- | :--------------: | ------------------------------------------------------------- |
-| Project Scope             |   **Assigned**   | Accessible strictly within assigned projects                  |
-| First-Level Review        |      **✓**       | Primary reviewer for drawings with status `submitted`         |
-| Approve (Standard)        |      **✓**       | Transitions drawing directly to `ready_for_authority`         |
-| Approve (Escalate)        |      **✓**       | Flags drawing for Area Manager; transitions to `escalated`    |
-| Reject Drawing            |      **✓**       | Requires mandatory comment; transitions to `rejected`         |
-| View Documents & NOCs     |      **✓**       | In assigned projects only                                     |
-| Upload Documents          |      **—**       | Denied. Drawings submitted by Engineer and DC for RE review  |
-| Edit Documents            |      **—**       | Denied                                                        |
-| Archive / Soft Delete     |      **—**       | Denied                                                        |
-| Permanent Purge           |      **—**       | Denied                                                        |
-| Edit NOC Matrix / Tracker |      **—**       | Denied                                                        |
-| Override NOC Sequence     |      **—**       | Denied                                                        |
-| View Contractor Amount    |      **✓**       | Permitted (`projects.client_contractor_amount`)               |
-| View Consultant Amount    |      **—**       | Denied. Hidden at all layers                                  |
-| User Management           |      **—**       | Denied                                                        |
-| Expiry Alerts             |      **—**       | Denied (only Auth Eng, Engineer, DC receive expiry alerts)    |
+| Capability                |   Allowed    | Constraint / Note                                           |
+| ------------------------- | :----------: | ----------------------------------------------------------- |
+| Project Scope             | **Assigned** | Accessible strictly within assigned projects                |
+| First-Level Review        |    **✓**     | Primary reviewer for drawings with status `submitted`       |
+| Approve (Standard)        |    **✓**     | Transitions drawing directly to `ready_for_authority`       |
+| Approve (Escalate)        |    **✓**     | Flags drawing for Area Manager; transitions to `escalated`  |
+| Reject Drawing            |    **✓**     | Requires mandatory comment; transitions to `rejected`       |
+| View Documents & NOCs     |    **✓**     | In assigned projects only                                   |
+| Upload Documents          |    **—**     | Denied. Drawings submitted by Engineer and DC for RE review |
+| Edit Documents            |    **—**     | Denied                                                      |
+| Archive / Soft Delete     |    **—**     | Denied                                                      |
+| Permanent Purge           |    **—**     | Denied                                                      |
+| Edit NOC Matrix / Tracker |    **—**     | Denied                                                      |
+| Override NOC Sequence     |    **—**     | Denied                                                      |
+| View Contractor Amount    |    **✓**     | Permitted (`projects.client_contractor_amount`)             |
+| View Consultant Amount    |    **—**     | Denied. Hidden at all layers                                |
+| User Management           |    **—**     | Denied                                                      |
+| Expiry Alerts             |    **—**     | Denied (only Auth Eng, Engineer, DC receive expiry alerts)  |
 
 ---
 
