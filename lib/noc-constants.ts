@@ -64,12 +64,30 @@ export const AUTHORITY_BADGE_PALETTE = [
   'bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800',
 ] as const;
 
-// Hashes reviewing authority ID into a deterministic palette index.
-export function getAuthorityBadgeStyle(authorityId?: number | null): string {
-  if (!authorityId || authorityId <= 0) {
+// Hashes reviewing authority ID or name into a deterministic palette index.
+export function getAuthorityBadgeStyle(
+  authorityIdOrName?: number | string | null,
+): string {
+  if (!authorityIdOrName) {
     return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
   }
-  const index = Math.abs(authorityId - 1) % AUTHORITY_BADGE_PALETTE.length;
+  if (typeof authorityIdOrName === 'number') {
+    if (authorityIdOrName <= 0) {
+      return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
+    }
+    const index = Math.abs(authorityIdOrName - 1) % AUTHORITY_BADGE_PALETTE.length;
+    return AUTHORITY_BADGE_PALETTE[index];
+  }
+  const str = authorityIdOrName.trim();
+  if (!str) {
+    return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
+  }
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % AUTHORITY_BADGE_PALETTE.length;
   return AUTHORITY_BADGE_PALETTE[index];
 }
 

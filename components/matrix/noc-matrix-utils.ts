@@ -51,53 +51,7 @@ export function getDisciplineTag(title: string): string {
   return 'AUTHORITY';
 }
 
-export function getAuthorityBadgeStyle(authority: string): string {
-  const norm = (authority || '').trim();
-  switch (norm) {
-    case 'Nakheel':
-      return 'bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
-    case 'Trakhees':
-      return 'bg-indigo-50 text-indigo-800 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800';
-    case 'DEWA':
-      return 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
-    case 'RTA':
-      return 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';
-    case 'DCD':
-      return 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800';
-    case 'DM':
-      return 'bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800';
-    case 'DDA':
-      return 'bg-violet-50 text-violet-800 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800';
-    default: {
-      const upper = norm.toUpperCase();
-      if (upper === 'NAKHEEL') return 'bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
-      if (upper === 'TRAKHEES') return 'bg-indigo-50 text-indigo-800 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800';
-      if (upper === 'DEWA') return 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
-      if (upper === 'RTA') return 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';
-      if (upper === 'DCD') return 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800';
-      if (upper === 'DM') return 'bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800';
-      if (upper === 'DDA') return 'bg-violet-50 text-violet-800 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800';
-      return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
-    }
-  }
-}
-
-export function getSubmitterBadgeStyle(submitter: string): string {
-  const norm = (submitter || '').trim().toLowerCase();
-  switch (norm) {
-    case 'consultant':
-      return 'bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800';
-    case 'client':
-      return 'bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800';
-    case 'contractor':
-      return 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';
-    case 'specialist':
-    case 'specialists':
-      return 'bg-teal-50 text-teal-800 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800';
-    default:
-      return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
-  }
-}
+export { getAuthorityBadgeStyle, getSubmitterBadgeStyle } from '@/lib/noc-constants';
 
 // Maps discipline names to high-contrast tag styling.
 export function getDisciplineBadgeClass(discipline: string): string {

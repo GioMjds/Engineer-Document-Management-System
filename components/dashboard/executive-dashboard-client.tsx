@@ -57,6 +57,9 @@ interface ExecutiveDashboardClientProps {
 /** Dev-only. Set NEXT_PUBLIC_ENABLE_ROLE_PREVIEW=true in .env.local to show it. */
 const ROLE_PREVIEW_ENABLED =
   process.env.NEXT_PUBLIC_ENABLE_ROLE_PREVIEW === 'true';
+
+// Remove this when we have a proper role-based auth system in place. 
+// For now, this is just a dev convenience to preview the dashboard as different roles.
 const AVAILABLE_ROLES = [
   { value: 'admin', label: 'Admin (Full Access)' },
   { value: 'ceo', label: 'CEO (Read Only Portfolio)' },

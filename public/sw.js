@@ -1,4 +1,4 @@
-const CACHE_NAME = 'docu-collab-cache-v1';
+const CACHE_NAME = 'docu-collab-cache-v2';
 const OFFLINE_URL = '/offline';
 const PUBLIC_ASSETS = [
   OFFLINE_URL,
@@ -9,7 +9,13 @@ const PUBLIC_ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PUBLIC_ASSETS)),
+    caches
+      .open(CACHE_NAME)
+      .then((cache) =>
+        cache.addAll(
+          PUBLIC_ASSETS.map((url) => new Request(url, { cache: 'reload' })),
+        ),
+      ),
   );
   self.skipWaiting();
 });

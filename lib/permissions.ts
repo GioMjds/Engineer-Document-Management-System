@@ -40,6 +40,14 @@ export const PERMISSIONS = {
 
   // Navigation
   'dashboard.view': ALL,
+  'project.view': [
+    'admin',
+    'area_manager',
+    'resident_engineer',
+    'authority_engineer',
+    'engineer',
+    'dc',
+  ],
 
   // Documents
   'document.view': ALL,
@@ -196,6 +204,7 @@ export const NAV_ITEMS: ReadonlyArray<{
   capability: Capability;
 }> = [
   { href: '/', label: 'Dashboard', capability: 'dashboard.view' },
+  { href: '/projects', label: 'Projects', capability: 'project.view' },
   { href: '/noc-tracker', label: 'NOC Tracker', capability: 'noc.view' },
   { href: '/noc-matrix', label: 'NOC Matrix', capability: 'noc.matrix.view' },
   { href: '/documents', label: 'Documents', capability: 'document.view' },

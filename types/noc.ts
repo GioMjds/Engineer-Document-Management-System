@@ -44,12 +44,8 @@ export interface StageGateReadiness {
   prerequisites: StageGatePrerequisiteItem[];
 }
 
-// Dynamic authorities with known statutory defaults for autocomplete.
-export type MasterAuthority =
-  | 'Nakheel and Trakhees'
-  | 'Dubai Municipality'
-  | 'Dubai Development Authority'
-  | (string & {});
+// Dynamic master authority name.
+export type MasterAuthority = string;
 
 export interface MasterAuthorityRecord {
   id: number;
@@ -57,23 +53,8 @@ export interface MasterAuthorityRecord {
   jurisdiction?: string | null;
 }
 
-// Dynamic reviewing authorities with known statutory departments for autocomplete.
-export type ReviewingAuthority =
-  | 'Trakhees'
-  | 'Nakheel'
-  | 'DEWA'
-  | 'Empower'
-  | 'RTA'
-  | 'EHS'
-  | 'DCAA'
-  | 'DM'
-  | 'DU'
-  | 'Etisalat'
-  | 'Green Building'
-  | 'Third Party'
-  | 'DCD'
-  | 'DDA'
-  | (string & {});
+// Dynamic reviewing authority name.
+export type ReviewingAuthority = string;
 
 export interface ReviewingAuthorityRecord {
   id: number;

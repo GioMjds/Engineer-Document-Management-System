@@ -26,6 +26,7 @@ import type {
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
+import { MasterAuthorityPickerModal } from './master-authority-picker-modal';
 import { MatrixItemEditorDrawer } from './matrix-item-editor-drawer';
 import { MatrixRevisionDrawer } from './matrix-revision-drawer';
 import { NocMatrixHeader } from './noc-matrix-header';
@@ -62,6 +63,7 @@ export function NocMatrixWorkspace({
     ReviewingAuthorityRecord[]
   >(initialReviewingAuthorities || []);
   const [isAddMasterModalOpen, setIsAddMasterModalOpen] = useState(false);
+  const [isPickerModalOpen, setIsPickerModalOpen] = useState(false);
   const [newMasterName, setNewMasterName] = useState('');
   const [newMasterJurisdiction, setNewMasterJurisdiction] = useState('');
   const [isCreatingMaster, setIsCreatingMaster] = useState(false);
@@ -100,6 +102,14 @@ export function NocMatrixWorkspace({
     [itemsCache, selectedAuthorityId],
   );
   const currentRevisions = revisionsCache[selectedAuthorityId] || [];
+
+  const itemsCountByAuthority = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const [idStr, list] of Object.entries(itemsCache)) {
+      counts[Number(idStr)] = list.length;
+    }
+    return counts;
+  }, [itemsCache]);
 
   // Active blueprint resolved from current authority items.
   const selectedItem = useMemo(() => {
@@ -250,7 +260,7 @@ export function NocMatrixWorkspace({
       <NocMatrixHeader
         masterAuthorities={masterAuthorities}
         selectedAuthorityId={selectedAuthorityId}
-        onSelectAuthority={handleSelectAuthority}
+        onOpenSelectAuthorityModal={() => setIsPickerModalOpen(true)}
         onOpenAddMasterModal={() => setIsAddMasterModalOpen(true)}
         onOpenRevisionDrawer={() => setIsRevisionDrawerOpen(true)}
         onOpenAddNocModal={() => {
@@ -347,6 +357,18 @@ export function NocMatrixWorkspace({
         masterAuthorityId={selectedAuthorityId}
         masterAuthorityName={currentAuthority?.name || 'Master Authority'}
         revisions={currentRevisions}
+      />
+
+      {/* Master Authority Picker Modal */}
+      <MasterAuthorityPickerModal
+        isOpen={isPickerModalOpen}
+        onClose={() => setIsPickerModalOpen(false)}
+        masterAuthorities={masterAuthorities}
+        selectedAuthorityId={selectedAuthorityId}
+        onSelectAuthority={handleSelectAuthority}
+        onOpenAddMasterModal={() => setIsAddMasterModalOpen(true)}
+        currentUserRole={currentUserRole}
+        itemsCountByAuthority={itemsCountByAuthority}
       />
 
       {/* Register Master Authority Dialog */}

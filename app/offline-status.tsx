@@ -1,3 +1,4 @@
+import './globals.css';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { WifiOff, RefreshCw } from 'lucide-react';

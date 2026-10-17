@@ -2,6 +2,17 @@
 
 ## Session 2026-10-17
 
+- Added `/projects` directory workspace and `loading.tsx` per user request:
+  - Added `project.view` capability to `lib/permissions.ts` and registered `/projects` route in `NAV_ITEMS`.
+  - Added `Building2` icon and `project.view` mapping to `NAV_META` in `components/layout/app-shell.tsx`.
+  - Created `app/(app)/projects/loading.tsx` using `react-loading-skeleton` and `react-loading-skeleton/dist/skeleton.css` with accessibility tags (`role="status" aria-busy="true"`).
+  - Created `components/projects/project-team-dialog.tsx` enabling Admin to manage and update project member assignments across all 8 engineering and oversight roles.
+  - Created `components/projects/projects-workspace-client.tsx` featuring high-density metrics strip, multi-criteria search, lifecycle stage filters, role assignment filters, dual grid/table layouts, and direct links to NOC Tracker and Documents.
+  - Created `app/(app)/projects/page.tsx` server route fetching live projects via `getNocTrackerData()` and active team profiles.
+  - Verified full production build (`pnpm build`) compiled 20/20 routes with 0 errors.
+  - Verified linter (`pnpm lint`) with 0 errors.
+  - Verified role acceptance suites (`verify-foundation-and-admin`, `verify-ceo`, `verify-area-manager`, `verify-resident-engineer`, `verify-document-controller`, `verify-authority-engineer`).
+
 - Initiated UI redesign ideation for Authority NOC Matrix in `app/(app)/noc-matrix`.
 - Invoked `superpowers:brainstorming` (Architectural path).
 - Explored project context, `PRODUCT.md`, `DESIGN.md`, and current `NocMatrixWorkspace` implementation.
@@ -151,6 +162,7 @@
   - Bug 6 (NOC Tracker Header): Initialized project roles with seed defaults and added name-based discipline matching to prevent MEP engineer from being misassigned as Civil engineer.
   - Bug 7 (Documents Table Overflow): Wrapped Documents table in responsive card container with explicit column widths, text wrapping on document titles, and actions alignment to prevent the Download column from being cut off.
 - Verified TypeScript compilation (`npx tsc --noEmit`) and Next.js production build (`pnpm run build`) with zero errors across all 16 routes.
+
 ## Session 2026-10-14
 
 - Analyzed baseline role flows from `CVTEC_EDMS.md`, `CVTEC EDMS – Implementation Plan by Role.md`, and `lib/permissions.ts`.
@@ -300,7 +312,6 @@
   - Documented 5 critical break points: Review Queue disconnect (writes to legacy `reviews`, fails to mutate document status), new project template NOC instantiation failure, mock fallback mutation blackhole, unenforced engineer discipline check on upload, and absence of background expiry cron engine.
   - Formulated full standard user workflows across all 7 system roles (Admin, Engineer, Resident Engineer, Area Manager, Document Controller, Authority Engineer, CEO).
   - Outlined immediate Sprint 3 remediation roadmap.
-
 
 ## Session 2026-10-16
 
@@ -529,4 +540,19 @@
   - Created `app/(app)/audit-logs/audit-logs-workspace.tsx` with search, entity filtering, action category tabs, KPI metrics, CSV export, and raw payload inspection modal.
   - Authored acceptance test suite `scripts/verify-audit-logs.ts` verifying permissions, navigation isolation, database insertion, and actor profile relationship queries.
   - Verified regression test suites (`verify-foundation-and-admin.ts`, `verify-document-controller.ts`, `verify-resident-engineer.ts`, `verify-ceo.ts`): 100% pass rate.
+
+- Master Authority Modal Selection & Hardcoding Elimination:
+  - Eliminated hardcoded master authority string fallbacks and switches from `lib/noc-matrix.ts` (`getAuthorityName` and `getMasterAuthorityId` now strictly dynamic).
+  - Cleaned `MasterAuthority` type in `types/noc.ts` to open `string` type.
+  - Replaced confusing `<Select>` dropdown in `components/matrix/noc-matrix-header.tsx` with explicit, accessible trigger button displaying `Jurisdiction: <Authority Name>`, jurisdiction badge, and `ChevronsUpDown` icon.
+  - Created `components/matrix/master-authority-picker-modal.tsx` featuring searchable authority card grid, active selection state, blueprint count pill, and admin registration action.
+  - Integrated `MasterAuthorityPickerModal` in `components/matrix/noc-matrix-workspace.tsx` with dynamic item count mapping.
+- Reviewing Authority Hardcoding Elimination:
+  - Cleaned `ReviewingAuthority` type in `types/noc.ts` to open `string` type, removing 14 hardcoded string literals.
+  - Removed hardcoded `REVIEWING_AUTHORITIES` array from `components/matrix/matrix-item-editor-drawer.tsx`.
+  - Updated editor drawer to populate reviewing authorities strictly from dynamic database records (`availableReviewingAuthorities` and newly registered ones) without defaulting to `'DEWA'`.
+  - Replaced hardcoded authority name badge coloring switch in `components/matrix/noc-matrix-utils.ts` by delegating to deterministic string/ID hashing in `lib/noc-constants.ts`.
+  - Removed `REVIEWING_AUTHORITY_NAME_TO_ID` and dead seed fallback in `app/actions/admin.ts`.
+  - Replaced hardcoded `'DEWA'` fallback in `lib/server/noc-data.ts` with generic authority ID.
+  - Verified with `pnpm lint` (0 errors) and `pnpm build` (20/20 routes compiled cleanly).
 

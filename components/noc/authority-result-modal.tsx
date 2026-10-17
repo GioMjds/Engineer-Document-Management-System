@@ -1,24 +1,30 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { toast } from 'sonner';
-import { CheckCircle2, XCircle, Calendar, AlertTriangle, FileCheck } from 'lucide-react';
+import { recordAuthorityDecision } from '@/app/actions/noc';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { recordAuthorityDecision } from '@/app/actions/noc';
-import type { ProjectNocItem, NocResubmissionEntry } from '@/types/noc';
+import type { NocResubmissionEntry, ProjectNocItem } from '@/types/noc';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  AlertTriangle,
+  Calendar,
+  CheckCircle2,
+  FileCheck,
+  XCircle,
+} from 'lucide-react';
+import { useForm, useWatch } from 'react-hook-form';
+import { toast } from 'sonner';
+import { z } from 'zod';
 
 const authorityResultSchema = z
   .object({
@@ -44,7 +50,10 @@ const authorityResultSchema = z
         });
       }
     } else if (data.decision === 'rejected') {
-      if (!data.rejectionReason.trim() || data.rejectionReason.trim().length < 5) {
+      if (
+        !data.rejectionReason.trim() ||
+        data.rejectionReason.trim().length < 5
+      ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['rejectionReason'],
@@ -74,7 +83,7 @@ export function AuthorityResultModal({
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     setValue,
     reset,
     formState: { errors, isSubmitting },
@@ -88,15 +97,22 @@ export function AuthorityResultModal({
     },
   });
 
-  const decision = watch('decision');
-  const rejectionReason = watch('rejectionReason');
+  const decision = useWatch({ control, name: 'decision' });
+  const rejectionReason = useWatch({ control, name: 'rejectionReason' });
 
   async function onSubmit(values: AuthorityResultValues) {
     const res = await recordAuthorityDecision(noc.id, {
       decision: values.decision,
-      expiryDate: values.decision === 'obtained' ? values.expiryDate : undefined,
-      officialDocumentUrl: values.decision === 'obtained' ? values.documentUrl.trim() || undefined : undefined,
-      rejectionReason: values.decision === 'rejected' ? values.rejectionReason.trim() : undefined,
+      expiryDate:
+        values.decision === 'obtained' ? values.expiryDate : undefined,
+      officialDocumentUrl:
+        values.decision === 'obtained'
+          ? values.documentUrl.trim() || undefined
+          : undefined,
+      rejectionReason:
+        values.decision === 'rejected'
+          ? values.rejectionReason.trim()
+          : undefined,
     });
 
     if (!res.success) {
@@ -106,7 +122,9 @@ export function AuthorityResultModal({
 
     const now = new Date().toISOString();
     if (values.decision === 'obtained') {
-      toast.success('NOC obtained status recorded with automated 14-day expiry tracking.');
+      toast.success(
+        'NOC obtained status recorded with automated 14-day expiry tracking.',
+      );
       onDecisionRecorded({
         ...noc,
         status: 'Approved',
@@ -118,7 +136,7 @@ export function AuthorityResultModal({
       const currentRevNum = parseInt(noc.revision.replace('R', ''), 10) || 0;
       const nextRev = `R${String(currentRevNum + 1).padStart(2, '0')}`;
       const newEntry: NocResubmissionEntry = {
-        id: 'resub-' + Date.now(),
+        id: `resub-${now}`,
         projectNocId: noc.id,
         revision: nextRev,
         rejectionReason: values.rejectionReason.trim(),
@@ -127,7 +145,9 @@ export function AuthorityResultModal({
         resubmittedBy: 'Authority Engineer',
       };
 
-      toast.success(`Authority rejection recorded. Revision ${nextRev} created.`);
+      toast.success(
+        `Authority rejection recorded. Revision ${nextRev} created.`,
+      );
       onDecisionRecorded({
         ...noc,
         status: 'Rejected',
@@ -157,14 +177,17 @@ export function AuthorityResultModal({
             Record Statutory Authority Decision
           </DialogTitle>
           <DialogDescription>
-            Record statutory determination for {noc.reviewingAuthority} ({noc.description}).
+            Record statutory determination for {noc.reviewingAuthority} (
+            {noc.description}).
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-1">
           {/* Decision Selector */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Authority Determination *</Label>
+            <Label className="text-xs font-semibold">
+              Authority Determination *
+            </Label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -197,7 +220,10 @@ export function AuthorityResultModal({
           {decision === 'obtained' ? (
             <div className="space-y-3 pt-1">
               <div>
-                <Label htmlFor="decision-expiry" className="text-xs font-medium">
+                <Label
+                  htmlFor="decision-expiry"
+                  className="text-xs font-medium"
+                >
                   Mandatory Expiry Date * (Future date)
                 </Label>
                 <div className="relative mt-1">
@@ -211,10 +237,13 @@ export function AuthorityResultModal({
                   />
                 </div>
                 {errors.expiryDate && (
-                  <p className="text-xs text-destructive mt-1">{errors.expiryDate.message}</p>
+                  <p className="text-xs text-destructive mt-1">
+                    {errors.expiryDate.message}
+                  </p>
                 )}
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Triggers automated internal and external alerts 14 days prior to expiration.
+                  Triggers automated internal and external alerts 14 days prior
+                  to expiration.
                 </p>
               </div>
 
@@ -233,7 +262,10 @@ export function AuthorityResultModal({
           ) : (
             <div className="space-y-3 pt-1">
               <div>
-                <Label htmlFor="decision-reason" className="text-xs font-medium">
+                <Label
+                  htmlFor="decision-reason"
+                  className="text-xs font-medium"
+                >
                   Authority Rejection Reason * (Min 5 chars)
                 </Label>
                 <Textarea
@@ -244,14 +276,19 @@ export function AuthorityResultModal({
                   className="text-xs mt-1"
                 />
                 {errors.rejectionReason && (
-                  <p className="text-xs text-destructive mt-1">{errors.rejectionReason.message}</p>
+                  <p className="text-xs text-destructive mt-1">
+                    {errors.rejectionReason.message}
+                  </p>
                 )}
                 <div className="flex justify-between items-center text-[11px] text-muted-foreground mt-1">
                   <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
                     <AlertTriangle className="h-3 w-3" />
-                    Creates next revision in tracker, retaining previous history.
+                    Creates next revision in tracker, retaining previous
+                    history.
                   </span>
-                  <span>{(rejectionReason || '').trim().length} / 5 chars min</span>
+                  <span>
+                    {(rejectionReason || '').trim().length} / 5 chars min
+                  </span>
                 </div>
               </div>
             </div>
@@ -279,7 +316,11 @@ export function AuthorityResultModal({
                   : 'bg-rose-600 hover:bg-rose-700 text-white'
               }`}
             >
-              {isSubmitting ? 'Recording...' : decision === 'obtained' ? 'Confirm Obtained' : 'Confirm Rejection'}
+              {isSubmitting
+                ? 'Recording...'
+                : decision === 'obtained'
+                  ? 'Confirm Obtained'
+                  : 'Confirm Rejection'}
             </Button>
           </DialogFooter>
         </form>

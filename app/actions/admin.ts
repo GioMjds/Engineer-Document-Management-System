@@ -6,45 +6,6 @@ import { requireCan } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { type AppRole } from '@/lib/permissions';
-import { SEED_MATRIX_TEMPLATES } from '@/lib/noc-matrix';
-import type { Database } from '@/types/database';
-
-// Hardcoded reviewing authority name to ID mapping for NOC matrix items
-const REVIEWING_AUTHORITY_NAME_TO_ID: Record<string, number> = {
-  Trakhees: 1,
-  Nakheel: 2,
-  DEWA: 3,
-  Empower: 4,
-  RTA: 5,
-  EHS: 6,
-  DCAA: 7,
-  DM: 8,
-  DU: 9,
-  Etisalat: 10,
-  'Green Building': 11,
-  'Third Party': 12,
-  DCD: 13,
-  DDA: 14,
-};
-
-function toDbStage(stage: string): Database['public']['Enums']['noc_stage'] {
-  const lower = stage.toLowerCase();
-  if (lower.includes('handover')) return 'handover';
-  if (lower.includes('construction')) return 'construction';
-  if (lower.includes('information')) return 'information';
-  return 'design';
-}
-
-function toDbSubmitter(
-  submitter: string,
-): Database['public']['Enums']['noc_submitter'] {
-  const lower = submitter.toLowerCase();
-  if (lower.includes('client')) return 'client';
-  if (lower.includes('contractor')) return 'contractor';
-  if (lower.includes('specialist')) return 'specialist';
-  return 'consultant';
-}
-
 // ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
@@ -413,67 +374,15 @@ export async function createProject(
       if (insertedNoc) {
         instantiatedNocsCount++;
 
-        // Clone checklist requirements (DB requirements or seed fallback)
-        let reqTitles: string[] = (item.noc_matrix_requirements || []).map(
+        // Clone checklist requirements from DB matrix item requirements
+        const reqTitles: string[] = (item.noc_matrix_requirements || []).map(
           (r: { title: string }) => r.title,
         );
-
-        if (reqTitles.length === 0) {
-          const seedItems =
-            SEED_MATRIX_TEMPLATES[parsed.data.master_authority_id] || [];
-          const matchingSeed = seedItems.find(
-            (s) =>
-              s.sequenceNo === item.sequence_no ||
-              s.description === item.description,
-          );
-          if (matchingSeed?.requirements) {
-            reqTitles = matchingSeed.requirements.map((r) => r.title);
-          }
-        }
 
         if (reqTitles.length > 0) {
           const reqInserts = reqTitles.map((title) => ({
             project_noc_id: insertedNoc.id,
             title,
-            is_satisfied: false,
-          }));
-          await adminClient.from('project_noc_requirements').insert(reqInserts);
-        }
-      }
-    }
-  } else {
-    // Fallback: DB unseeded for authority, clone from SEED_MATRIX_TEMPLATES
-    const seedTemplates =
-      SEED_MATRIX_TEMPLATES[parsed.data.master_authority_id] || [];
-    for (const item of seedTemplates) {
-      const reviewingAuthorityId =
-        REVIEWING_AUTHORITY_NAME_TO_ID[item.reviewingAuthority] || 1;
-
-      const { data: insertedNoc } = await adminClient
-        .from('project_nocs')
-        .insert({
-          project_id: project.id,
-          matrix_item_id: null,
-          sequence_no: item.sequenceNo,
-          stage: toDbStage(item.stage),
-          reviewing_authority_id: reviewingAuthorityId,
-          description: item.description,
-          submitted_by: toDbSubmitter(item.submittedBy),
-          status_code: 'not_started',
-          payment_fee: item.defaultFee || 0,
-          is_paid: false,
-          blocking_sequence_no: item.blockingSequenceNo,
-          current_revision: 'R00',
-        })
-        .select('id')
-        .single();
-
-      if (insertedNoc) {
-        instantiatedNocsCount++;
-        if (item.requirements && item.requirements.length > 0) {
-          const reqInserts = item.requirements.map((r) => ({
-            project_noc_id: insertedNoc.id,
-            title: r.title,
             is_satisfied: false,
           }));
           await adminClient.from('project_noc_requirements').insert(reqInserts);

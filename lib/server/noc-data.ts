@@ -422,7 +422,7 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
       (row) => {
         const projectCode = projectDbIdToCode.get(row.project_id) || '23016';
         const reviewingAuthName = (revAuthMap.get(row.reviewing_authority_id) ||
-          'DEWA') as ReviewingAuthority;
+          `Authority #${row.reviewing_authority_id}`) as ReviewingAuthority;
         return mapDbNocToItem(row, projectCode, reviewingAuthName);
       },
     );

@@ -6,6 +6,7 @@ import type { Route } from 'next';
 import { usePathname } from 'next/navigation';
 import {
   Archive,
+  Building2,
   CheckSquare,
   FileText,
   Layers,
@@ -27,6 +28,7 @@ import { cn } from '@/lib/utils';
 /** Nav grouping + icons live here; navFor() still decides WHO sees WHAT. */
 const NAV_META = {
   'dashboard.view': { group: 'Overview', icon: LayoutDashboard },
+  'project.view': { group: 'Overview', icon: Building2 },
   'noc.view': { group: 'Authorities', icon: ShieldCheck },
   'noc.matrix.view': { group: 'Authorities', icon: Layers },
   'document.view': { group: 'Documents', icon: FileText },

@@ -1,21 +1,14 @@
 'use client';
 
-import { Layers, History, Plus, Building2 } from 'lucide-react';
+import { Layers, History, Plus, Building2, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import type { MasterAuthorityRecord } from '@/types/noc';
 
 export interface NocMatrixHeaderProps {
   masterAuthorities: MasterAuthorityRecord[];
   selectedAuthorityId: number;
-  onSelectAuthority: (id: number) => void;
+  onOpenSelectAuthorityModal: () => void;
   onOpenAddMasterModal: () => void;
   onOpenRevisionDrawer: () => void;
   onOpenAddNocModal: () => void;
@@ -24,11 +17,11 @@ export interface NocMatrixHeaderProps {
   currentUserRole: string;
 }
 
-// Command deck header with master authority selector, revision log trigger, and action controls.
+// Command deck header with master authority modal trigger, revision log trigger, and action controls.
 export function NocMatrixHeader({
   masterAuthorities,
   selectedAuthorityId,
-  onSelectAuthority,
+  onOpenSelectAuthorityModal,
   onOpenAddMasterModal,
   onOpenRevisionDrawer,
   onOpenAddNocModal,
@@ -36,6 +29,10 @@ export function NocMatrixHeader({
   canEdit,
   currentUserRole,
 }: NocMatrixHeaderProps) {
+  const currentAuthority =
+    masterAuthorities.find((a) => a.id === selectedAuthorityId) ||
+    masterAuthorities[0];
+
   return (
     <header className="flex flex-col gap-4 border-b border-border pb-4 lg:flex-row lg:items-center lg:justify-between">
       <div className="space-y-1">
@@ -53,35 +50,32 @@ export function NocMatrixHeader({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {/* Master Authority Selector */}
+        {/* Master Authority Jurisdiction Trigger */}
         <div className="flex items-center gap-1.5">
-          <Select
-            value={String(selectedAuthorityId)}
-            onValueChange={(val) => {
-              if (val) {
-                onSelectAuthority(Number(val));
-              }
-            }}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenSelectAuthorityModal}
+            className="h-8 gap-2 text-xs font-semibold bg-card border-border shadow-none hover:bg-muted/60 transition-colors cursor-pointer"
+            title="Switch Master Authority Jurisdiction"
+            aria-label={`Current jurisdiction: ${currentAuthority?.name ?? 'Select Jurisdiction'}`}
           >
-            <SelectTrigger className="h-8 min-w-55 text-xs font-semibold bg-card border-border shadow-none">
-              <Building2 className="mr-1.5 h-3.5 w-3.5 text-(--site-cyan)" />
-              <SelectValue placeholder="Select Authority" />
-            </SelectTrigger>
-            <SelectContent>
-              {masterAuthorities.map((auth) => (
-                <SelectItem key={auth.id} value={String(auth.id)} className="text-xs">
-                  <div className="flex items-center justify-between gap-3 w-full">
-                    <span className="font-semibold">{auth.name}</span>
-                    {auth.jurisdiction && (
-                      <span className="text-[10px] font-mono text-muted-foreground">
-                        {auth.jurisdiction}
-                      </span>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Building2 className="h-3.5 w-3.5 text-(--site-cyan) shrink-0" />
+            <div className="flex items-center gap-1.5 text-left">
+              <span className="text-[11px] font-normal text-muted-foreground hidden sm:inline">
+                Jurisdiction:
+              </span>
+              <span className="font-semibold text-foreground truncate max-w-36 sm:max-w-50 md:max-w-65">
+                {currentAuthority?.name ?? 'Select Jurisdiction'}
+              </span>
+              {currentAuthority?.jurisdiction && (
+                <span className="text-[10px] font-mono text-muted-foreground px-1.5 py-0.5 rounded bg-muted/80 hidden md:inline truncate max-w-35">
+                  {currentAuthority.jurisdiction}
+                </span>
+              )}
+            </div>
+            <ChevronsUpDown className="h-3 w-3 text-muted-foreground shrink-0 ml-0.5" />
+          </Button>
 
           {currentUserRole === 'admin' && (
             <Button

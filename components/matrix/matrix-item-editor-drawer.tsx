@@ -1,5 +1,19 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
+import {
+  AlertCircle,
+  Calendar,
+  Coins,
+  Info,
+  ListChecks,
+  Loader2,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
+import { toast } from 'sonner';
 import {
   createMatrixItem,
   saveMatrixItem,
@@ -29,23 +43,9 @@ import { cn } from '@/lib/utils';
 import type {
   NocMatrixItem,
   NocStage,
-  ReviewingAuthority,
   ReviewingAuthorityRecord,
   SubmittedBy,
 } from '@/types/noc';
-import {
-  AlertCircle,
-  Calendar,
-  Coins,
-  Info,
-  ListChecks,
-  Loader2,
-  Plus,
-  Trash2,
-  X,
-} from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 
 export interface MatrixItemEditorDrawerProps {
   isOpen: boolean;
@@ -66,25 +66,6 @@ export interface MatrixItemEditorDrawerProps {
   onSaved?: () => void;
 }
 
-// Hardcoded reviewing authorities, stages, and submitters for selection in the NOC blueprint editor form.
-// This may be set by the admin.
-const REVIEWING_AUTHORITIES: ReviewingAuthority[] = [
-  'DEWA',
-  'RTA',
-  'DCD',
-  'DM',
-  'Trakhees',
-  'Nakheel',
-  'Empower',
-  'EHS',
-  'DCAA',
-  'DU',
-  'Etisalat',
-  'Green Building',
-  'Third Party',
-  'DDA',
-];
-
 const STAGES = [
   'Design NOC',
   'Construction NOC',
@@ -99,13 +80,140 @@ const SUBMITTERS = [
   'Specialists',
 ] satisfies SubmittedBy[];
 
-interface DraftRequirement {
-  id?: string;
-  matrixItemId?: string;
+/**
+ * NOTE: the DB id is stored as `reqId`, not `id`. useFieldArray reserves `id`
+ * as its internal React key and will clobber a custom `id` field.
+ */
+interface RequirementField {
+  reqId?: string;
   title: string;
   mandatory: boolean;
-  sortOrder: number;
 }
+
+interface MatrixItemFormValues {
+  description: string;
+  reviewingAuthority: string;
+  stage: NocStage;
+  submittedBy: SubmittedBy;
+  blockingSequenceNo: string; // 'none' | String(sequenceNo)
+  defaultFee: number;
+  validityDays: number;
+  requirements: RequirementField[];
+  changeSummary: string;
+}
+
+interface AddAuthorityDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (created: ReviewingAuthorityRecord) => void;
+}
+
+function AddAuthorityForm({
+  onCancel,
+  onCreated,
+}: {
+  onCancel: () => void;
+  onCreated: (created: ReviewingAuthorityRecord) => void;
+}) {
+  const {
+    register,
+    handleSubmit,
+    control,
+    formState: { errors, isSubmitting },
+  } = useForm<{ name: string }>({ defaultValues: { name: '' } });
+
+  const name = useWatch({ control, name: 'name' });
+
+  const onSubmit = async ({ name }: { name: string }) => {
+    const res = await createReviewingAuthority({ name: name.trim() });
+
+    if (!res.ok || !res.data) {
+      toast.error(res.error || 'Failed to add reviewing authority');
+      return;
+    }
+
+    onCreated(res.data);
+    toast.success(`Reviewing Authority "${res.data.name}" registered.`);
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="new-rev-auth-name" className="text-xs font-semibold">
+          Authority Name / Department{' '}
+          <span className="text-destructive">*</span>
+        </Label>
+        <Input
+          id="new-rev-auth-name"
+          placeholder="e.g. Etihad Rail, ADDC, Tadweer"
+          aria-invalid={!!errors.name}
+          className="h-8 text-xs"
+          {...register('name', {
+            validate: (v) => v.trim().length > 0 || 'Name is required.',
+          })}
+        />
+        {errors.name && (
+          <p className="text-[11px] text-destructive">{errors.name.message}</p>
+        )}
+      </div>
+      <DialogFooter className="gap-2 sm:gap-0">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onCancel}
+          disabled={isSubmitting}
+          className="text-xs h-8 cursor-pointer"
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={isSubmitting || !name?.trim()}
+          className="bg-(--site-cyan) text-white hover:bg-(--site-cyan-hover) text-xs h-8 cursor-pointer gap-1.5"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>Registering...</span>
+            </>
+          ) : (
+            <span>Register Authority</span>
+          )}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+function AddAuthorityDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: AddAuthorityDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Register Reviewing Authority</DialogTitle>
+        </DialogHeader>
+        {/* Mounted only while open, so form state resets on every open. */}
+        <AddAuthorityForm
+          onCancel={() => onOpenChange(false)}
+          onCreated={(created) => {
+            onCreated(created);
+            onOpenChange(false);
+          }}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Main drawer form                                                          */
+/* -------------------------------------------------------------------------- */
 
 function MatrixItemEditorDrawerForm({
   isOpen,
@@ -134,73 +242,83 @@ function MatrixItemEditorDrawerForm({
     currentSeq,
   );
 
-  const [description, setDescription] = useState(item?.description ?? '');
-  const [reviewingAuthority, setReviewingAuthority] =
-    useState<ReviewingAuthority>(item?.reviewingAuthority ?? 'DEWA');
-  const [createdAuthorities, setCreatedAuthorities] = useState<string[]>([]);
-  const authorityOptions = Array.from(
-    new Set([
-      ...(availableReviewingAuthorities || []).map((a) => a.name),
-      ...createdAuthorities,
-      ...REVIEWING_AUTHORITIES,
-    ]),
-  );
-  const [isAddRevAuthOpen, setIsAddRevAuthOpen] = useState(false);
-  const [newRevAuthName, setNewRevAuthName] = useState('');
-  const [isCreatingRevAuth, setIsCreatingRevAuth] = useState(false);
+  const {
+    register,
+    control,
+    handleSubmit,
+    setValue,
+    formState: { errors, isValid, isSubmitting },
+  } = useForm<MatrixItemFormValues>({
+    mode: 'onChange',
+    // The wrapper remounts this component per item (see formKey below),
+    // so defaultValues are always fresh and no reset() is needed.
+    defaultValues: {
+      description: item?.description ?? '',
+      reviewingAuthority:
+        item?.reviewingAuthority ??
+        availableReviewingAuthorities?.[0]?.name ??
+        '',
+      stage: item?.stage ?? 'Design NOC',
+      submittedBy: item?.submittedBy ?? 'Consultant',
+      blockingSequenceNo:
+        item?.blockingSequenceNo !== null &&
+        item?.blockingSequenceNo !== undefined
+          ? String(item.blockingSequenceNo)
+          : 'none',
+      defaultFee: item?.defaultFee ?? 0,
+      validityDays: item?.validityDays ?? 365,
+      requirements: (item?.requirements ?? []).map((r) => ({
+        reqId: r.id,
+        title: r.title,
+        mandatory: r.mandatory,
+      })),
+      changeSummary: '',
+    },
+  });
 
-  const handleCreateReviewingAuthority = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanName = newRevAuthName.trim();
-    if (!cleanName) return;
+  const { fields, append, update, remove } = useFieldArray({
+    control,
+    name: 'requirements',
+  });
 
-    setIsCreatingRevAuth(true);
-    const res = await createReviewingAuthority({ name: cleanName });
-    setIsCreatingRevAuth(false);
+  const changeSummary = useWatch({ control, name: 'changeSummary' }) ?? '';
 
-    if (!res.ok || !res.data) {
-      toast.error(res.error || 'Failed to add reviewing authority');
-      return;
-    }
-
-    const created = res.data;
-    setCreatedAuthorities((prev) =>
-      prev.includes(created.name) ? prev : [...prev, created.name],
-    );
-    setReviewingAuthority(created.name as ReviewingAuthority);
-    onReviewingAuthorityCreated?.(created);
-    setIsAddRevAuthOpen(false);
-    setNewRevAuthName('');
-    toast.success(`Reviewing Authority "${created.name}" registered.`);
-  };
-
-  const [stage, setStage] = useState<NocStage>(item?.stage ?? 'Design NOC');
-  const [submittedBy, setSubmittedBy] = useState<SubmittedBy>(
-    item?.submittedBy ?? 'Consultant',
-  );
-  const [blockingSequenceNo, setBlockingSequenceNo] = useState<string>(
-    item?.blockingSequenceNo !== null && item?.blockingSequenceNo !== undefined
-      ? String(item.blockingSequenceNo)
-      : 'none',
-  );
-  const [defaultFee, setDefaultFee] = useState<number>(item?.defaultFee ?? 0);
-  const [validityDays, setValidityDays] = useState<number>(
-    item?.validityDays ?? 365,
-  );
-  const [requirements, setRequirements] = useState<DraftRequirement[]>(
-    item?.requirements
-      ? item.requirements.map((r, i) => ({
-          id: r.id,
-          matrixItemId: r.matrixItemId,
-          title: r.title,
-          mandatory: r.mandatory,
-          sortOrder: r.sortOrder ?? i + 1,
-        }))
-      : [],
-  );
+  // Local UI state (not form data): the inline "add requirement" input.
   const [newReqTitle, setNewReqTitle] = useState('');
-  const [changeSummary, setChangeSummary] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+
+  // Reviewing-authority creation (UI state, not form data).
+  const [isAddRevAuthOpen, setIsAddRevAuthOpen] = useState(false);
+  const [createdAuthorities, setCreatedAuthorities] = useState<
+    ReviewingAuthorityRecord[]
+  >([]);
+
+  const authorityOptions = useMemo(() => {
+    const combined = [
+      ...(availableReviewingAuthorities || []),
+      ...createdAuthorities,
+    ];
+    const seen = new Set<string>();
+    const result: ReviewingAuthorityRecord[] = [];
+    for (const a of combined) {
+      const key = a.name.trim().toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        result.push(a);
+      }
+    }
+    return result;
+  }, [availableReviewingAuthorities, createdAuthorities]);
+
+  const handleAuthorityCreated = (created: ReviewingAuthorityRecord) => {
+    setCreatedAuthorities((prev) =>
+      prev.some((a) => a.id === created.id) ? prev : [...prev, created],
+    );
+    setValue('reviewingAuthority', created.name, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    onReviewingAuthorityCreated?.(created);
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -214,95 +332,69 @@ function MatrixItemEditorDrawerForm({
   if (!isOpen) return null;
 
   const handleAddRequirement = () => {
-    if (!newReqTitle.trim()) return;
-    const newItem: DraftRequirement = {
-      id: `draft-req-${Date.now()}-${requirements.length + 1}`,
-      title: newReqTitle.trim(),
+    const title = newReqTitle.trim();
+    if (!title) return;
+    append({
+      reqId: `draft-req-${Date.now()}-${fields.length + 1}`,
+      title,
       mandatory: true,
-      sortOrder: requirements.length + 1,
-    };
-    setRequirements((prev) => [...prev, newItem]);
+    });
     setNewReqTitle('');
   };
 
   const handleToggleMandatory = (index: number) => {
     if (!effectiveCanEdit) return;
-    setRequirements((prev) =>
-      prev.map((req, i) =>
-        i === index ? { ...req, mandatory: !req.mandatory } : req,
-      ),
-    );
+    update(index, { ...fields[index], mandatory: !fields[index].mandatory });
   };
 
   const handleRemoveRequirement = (index: number) => {
     if (!effectiveCanEdit) return;
-    setRequirements((prev) => prev.filter((_, i) => i !== index));
+    remove(index);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!effectiveCanEdit || isSaving) return;
-
-    const trimmedDescription = description.trim();
-    const trimmedChangeSummary = changeSummary.trim();
-
-    if (trimmedDescription.length < 3) {
-      toast.error('NOC description must be at least 3 characters.');
-      return;
-    }
-
-    if (trimmedChangeSummary.length < 5) {
-      toast.error('Reason for template change must be at least 5 characters.');
-      return;
-    }
-
-    if (defaultFee < 0) {
-      toast.error('Default fee cannot be negative.');
-      return;
-    }
-
-    if (validityDays < 1) {
-      toast.error('Validity period must be at least 1 day.');
-      return;
-    }
-
-    setIsSaving(true);
+  const onSubmit = async (values: MatrixItemFormValues) => {
+    if (!effectiveCanEdit) return;
 
     try {
+      const trimmedDescription = values.description.trim();
+      const trimmedChangeSummary = values.changeSummary.trim();
       const parsedBlocking =
-        blockingSequenceNo === 'none' ? null : Number(blockingSequenceNo);
-      const formattedReqs = requirements.map((r, i) => ({
-        id: r.id,
+        values.blockingSequenceNo === 'none'
+          ? null
+          : Number(values.blockingSequenceNo);
+
+      const formattedReqs = values.requirements.map((r, i) => ({
+        id: r.reqId,
         title: r.title.trim(),
         mandatory: r.mandatory,
         sortOrder: i + 1,
       }));
 
-      const selectedRevAuth = (availableReviewingAuthorities || []).find(
-        (a) => a.name.toLowerCase() === reviewingAuthority.toLowerCase(),
+      const selectedRevAuth = authorityOptions.find(
+        (a) => a.name.toLowerCase() === values.reviewingAuthority.toLowerCase(),
       );
       const revAuthId = selectedRevAuth?.id ?? item?.reviewingAuthorityId;
 
+      const payload = {
+        masterAuthorityId,
+        description: trimmedDescription,
+        stage: values.stage,
+        reviewingAuthorityId: revAuthId,
+        reviewingAuthority: values.reviewingAuthority,
+        submittedBy: values.submittedBy,
+        blockingSequenceNo: parsedBlocking,
+        defaultFee: values.defaultFee,
+        validityDays: values.validityDays,
+        requirements: formattedReqs,
+        changeSummary: trimmedChangeSummary,
+      };
+
       if (item) {
         // Edit existing blueprint item.
-        const res = await saveMatrixItem({
-          matrixItemId: item.id,
-          masterAuthorityId,
-          description: trimmedDescription,
-          stage,
-          reviewingAuthorityId: revAuthId,
-          reviewingAuthority,
-          submittedBy,
-          blockingSequenceNo: parsedBlocking,
-          defaultFee: Number(defaultFee),
-          validityDays: Number(validityDays),
-          requirements: formattedReqs,
-          changeSummary: trimmedChangeSummary,
-        });
+        const res = await saveMatrixItem({ matrixItemId: item.id, ...payload });
 
         if (!res.ok) {
           toast.error(res.error || 'Failed to update statutory blueprint.');
-          setIsSaving(false);
           return;
         }
 
@@ -312,13 +404,13 @@ function MatrixItemEditorDrawerForm({
         const updatedItem: NocMatrixItem = {
           ...item,
           description: trimmedDescription,
-          stage,
+          stage: values.stage,
           reviewingAuthorityId: revAuthId ?? item.reviewingAuthorityId ?? 0,
-          reviewingAuthority,
-          submittedBy,
+          reviewingAuthority: values.reviewingAuthority,
+          submittedBy: values.submittedBy,
           blockingSequenceNo: parsedBlocking,
-          defaultFee: Number(defaultFee),
-          validityDays: Number(validityDays),
+          defaultFee: values.defaultFee,
+          validityDays: values.validityDays,
           requirements: formattedReqs.map((r, i) => ({
             id: r.id || `req-${Date.now()}-${i}`,
             matrixItemId: item.id,
@@ -340,23 +432,10 @@ function MatrixItemEditorDrawerForm({
         onClose();
       } else {
         // Create new blueprint item.
-        const res = await createMatrixItem({
-          masterAuthorityId,
-          description: trimmedDescription,
-          stage,
-          reviewingAuthorityId: revAuthId,
-          reviewingAuthority,
-          submittedBy,
-          blockingSequenceNo: parsedBlocking,
-          defaultFee: Number(defaultFee),
-          validityDays: Number(validityDays),
-          requirements: formattedReqs,
-          changeSummary: trimmedChangeSummary,
-        });
+        const res = await createMatrixItem(payload);
 
         if (!res.ok || !res.data) {
           toast.error(res.error || 'Failed to create statutory blueprint.');
-          setIsSaving(false);
           return;
         }
 
@@ -372,10 +451,10 @@ function MatrixItemEditorDrawerForm({
       const msg =
         err instanceof Error ? err.message : 'Unexpected error during save';
       toast.error(msg);
-    } finally {
-      setIsSaving(false);
     }
   };
+
+  const fieldsDisabled = !effectiveCanEdit || isSubmitting;
 
   return (
     <>
@@ -435,7 +514,11 @@ function MatrixItemEditorDrawerForm({
         )}
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          noValidate
+          className="flex-1 flex flex-col min-h-0"
+        >
           <div className="flex-1 overflow-y-auto p-4 pb-6 space-y-4 text-xs">
             {/* Description */}
             <div className="space-y-1.5">
@@ -447,17 +530,26 @@ function MatrixItemEditorDrawerForm({
               </Label>
               <Textarea
                 id="matrix-item-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g. Master Developer Concept & Architectural Clearance"
-                disabled={!effectiveCanEdit || isSaving}
+                disabled={fieldsDisabled}
+                aria-invalid={!!errors.description}
                 className="min-h-16 text-xs resize-none"
-                required
+                {...register('description', {
+                  validate: (v) =>
+                    v.trim().length >= 3 ||
+                    'NOC description must be at least 3 characters.',
+                })}
               />
-              <p className="text-[11px] text-muted-foreground">
-                Official permit or clearance title published to project NOC
-                registers.
-              </p>
+              {errors.description ? (
+                <p className="text-[11px] text-destructive">
+                  {errors.description.message}
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Official permit or clearance title published to project NOC
+                  registers.
+                </p>
+              )}
             </div>
 
             {/* Authority & Stage Selection */}
@@ -483,27 +575,42 @@ function MatrixItemEditorDrawerForm({
                     </button>
                   )}
                 </div>
-                <Select
-                  value={reviewingAuthority}
-                  onValueChange={(val) =>
-                    val && setReviewingAuthority(val as ReviewingAuthority)
-                  }
-                  disabled={!effectiveCanEdit || isSaving}
-                >
-                  <SelectTrigger
-                    id="matrix-item-authority"
-                    className="w-full h-8 text-xs bg-card"
-                  >
-                    <SelectValue placeholder="Select authority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {authorityOptions.map((auth) => (
-                      <SelectItem key={auth} value={auth} className="text-xs">
-                        {auth}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Controller
+                  control={control}
+                  name="reviewingAuthority"
+                  rules={{ required: 'Select a reviewing authority.' }}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={(val) => val && field.onChange(val)}
+                      disabled={fieldsDisabled}
+                    >
+                      <SelectTrigger
+                        id="matrix-item-authority"
+                        className="w-full h-8 text-xs bg-card"
+                        onBlur={field.onBlur}
+                      >
+                        <SelectValue placeholder="Select authority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {authorityOptions.map((auth) => (
+                          <SelectItem
+                            key={auth.id}
+                            value={auth.name}
+                            className="text-xs"
+                          >
+                            {auth.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.reviewingAuthority && (
+                  <p className="text-[11px] text-destructive">
+                    {errors.reviewingAuthority.message}
+                  </p>
+                )}
               </div>
 
               {/* Stage */}
@@ -514,25 +621,34 @@ function MatrixItemEditorDrawerForm({
                 >
                   Project Stage <span className="text-destructive">*</span>
                 </Label>
-                <Select
-                  value={stage}
-                  onValueChange={(val) => val && setStage(val as NocStage)}
-                  disabled={!effectiveCanEdit || isSaving}
-                >
-                  <SelectTrigger
-                    id="matrix-item-stage"
-                    className="w-full h-8 text-xs bg-card"
-                  >
-                    <SelectValue placeholder="Select stage" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STAGES.map((s) => (
-                      <SelectItem key={s} value={s} className="text-xs">
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Controller
+                  control={control}
+                  name="stage"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={(val) =>
+                        val && field.onChange(val as NocStage)
+                      }
+                      disabled={fieldsDisabled}
+                    >
+                      <SelectTrigger
+                        id="matrix-item-stage"
+                        className="w-full h-8 text-xs bg-card"
+                        onBlur={field.onBlur}
+                      >
+                        <SelectValue placeholder="Select stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STAGES.map((s) => (
+                          <SelectItem key={s} value={s} className="text-xs">
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </div>
             </div>
 
@@ -546,27 +662,34 @@ function MatrixItemEditorDrawerForm({
                 >
                   Submitted By <span className="text-destructive">*</span>
                 </Label>
-                <Select
-                  value={submittedBy}
-                  onValueChange={(val) =>
-                    val && setSubmittedBy(val as SubmittedBy)
-                  }
-                  disabled={!effectiveCanEdit || isSaving}
-                >
-                  <SelectTrigger
-                    id="matrix-item-submitter"
-                    className="w-full h-8 text-xs bg-card"
-                  >
-                    <SelectValue placeholder="Select submitter" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SUBMITTERS.map((sub) => (
-                      <SelectItem key={sub} value={sub} className="text-xs">
-                        {sub}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Controller
+                  control={control}
+                  name="submittedBy"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={(val) =>
+                        val && field.onChange(val as SubmittedBy)
+                      }
+                      disabled={fieldsDisabled}
+                    >
+                      <SelectTrigger
+                        id="matrix-item-submitter"
+                        className="w-full h-8 text-xs bg-card"
+                        onBlur={field.onBlur}
+                      >
+                        <SelectValue placeholder="Select submitter" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SUBMITTERS.map((sub) => (
+                          <SelectItem key={sub} value={sub} className="text-xs">
+                            {sub}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </div>
 
               {/* Prerequisite Sequence */}
@@ -577,33 +700,40 @@ function MatrixItemEditorDrawerForm({
                 >
                   Prerequisite Sequence
                 </Label>
-                <Select
-                  value={blockingSequenceNo}
-                  onValueChange={(val) => val && setBlockingSequenceNo(val)}
-                  disabled={!effectiveCanEdit || isSaving}
-                >
-                  <SelectTrigger
-                    id="matrix-item-prereq"
-                    className="w-full h-8 text-xs bg-card"
-                  >
-                    <SelectValue placeholder="Select prerequisite" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none" className="text-xs">
-                      None / Independent
-                    </SelectItem>
-                    {availablePrerequisites.map((p) => (
-                      <SelectItem
-                        key={p.sequenceNo}
-                        value={String(p.sequenceNo)}
-                        className="text-xs font-mono"
+                <Controller
+                  control={control}
+                  name="blockingSequenceNo"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={(val) => val && field.onChange(val)}
+                      disabled={fieldsDisabled}
+                    >
+                      <SelectTrigger
+                        id="matrix-item-prereq"
+                        className="w-full h-8 text-xs bg-card"
+                        onBlur={field.onBlur}
                       >
-                        #{p.sequenceNo} {p.reviewingAuthority} -{' '}
-                        {p.description.slice(0, 24)}...
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                        <SelectValue placeholder="Select prerequisite" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none" className="text-xs">
+                          None / Independent
+                        </SelectItem>
+                        {availablePrerequisites.map((p) => (
+                          <SelectItem
+                            key={p.sequenceNo}
+                            value={String(p.sequenceNo)}
+                            className="text-xs font-mono"
+                          >
+                            #{p.sequenceNo} {p.reviewingAuthority} -{' '}
+                            {p.description.slice(0, 24)}...
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </div>
             </div>
 
@@ -623,15 +753,22 @@ function MatrixItemEditorDrawerForm({
                     type="number"
                     min={0}
                     step={100}
-                    value={defaultFee}
-                    onChange={(e) =>
-                      setDefaultFee(Math.max(0, Number(e.target.value)))
-                    }
-                    disabled={!effectiveCanEdit || isSaving}
+                    disabled={fieldsDisabled}
+                    aria-invalid={!!errors.defaultFee}
                     className="h-8 pl-8 text-xs font-mono"
-                    required
+                    {...register('defaultFee', {
+                      valueAsNumber: true,
+                      validate: (v) =>
+                        (Number.isFinite(v) && v >= 0) ||
+                        'Default fee must be 0 or more.',
+                    })}
                   />
                 </div>
+                {errors.defaultFee && (
+                  <p className="text-[11px] text-destructive">
+                    {errors.defaultFee.message}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -648,15 +785,22 @@ function MatrixItemEditorDrawerForm({
                     id="matrix-item-validity"
                     type="number"
                     min={1}
-                    value={validityDays}
-                    onChange={(e) =>
-                      setValidityDays(Math.max(1, Number(e.target.value)))
-                    }
-                    disabled={!effectiveCanEdit || isSaving}
+                    disabled={fieldsDisabled}
+                    aria-invalid={!!errors.validityDays}
                     className="h-8 pl-8 text-xs font-mono"
-                    required
+                    {...register('validityDays', {
+                      valueAsNumber: true,
+                      validate: (v) =>
+                        (Number.isFinite(v) && v >= 1) ||
+                        'Validity period must be at least 1 day.',
+                    })}
                   />
                 </div>
+                {errors.validityDays && (
+                  <p className="text-[11px] text-destructive">
+                    {errors.validityDays.message}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -673,21 +817,20 @@ function MatrixItemEditorDrawerForm({
                   variant="secondary"
                   className="font-mono text-[10px] h-5 px-1.5"
                 >
-                  {requirements.length}{' '}
-                  {requirements.length === 1 ? 'item' : 'items'}
+                  {fields.length} {fields.length === 1 ? 'item' : 'items'}
                 </Badge>
               </div>
 
               {/* Requirement Items List */}
               <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                {requirements.length === 0 ? (
+                {fields.length === 0 ? (
                   <div className="rounded border border-dashed border-border p-3 text-center text-muted-foreground text-[11px]">
                     No statutory submittal requirements attached yet.
                   </div>
                 ) : (
-                  requirements.map((req, idx) => (
+                  fields.map((req, idx) => (
                     <div
-                      key={req.id || idx}
+                      key={req.id}
                       className="flex items-center justify-between gap-2 rounded border border-border bg-card p-2 text-xs"
                     >
                       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -703,7 +846,7 @@ function MatrixItemEditorDrawerForm({
                         <button
                           type="button"
                           onClick={() => handleToggleMandatory(idx)}
-                          disabled={!effectiveCanEdit || isSaving}
+                          disabled={fieldsDisabled}
                           className={cn(
                             'px-1.5 py-0.5 rounded text-[10px] font-mono border transition cursor-pointer',
                             req.mandatory
@@ -719,7 +862,7 @@ function MatrixItemEditorDrawerForm({
                           <button
                             type="button"
                             onClick={() => handleRemoveRequirement(idx)}
-                            disabled={isSaving}
+                            disabled={isSubmitting}
                             className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-muted transition cursor-pointer"
                             aria-label={`Remove requirement: ${req.title}`}
                           >
@@ -745,7 +888,7 @@ function MatrixItemEditorDrawerForm({
                       }
                     }}
                     placeholder="Add statutory submittal requirement..."
-                    disabled={isSaving}
+                    disabled={isSubmitting}
                     className="h-8 text-xs"
                   />
                   <Button
@@ -753,7 +896,7 @@ function MatrixItemEditorDrawerForm({
                     variant="outline"
                     size="sm"
                     onClick={handleAddRequirement}
-                    disabled={!newReqTitle.trim() || isSaving}
+                    disabled={!newReqTitle.trim() || isSubmitting}
                     className="h-8 px-2.5 text-xs shrink-0 cursor-pointer"
                   >
                     <Plus className="h-3.5 w-3.5 mr-1" />
@@ -786,12 +929,15 @@ function MatrixItemEditorDrawerForm({
               </div>
               <Textarea
                 id="matrix-item-change-summary"
-                value={changeSummary}
-                onChange={(e) => setChangeSummary(e.target.value)}
                 placeholder="Explain the statutory authority, circular revision, or engineering requirement rationale..."
-                disabled={!effectiveCanEdit || isSaving}
+                disabled={fieldsDisabled}
+                aria-invalid={!!errors.changeSummary}
                 className="min-h-16 text-xs resize-none"
-                required
+                {...register('changeSummary', {
+                  validate: (v) =>
+                    v.trim().length >= 5 ||
+                    'Reason for template change must be at least 5 characters.',
+                })}
               />
               <p className="text-[11px] text-muted-foreground">
                 Required audit justification logged permanently with this
@@ -817,10 +963,17 @@ function MatrixItemEditorDrawerForm({
                   </div>
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
                     Saving automatically updates unobtained NOCs (
-                    <span className="text-foreground font-medium">Not Started</span>,{' '}
-                    <span className="text-foreground font-medium">Pending</span>,{' '}
-                    <span className="text-foreground font-medium">Rejected</span>
-                    ) across all active projects under this Master Authority. Approved certificates remain locked and unchanged.
+                    <span className="text-foreground font-medium">
+                      Not Started
+                    </span>
+                    ,{' '}
+                    <span className="text-foreground font-medium">Pending</span>
+                    ,{' '}
+                    <span className="text-foreground font-medium">
+                      Rejected
+                    </span>
+                    ) across all active projects under this Master Authority.
+                    Approved certificates remain locked and unchanged.
                   </p>
                 </div>
               </div>
@@ -834,7 +987,7 @@ function MatrixItemEditorDrawerForm({
               variant="outline"
               size="sm"
               onClick={onClose}
-              disabled={isSaving}
+              disabled={isSubmitting}
               className="text-xs h-8 cursor-pointer"
             >
               Cancel
@@ -844,14 +997,10 @@ function MatrixItemEditorDrawerForm({
               <Button
                 type="submit"
                 size="sm"
-                disabled={
-                  isSaving ||
-                  description.trim().length < 3 ||
-                  changeSummary.trim().length < 5
-                }
+                disabled={isSubmitting || !isValid}
                 className="bg-(--site-cyan) text-white hover:bg-(--site-cyan-hover) text-xs h-8 px-4 cursor-pointer gap-1.5 shadow-xs"
               >
-                {isSaving ? (
+                {isSubmitting ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     <span>Saving...</span>
@@ -867,56 +1016,11 @@ function MatrixItemEditorDrawerForm({
         </form>
       </aside>
 
-      {/* Dialog: Add Reviewing Authority */}
-      <Dialog open={isAddRevAuthOpen} onOpenChange={setIsAddRevAuthOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Register Reviewing Authority</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreateReviewingAuthority} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="new-rev-auth-name" className="text-xs font-semibold">
-                Authority Name / Department <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="new-rev-auth-name"
-                placeholder="e.g. Etihad Rail, ADDC, Tadweer"
-                value={newRevAuthName}
-                onChange={(e) => setNewRevAuthName(e.target.value)}
-                required
-                className="h-8 text-xs"
-              />
-            </div>
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsAddRevAuthOpen(false)}
-                disabled={isCreatingRevAuth}
-                className="text-xs h-8 cursor-pointer"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={isCreatingRevAuth || !newRevAuthName.trim()}
-                className="bg-(--site-cyan) text-white hover:bg-(--site-cyan-hover) text-xs h-8 cursor-pointer gap-1.5"
-              >
-                {isCreatingRevAuth ? (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    <span>Registering...</span>
-                  </>
-                ) : (
-                  <span>Register Authority</span>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <AddAuthorityDialog
+        open={isAddRevAuthOpen}
+        onOpenChange={setIsAddRevAuthOpen}
+        onCreated={handleAuthorityCreated}
+      />
     </>
   );
 }

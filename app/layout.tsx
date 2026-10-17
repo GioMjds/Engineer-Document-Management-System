@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { RegisterServiceWorker } from '@/components/pwa/register-service-worker';
 import { Toaster } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { OfflineStatus } from '@/components/pwa/offline-status';
 
 const manrope = Manrope({
   variable: '--font-manrope',
@@ -72,6 +73,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
           enableSystem
           disableTransitionOnChange
         >
+          <OfflineStatus />
           {children}
           <Toaster closeButton richColors position="top-right" />
           <RegisterServiceWorker />
