@@ -1,7 +1,3 @@
-// ---------------------------------------------------------------------------
-// Roles
-// ---------------------------------------------------------------------------
-
 export const ROLES = [
   'admin',
   'ceo',
@@ -203,7 +199,7 @@ export const NAV_ITEMS: ReadonlyArray<{
   label: string;
   capability: Capability;
 }> = [
-  { href: '/', label: 'Dashboard', capability: 'dashboard.view' },
+  { href: '/dashboard', label: 'Dashboard', capability: 'dashboard.view' },
   { href: '/projects', label: 'Projects', capability: 'project.view' },
   { href: '/noc-tracker', label: 'NOC Tracker', capability: 'noc.view' },
   { href: '/noc-matrix', label: 'NOC Matrix', capability: 'noc.matrix.view' },

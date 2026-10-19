@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireUser, requireRole, requireCan } from '@/lib/auth';
+import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import {
   documentMetaSchema,

@@ -65,7 +65,7 @@ export async function requireRole(
     .filter((r): r is AppRole => r !== null);
 
   if (!normalizedAllowed.includes(user.role)) {
-    redirect('/documents');
+    redirect('/dashboard');
   }
   return user;
 }

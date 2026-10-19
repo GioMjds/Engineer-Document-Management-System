@@ -64,6 +64,7 @@ The following table details the exact permissions, data visibility, and action b
 
 - **Storage & Isolation**: Projects are stored in `public.projects`. Cross-project roles (`admin`, `ceo`, `area_manager`) see every project globally via `private.can_see_project()`. Field and operational roles (`resident_engineer`, `authority_engineer`, `engineer`, `dc`) only see projects where their user ID is explicitly assigned in `public.project_members`.
 - **Project Registration**: Handled exclusively by `admin` at `/projects/new`. When an admin creates a project, the system automatically instantiates the complete statutory NOC requirement matrix and deliverable checklists for the selected Master Authority (e.g., Nakheel, Dubai Municipality, DDA).
+- **Project Code Standard**: Project codes enforce a strict 5-digit numeric format (`^[0-9]{5}$`) via database check constraint `projects_code_check`. Standard convention uses a 2-digit year plus a 3-digit sequence (`YYNNN`, e.g., `26001`, `23015`, `23016`). Alphanumeric codes or prefixes (such as `PRJ-2026-001`) violate `projects_code_check` and are rejected by Supabase.
 
 ### 3.2 Documents & Engineering Drawing Review Lifecycle
 
@@ -160,7 +161,8 @@ Full governance and operational authority. Responsible for user lifecycle, proje
 ##### A. Creating a New Project
 
 1. Navigate to `/projects/new` (or click **"New Project"** on the projects list or empty tracker screen).
-2. Enter the **Project Code** (e.g., `PRJ-2026-001`).
+2. Enter the **Project Code** (e.g., `26001` or `23017`).
+   - _Requirement_: Exactly 5 numeric digits (`YYNNN`, 2-digit year + 3-digit counter) per Supabase check constraint `projects_code_check`. Do not use prefixes or dashes like `PRJ-2026-001`.
 3. Enter the **Project Title / Description** (e.g., `Al Wasl Residential Tower Phase 2`).
 4. Enter the **Client Name** and **Contractor Name**.
 5. Select the **Master Authority** from the dropdown (e.g., `Nakheel & Trakhees`, `Dubai Municipality`, or `Dubai Development Authority`).

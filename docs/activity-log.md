@@ -556,3 +556,16 @@
   - Replaced hardcoded `'DEWA'` fallback in `lib/server/noc-data.ts` with generic authority ID.
   - Verified with `pnpm lint` (0 errors) and `pnpm build` (20/20 routes compiled cleanly).
 
+## Session 2026-10-19
+
+- Resolved project registration failure caused by `projects_code_check` constraint:
+  - Investigated Supabase check constraint `projects_code_check` on `public.projects.code`.
+  - Confirmed database enforces strict 5-digit numeric pattern (`^[0-9]{5}$`, e.g. `23015`, `26001`).
+  - Identified cause: `docs/role-guides.md` provided non-conforming example `PRJ-2026-001`.
+  - Updated `docs/role-guides.md` Section 3.1 and Section 4.1.A documenting exact 5-digit (`YYNNN`) requirement and valid examples (`26001`, `23017`).
+- Seeded comprehensive Management & Permitting Oversight and Discipline Engineer users:
+  - Created idempotent seed script `scripts/seed-users.ts` and updated `scripts/set-test-passwords.ts`.
+  - Provisioned 16 additional user accounts (23 total profiles) across `resident_engineer` (RE), `authority_engineer` (AE), `area_manager` (AM), `dc` (DC), and `engineer` (Architect, MEP, Structural, Civil disciplines).
+  - Configured uniform credentials (`cvtec123456`) and active status.
+  - Automatically mapped initial multidisciplinary project team onto active project `23020`.
+

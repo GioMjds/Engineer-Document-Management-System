@@ -20,6 +20,22 @@ const TEST_EMAILS = [
   'authority.eng@test.com',
   'engineer@test.com',
   'dc@test.com',
+  're2@test.com',
+  're3@test.com',
+  'ae2@test.com',
+  'ae3@test.com',
+  'am2@test.com',
+  'am3@test.com',
+  'dc2@test.com',
+  'dc3@test.com',
+  'architect@test.com',
+  'architect2@test.com',
+  'mep@test.com',
+  'mep2@test.com',
+  'structural@test.com',
+  'structural2@test.com',
+  'civil@test.com',
+  'civil2@test.com',
 ];
 
 async function setTestPasswords() {

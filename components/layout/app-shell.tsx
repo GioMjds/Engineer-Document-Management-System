@@ -24,6 +24,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { navFor, type Capability } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 
 /** Nav grouping + icons live here; navFor() still decides WHO sees WHAT. */
 const NAV_META = {
@@ -210,13 +211,18 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
       <Link
-        href="/"
+        href="/dashboard"
         onClick={onNavigate}
         className="flex h-14 shrink-0 items-center gap-3 border-b border-sidebar-border px-4 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
       >
-        <span className="flex size-9 items-center justify-center rounded-lg bg-sidebar-primary font-mono text-sm font-black text-sidebar-primary-foreground">
-          CV
-        </span>
+        <Image 
+          src="/cvtec-logo.svg"
+          alt="CVTEC Logo"
+          width={36}
+          height={36}
+          quality={100}
+          loading="lazy"
+        />
         <span className="flex flex-col leading-tight">
           <span className="text-sm font-bold tracking-tight">CVTEC EDMS</span>
           <span className="text-xs text-sidebar-foreground/70">

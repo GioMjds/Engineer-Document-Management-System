@@ -84,7 +84,7 @@ export default function OfflinePage() {
           The engineering document portal needs an active connection to sync
           document revisions and authority NOC matrices.
         </p>
-        <Link href="/">Try again</Link>
+        <Link href="/dashboard">Try again</Link>
       </div>
       <script dangerouslySetInnerHTML={{ __html: autoRecover }} />
     </main>

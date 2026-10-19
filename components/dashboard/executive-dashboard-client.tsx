@@ -109,8 +109,6 @@ export function ExecutiveDashboardClient({
   initialAreaManagerStats,
   executiveSummary,
 }: ExecutiveDashboardClientProps) {
-  // NOTE: `projects` must already be scoped to the user's assignments on the
-  // server (getNocTrackerData + RLS). Client-side filtering is not a security boundary.
   const [projectList, setProjectList] = useState<AssignedProject[]>(projects);
   const [milestonesMap, setMilestonesMap] = useState<
     Record<string, StageMilestoneDates>
@@ -353,7 +351,7 @@ export function ExecutiveDashboardClient({
                 <SelectValue placeholder="All projects" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">
+                <SelectItem>
                   All projects ({projectList.length})
                 </SelectItem>
                 {projectList.map((p) => (
