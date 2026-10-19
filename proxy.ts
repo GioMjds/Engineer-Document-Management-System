@@ -3,17 +3,30 @@ import { updateSession } from '@/lib/supabase/middleware';
 
 export async function proxy(request: NextRequest) {
   const { response, user } = await updateSession(request);
-  const isAuthRoute =
-    request.nextUrl.pathname.startsWith('/login') ||
-    request.nextUrl.pathname.startsWith('/confirm') ||
-    request.nextUrl.pathname.startsWith('/forgot-password');
+  const pathname = request.nextUrl.pathname;
 
-  if (!user && !isAuthRoute) {
+  // Guest-only auth routes: signed-in users should redirect to dashboard
+  const isGuestOnlyRoute =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/forgot-password');
+
+  // Allowed public or auth lifecycle routes (token verification and setting initial password)
+  const isAuthLifecycleRoute =
+    isGuestOnlyRoute ||
+    pathname.startsWith('/confirm') ||
+    pathname.startsWith('/auth/confirm') ||
+    pathname.startsWith('/set-password');
+
+  if (!user && !isAuthLifecycleRoute) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
-  if (user && isAuthRoute) {
+
+  // Only redirect away from login/forgot-password if user is already signed in.
+  // Do NOT redirect away from /set-password or /confirm so new users can set their password.
+  if (user && isGuestOnlyRoute) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
+
   return response;
 }
 

@@ -6,6 +6,7 @@ import { requireCan } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { type AppRole } from '@/lib/permissions';
+import { sendUserInviteEmail } from '@/lib/email/notifications';
 // ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
@@ -69,36 +70,85 @@ export async function inviteUser(input: {
   }
 
   const adminClient = createAdminClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
-  const { data, error } = await adminClient.auth.admin.inviteUserByEmail(
-    parsed.data.email,
-    {
-      data: {
-        full_name: parsed.data.full_name,
-        role: parsed.data.role,
+  let userId: string | null = null;
+  let actionLink: string | null = null;
+
+  // Generate invite link to bypass Supabase default rate limit and send custom email
+  const { data: linkData, error: linkError } =
+    await adminClient.auth.admin.generateLink({
+      type: 'invite',
+      email: parsed.data.email,
+      options: {
+        data: {
+          full_name: parsed.data.full_name,
+          role: parsed.data.role,
+        },
+        redirectTo: `${siteUrl}/set-password`,
       },
-    },
-  );
+    });
 
-  if (error || !data.user) {
-    return { ok: false, error: error?.message ?? 'Failed to invite user.' };
+  if (linkError || !linkData?.user) {
+    // Fallback to inviteUserByEmail if generateLink fails
+    const { data: inviteData, error: inviteError } =
+      await adminClient.auth.admin.inviteUserByEmail(parsed.data.email, {
+        data: {
+          full_name: parsed.data.full_name,
+          role: parsed.data.role,
+        },
+        redirectTo: `${siteUrl}/set-password`,
+      });
+
+    if (inviteError || !inviteData?.user) {
+      return {
+        ok: false,
+        error:
+          linkError?.message ?? inviteError?.message ?? 'Failed to invite user.',
+      };
+    }
+    userId = inviteData.user.id;
+  } else {
+    userId = linkData.user.id;
+    actionLink = linkData.properties?.action_link ?? null;
   }
 
-  // Ensure role is explicitly set on profile
+  // Ensure role and active status are explicitly set on profile
   await adminClient
     .from('profiles')
-    .update({
-      role: parsed.data.role,
+    .upsert({
+      id: userId,
+      email: parsed.data.email,
       full_name: parsed.data.full_name,
+      role: parsed.data.role,
       active: true,
     })
-    .eq('id', data.user.id);
+    .eq('id', userId);
+
+  // Construct direct app activation URL to avoid reliance on Supabase redirect allowlists
+  const directActivationLink = linkData?.properties?.hashed_token
+    ? `${siteUrl}/auth/confirm?token_hash=${linkData.properties.hashed_token}&type=invite&next=/set-password`
+    : (actionLink ?? `${siteUrl}/set-password`);
+
+  // Send branded invitation email with password activation link via Resend
+  if (process.env.RESEND_API_KEY) {
+    const emailResult = await sendUserInviteEmail({
+      email: parsed.data.email,
+      fullName: parsed.data.full_name,
+      role: parsed.data.role,
+      actionLink: directActivationLink,
+    });
+
+    if (!emailResult.ok) {
+      console.warn('Invite email delivery error via Resend:', emailResult.error);
+    }
+  }
 
   await adminClient.from('audit_log').insert({
     actor_id: caller.id,
     action: 'USER_INVITE',
     entity: 'profiles',
-    entity_id: data.user.id,
+    entity_id: userId,
     metadata: {
       email: parsed.data.email,
       role: parsed.data.role,

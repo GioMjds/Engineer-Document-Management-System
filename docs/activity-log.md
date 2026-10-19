@@ -1,5 +1,19 @@
 # Activity Log
 
+## Session 2026-10-19
+
+- Integrated Resend email service and resolved Supabase free tier rate limits:
+  - Installed `resend` package.
+  - Created `lib/email/client.ts` for server-side Resend initialization.
+  - Created `lib/email/templates/invite-user.ts` for industrial CVTEC EDMS branded invitation emails.
+  - Created `lib/email/notifications.ts` for transactional email dispatching and user invite delivery.
+  - Updated `inviteUser` in `app/actions/admin.ts` to use `adminClient.auth.admin.generateLink`, bypassing Supabase internal mail limits and sending activation emails via Resend.
+  - Built dedicated `/set-password` landing page (`app/(auth)/set-password/page.tsx` and `set-password-form.tsx`) for invited users to set their initial password with validation and brand panel.
+  - Created server Route Handler `app/auth/confirm/route.ts` to exchange OTP tokens directly into session cookies.
+  - Fixed route guard in `proxy.ts` preventing authenticated users on activation routes from premature redirection to dashboard or login.
+  - Verified full TypeScript compilation (`npx tsc --noEmit`) with 0 errors.
+  - Verified production build (`pnpm build`) passing across all 23 routes with 0 errors.
+
 ## Session 2026-10-17
 
 - Added `/projects` directory workspace and `loading.tsx` per user request:
