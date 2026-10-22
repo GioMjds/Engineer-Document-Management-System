@@ -117,7 +117,13 @@ export function ExecutiveDashboardClient({
   const [projectList, setProjectList] = useState<AssignedProject[]>(projects);
   const [milestonesMap, setMilestonesMap] = useState<
     Record<string, StageMilestoneDates>
-  >(INITIAL_PROJECT_MILESTONES);
+  >(() => {
+    const initialMap = { ...INITIAL_PROJECT_MILESTONES };
+    for (const p of projects) {
+      if (p.milestones) initialMap[p.code] = p.milestones;
+    }
+    return initialMap;
+  });
   const [disciplineStatuses, setDisciplineStatuses] = useState<
     Record<string, ProjectDisciplineStatus>
   >(INITIAL_PROJECT_DISCIPLINE_STATUS);
@@ -131,7 +137,7 @@ export function ExecutiveDashboardClient({
   const [queueFilter, setQueueFilter] = useState<QueueFilter>('all');
   const [nocItems] = useState<ProjectNocItem[]>(initialNocs);
 
-  // Sync stored milestones and lifecycle stages from local storage on mount.
+  // Sync stored milestones and lifecycle stages on mount.
   useEffect(() => {
     setProjectList((prev) =>
       prev.map((p) => {
@@ -140,6 +146,9 @@ export function ExecutiveDashboardClient({
           p.code,
           p.lifecycleStage || 'Pre-Construction',
         );
+        if (storedMilestones && Object.keys(storedMilestones).length > 0) {
+          setMilestonesMap((m) => ({ ...m, [p.code]: storedMilestones }));
+        }
         return {
           ...p,
           milestones: storedMilestones,

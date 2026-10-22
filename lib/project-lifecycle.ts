@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   AssignedProject,
   ProjectNocItem,
   ProjectDisciplineStatus,
@@ -6,6 +6,7 @@
   StageGateReadiness,
   StageGatePrerequisiteItem,
   StageMilestoneDates,
+  ProjectDocumentItem,
 } from '@/types/noc';
 
 export const INITIAL_PROJECT_MILESTONES: Record<string, StageMilestoneDates> = {
@@ -87,7 +88,11 @@ export function getStoredProjectMilestones(
   code: string,
   fallback?: StageMilestoneDates,
 ): StageMilestoneDates {
-  const defaultMilestones = fallback || INITIAL_PROJECT_MILESTONES[code] || {};
+  if (fallback && Object.keys(fallback).length > 0) {
+    saveStoredProjectMilestones(code, fallback);
+    return fallback;
+  }
+  const defaultMilestones = INITIAL_PROJECT_MILESTONES[code] || {};
   const storage = getStorage();
   if (!storage) return defaultMilestones;
   try {
@@ -159,6 +164,7 @@ export function evaluateStageGateReadiness(
   project: AssignedProject,
   allNocs: ProjectNocItem[],
   disciplineStatus?: ProjectDisciplineStatus,
+  projectDocuments?: ProjectDocumentItem[],
 ): StageGateReadiness {
   const currentStage = (project.lifecycleStage ||
     'Pre-Construction') as ProjectLifecycleStage;
@@ -170,27 +176,49 @@ export function evaluateStageGateReadiness(
   const prerequisites: StageGatePrerequisiteItem[] = [];
 
   if (currentStage === 'Pre-Construction') {
+    const topoDoc = projectDocuments?.find(
+      (d) =>
+        d.docNumber.toLowerCase().includes('cad-e-001') ||
+        d.docNumber.toLowerCase().includes('topo') ||
+        d.title.toLowerCase().includes('topographical') ||
+        d.title.toLowerCase().includes('survey'),
+    );
     const topo = disciplineStatus?.specialists.find(
       (s) => s.type === 'Topographical',
     );
+    const isTopoSatisfied =
+      Boolean(topoDoc) ||
+      topo?.status === 'Approved' ||
+      topo?.status === 'Uploaded';
+
     prerequisites.push({
       id: 'gate-topo',
       title: 'Topographical Affection Survey Completed',
       category: 'specialist_study',
-      isSatisfied: topo?.status === 'Approved' || topo?.status === 'Uploaded',
-      sourceReference: topo?.fileName,
+      isSatisfied: isTopoSatisfied,
+      sourceReference: topoDoc?.docNumber || topo?.fileName,
       mandatoryForNextStage: true,
     });
 
+    const geotechDoc = projectDocuments?.find(
+      (d) =>
+        d.docNumber.toLowerCase().includes('cad-e-002') ||
+        d.docNumber.toLowerCase().includes('geo') ||
+        d.title.toLowerCase().includes('geotechnical') ||
+        d.title.toLowerCase().includes('soil'),
+    );
     const geotech = disciplineStatus?.specialists.find(
       (s) => s.type === 'Geotechnical',
     );
+    const isGeotechSatisfied =
+      Boolean(geotechDoc) || geotech?.status === 'Approved';
+
     prerequisites.push({
       id: 'gate-geotech',
       title: 'Geotechnical Soil Investigation Approved',
       category: 'specialist_study',
-      isSatisfied: geotech?.status === 'Approved',
-      sourceReference: geotech?.fileName,
+      isSatisfied: isGeotechSatisfied,
+      sourceReference: geotechDoc?.docNumber || geotech?.fileName,
       mandatoryForNextStage: true,
     });
 

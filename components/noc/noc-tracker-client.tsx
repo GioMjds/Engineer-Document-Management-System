@@ -1,7 +1,11 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { Search, Filter } from 'lucide-react';
+import {
+  advanceProjectStageAction,
+  updateProjectMilestonesAction,
+} from '@/app/actions/noc';
+import { ProjectLifecycleStepper } from '@/components/lifecycle/project-lifecycle-stepper';
+import { StageGateDrawer } from '@/components/lifecycle/stage-gate-drawer';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -10,37 +14,41 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { NocAlertBanner } from './noc-alert-banner';
-import { NocDataTable } from './noc-data-table';
-import { NocInspectorDrawer } from './noc-inspector-drawer';
-import { updateProjectMilestonesAction, advanceProjectStageAction } from '@/app/actions/noc';
-import { NocProjectHeader } from './noc-project-header';
-import { ProjectLifecycleStepper } from '@/components/lifecycle/project-lifecycle-stepper';
-import { StageGateDrawer } from '@/components/lifecycle/stage-gate-drawer';
+import { matchesUrgentFilter } from '@/lib/noc-summary';
 import {
   evaluateStageGateReadiness,
-  INITIAL_PROJECT_MILESTONES,
   getStoredProjectMilestones,
-  saveStoredProjectMilestones,
   getStoredProjectStage,
+  INITIAL_PROJECT_MILESTONES,
+  saveStoredProjectMilestones,
   saveStoredProjectStage,
 } from '@/lib/project-lifecycle';
 import { INITIAL_PROJECT_DISCIPLINE_STATUS } from '@/lib/project-status';
-import { matchesUrgentFilter } from '@/lib/noc-summary';
+import { createClient } from '@/lib/supabase/client';
 import type {
   AssignedProject,
-  ProjectNocItem,
   NocStage,
-  ReviewingAuthority,
+  ProjectDocumentItem,
   ProjectLifecycleStage,
+  ProjectNocItem,
+  ReviewingAuthority,
   StageMilestoneDates,
 } from '@/types/noc';
+import { Filter, Search } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { NocAlertBanner } from './noc-alert-banner';
+import { NocDataTable } from './noc-data-table';
+import { NocInspectorDrawer } from './noc-inspector-drawer';
+import { NocProjectHeader } from './noc-project-header';
 
 interface NocTrackerClientProps {
   /** The project from the URL (/noc-tracker/[projectId]). */
   project: AssignedProject;
   /** NOCs for this project only (filtered on the server). */
   initialNocs: ProjectNocItem[];
+  /** Technical submittals and specialist studies for this project */
+  projectDocuments?: ProjectDocumentItem[];
   currentUserRole: string;
 }
 
@@ -70,14 +78,36 @@ const countClass = (active: boolean) =>
 export function NocTrackerClient({
   project,
   initialNocs,
+  projectDocuments = [],
   currentUserRole,
 }: NocTrackerClientProps) {
+  const router = useRouter();
   const [lifecycleStage, setLifecycleStage] = useState<ProjectLifecycleStage>(
-    project.lifecycleStage || 'Pre-Construction',
+    () =>
+      (typeof window !== 'undefined'
+        ? getStoredProjectStage(
+            project.code,
+            project.lifecycleStage || 'Pre-Construction',
+          )
+        : project.lifecycleStage) || 'Pre-Construction',
   );
-  const [milestones, setMilestones] = useState(
-    INITIAL_PROJECT_MILESTONES[project.code] ?? project.milestones,
-  );
+  const [milestones, setMilestones] = useState<StageMilestoneDates>(() => {
+    if (project.milestones && Object.keys(project.milestones).length > 0) {
+      return project.milestones;
+    }
+
+    if (typeof window !== 'undefined') {
+      const storedMilestones = getStoredProjectMilestones(
+        project.code,
+        project.milestones,
+      );
+      if (storedMilestones && Object.keys(storedMilestones).length > 0) {
+        return storedMilestones;
+      }
+    }
+
+    return INITIAL_PROJECT_MILESTONES[project.code] ?? {};
+  });
   const [isGateDrawerOpen, setIsGateDrawerOpen] = useState(false);
   const [nocItems, setNocItems] = useState<ProjectNocItem[]>(initialNocs);
   const [activeStage, setActiveStage] = useState<string>('Design NOC');
@@ -87,23 +117,80 @@ export function NocTrackerClient({
   const [urgentFilter, setUrgentFilter] = useState<string | null>(null);
   const [selectedNoc, setSelectedNoc] = useState<ProjectNocItem | null>(null);
 
-  // Sync stored stage and milestones on mount after hydration.
+  // Persist server-provided milestones after hydration.
   useEffect(() => {
-    const storedMilestones = getStoredProjectMilestones(
-      project.code,
-      project.milestones,
-    );
-    if (storedMilestones && Object.keys(storedMilestones).length > 0) {
-      setMilestones(storedMilestones);
+    if (project.milestones && Object.keys(project.milestones).length > 0) {
+      saveStoredProjectMilestones(project.code, project.milestones);
     }
-    const storedStage = getStoredProjectStage(
-      project.code,
-      project.lifecycleStage || 'Pre-Construction',
-    );
-    if (storedStage && storedStage !== lifecycleStage) {
-      setLifecycleStage(storedStage);
-    }
-  }, [project.code, project.milestones, project.lifecycleStage]);
+  }, [project.code, project.milestones]);
+
+  // Subscribe to real-time database changes for milestone synchronization across roles.
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`realtime-project-${project.code}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'projects',
+          filter: `code=eq.${project.code}`,
+        },
+        (payload) => {
+          if (payload.new && 'milestones' in payload.new) {
+            const newMilestones = payload.new.milestones as StageMilestoneDates;
+            if (newMilestones) {
+              setMilestones(newMilestones);
+              saveStoredProjectMilestones(project.code, newMilestones);
+            }
+          }
+          if (payload.new && 'stage' in payload.new) {
+            const stageMap: Record<string, ProjectLifecycleStage> = {
+              planning: 'Pre-Construction',
+              design: 'Pre-Construction',
+              construction: 'Construction',
+              handover: 'Handover',
+              completed: 'Handover',
+            };
+            const rawStage = payload.new.stage as string;
+            const nextLifecycle = stageMap[rawStage] || 'Pre-Construction';
+            setLifecycleStage(nextLifecycle);
+            saveStoredProjectStage(project.code, nextLifecycle);
+          }
+          router.refresh();
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'project_nocs',
+          filter: project.id ? `project_id=eq.${project.id}` : undefined,
+        },
+        () => {
+          router.refresh();
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'documents',
+          filter: project.id ? `project_id=eq.${project.id}` : undefined,
+        },
+        () => {
+          router.refresh();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [project.code, project.id, router]);
 
   const currentProject = useMemo(
     () => ({ ...project, lifecycleStage, milestones }),
@@ -116,8 +203,9 @@ export function NocTrackerClient({
         currentProject,
         nocItems,
         INITIAL_PROJECT_DISCIPLINE_STATUS[currentProject.code],
+        projectDocuments,
       ),
-    [currentProject, nocItems],
+    [currentProject, nocItems, projectDocuments],
   );
 
   const filteredNocs = useMemo(() => {
@@ -298,6 +386,7 @@ export function NocTrackerClient({
       <NocInspectorDrawer
         item={selectedNoc}
         allNocs={nocItems}
+        projectDocuments={projectDocuments}
         isOpen={Boolean(selectedNoc)}
         currentUserRole={currentUserRole}
         onClose={() => setSelectedNoc(null)}

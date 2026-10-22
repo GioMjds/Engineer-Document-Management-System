@@ -1,6 +1,20 @@
-﻿# Activity Log
+# Activity Log
 
 ## Session 2026-10-22
+
+- Designed TanStack Query Advanced Server Rendering architecture:
+  - Formulated baseline setup per `advanced-ssr.md` with singleton browser client, per-request server client, and streaming pending query dehydration.
+  - Planned root provider integration and domain query key factory (`lib/queries/dashboard.ts`).
+  - Drafted migration strategy for Executive Dashboard (`app/(app)/dashboard/page.tsx` and `components/dashboard/executive-dashboard-client.tsx`) to eliminate `useEffect` lifecycle synchronization and prop drilling.
+  - Created specification document at `docs/superpowers/specs/2026-10-22-tanstack-query-advanced-ssr-design.md`.
+
+- Resolved Authority Engineer NOC Tracker visibility and cross-role real-time gate checklist synchronization:
+  - Fixed server-side data fetching in [noc-data.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/server/noc-data.ts) to select and map `milestones` from `public.projects`, ensuring true database milestones load across all roles instead of relying on browser localStorage.
+  - Added Supabase Realtime channel subscription in [noc-tracker-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-tracker-client.tsx) listening to `projects`, `project_nocs`, and `documents` tables for instantaneous cross-role updates without manual refresh.
+  - Initialized statutory baseline NOC items and reviewing authorities for Project 26001 so the NOC table and stage tabs display required permitting milestones.
+  - Created "Approved Submittals Bundle (Ready for Authority)" section in [noc-inspector-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-inspector-drawer.tsx) and [submission-modal.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/submission-modal.tsx) displaying drawing packages approved by Resident Engineer in Step 3.
+  - Enhanced [project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts) `evaluateStageGateReadiness` to check project documents for Topographical survey and Geotechnical investigation submittals.
+  - Verified full production build and acceptance test suites (all 11 Authority Engineer tests, 16 milestone tests, 10 Resident Engineer tests, 10 Area Manager tests passing).
 
 - Applied database schema migration for cross-session milestone synchronization:
   - Created and pushed migration supabase/migrations/20261022000000_project_milestones.sql adding milestones JSONB column to public.projects.
@@ -653,6 +667,14 @@
 
 ## Session 2026-10-22
 
+- Resolved Authority Engineer NOC Tracker visibility and cross-role real-time gate checklist synchronization:
+  - Fixed server-side data fetching in [noc-data.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/server/noc-data.ts) to select and map `milestones` from `public.projects`, ensuring true database milestones load across all roles instead of relying on browser localStorage.
+  - Added Supabase Realtime channel subscription in [noc-tracker-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-tracker-client.tsx) listening to `projects`, `project_nocs`, and `documents` tables for instantaneous cross-role updates without manual refresh.
+  - Initialized statutory baseline NOC items and reviewing authorities for Project 26001 so the NOC table and stage tabs display required permitting milestones.
+  - Created "Approved Submittals Bundle (Ready for Authority)" section in [noc-inspector-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-inspector-drawer.tsx) and [submission-modal.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/submission-modal.tsx) displaying drawing packages approved by Resident Engineer in Step 3.
+  - Enhanced [project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts) `evaluateStageGateReadiness` to check project documents for Topographical survey and Geotechnical investigation submittals.
+  - Verified full production build and acceptance test suites (all 11 Authority Engineer tests, 16 milestone tests, 10 Resident Engineer tests, 10 Area Manager tests passing).
+
 - Documented end-to-end multi-role operational workflow:
   - Created [project-lifecycle-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/project-lifecycle-workflow.md) detailing complete lifecycle actions across all 7 assigned roles for Project 26001.
   - Included Pre-Construction stage gate readiness calculations, milestone reference baseline, document review lifecycle, statutory permitting, and role boundaries.
@@ -663,3 +685,11 @@
   - Verified TypeScript compilation (`tsc --noEmit`) and production build (`next build`) pass with 0 errors.
 
 
+
+- Refactored engineering drawing review modal in `components/review/drawing-review-modal.tsx`:
+  - Resolved modal horizontal clipping and layout overflow: added `sm:max-w-2xl md:max-w-3xl w-full` to override default `sm:max-w-md` constraints in `DialogContent`.
+  - Eliminated awkward horizontal scrollbar by enforcing `overflow-x-hidden` and wrapping action buttons with `flex-wrap gap-2.5`.
+  - Upgraded metadata grid with dedicated container (`bg-muted/20 border rounded-lg p-4`), monospace project code, project name tooltip, discipline badges, and unclipped submission dates.
+  - Added structured "Review Decision Panel" header with clear visual separation between destructive action (`Reject Drawing`) and workflow approvals (`Approve & Escalate`, `Approve Direct`, `Approve Ready for Authority`).
+  - Streamlined rejection feedback panel with mandatory validation counter (min 5 chars) and accessible labels.
+  - Verified TypeScript compilation (`npx tsc --noEmit`) and production Next.js build (`pnpm run build`): 24 routes built with 0 errors.

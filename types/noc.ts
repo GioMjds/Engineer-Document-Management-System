@@ -259,3 +259,16 @@ export interface SubmittalDelayItem {
 }
 
 export type NocPayerType = 'client' | 'contractor' | 'consultant_advance';
+
+export interface ProjectDocumentItem {
+  id: string;
+  docNumber: string;
+  title: string;
+  discipline?: string | null;
+  revision: string;
+  status: string;
+  fileName?: string | null;
+  filePath?: string | null;
+  fileSize?: number | null;
+  updatedAt?: string;
+}

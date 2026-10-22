@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Send, FileText, Calendar, Link as LinkIcon } from 'lucide-react';
+import { Send, FileText, Calendar, Link as LinkIcon, CheckCircle2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { submitNocApplication } from '@/app/actions/noc';
-import type { ProjectNocItem } from '@/types/noc';
+import type { ProjectNocItem, ProjectDocumentItem } from '@/types/noc';
 
 const submissionSchema = z.object({
   referenceNo: z.string().trim().min(1, 'Authority tracking / reference number is required.'),
@@ -31,6 +31,7 @@ interface SubmissionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   noc: ProjectNocItem;
+  readyDocs?: ProjectDocumentItem[];
   onSubmitted: (updated: ProjectNocItem) => void;
 }
 
@@ -38,6 +39,7 @@ export function SubmissionModal({
   open,
   onOpenChange,
   noc,
+  readyDocs = [],
   onSubmitted,
 }: SubmissionModalProps) {
   const {
@@ -92,6 +94,30 @@ export function SubmissionModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5 py-1">
+          {readyDocs.length > 0 && (
+            <div className="p-2.5 rounded bg-emerald-50/70 border border-emerald-300 dark:bg-emerald-950/40 dark:border-emerald-800 text-xs space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  Included Submission Package ({readyDocs.length})
+                </span>
+                <span className="text-[10px] font-mono uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-900 px-1 rounded">
+                  RE Approved
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {readyDocs.map((d) => (
+                  <span
+                    key={d.id}
+                    className="px-2 py-0.5 rounded bg-white dark:bg-zinc-900 border text-[11px] font-mono text-foreground font-medium"
+                  >
+                    {d.docNumber} ({d.revision})
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <Label htmlFor="sub-ref" className="text-xs font-medium">
               Authority Tracking / Reference # *

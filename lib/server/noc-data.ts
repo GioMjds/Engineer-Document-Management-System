@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import {
   SEED_PROJECTS,
+  INITIAL_NOCS_PROJECT_26001,
   INITIAL_NOCS_PROJECT_23016,
   INITIAL_NOCS_PROJECT_23015,
 } from '@/lib/noc-tracker';
@@ -17,6 +18,7 @@ import type {
   NocRequirement,
   NocResubmissionEntry,
   ProjectLifecycleStage,
+  StageMilestoneDates,
 } from '@/types/noc';
 
 export interface NocTrackerData {
@@ -46,6 +48,7 @@ interface RawDbProject {
   stage: string | null;
   contractor_name?: string | null;
   client_contractor_amount?: number | null;
+  milestones?: StageMilestoneDates | null;
   project_members?: RawProjectMember[] | null;
 }
 
@@ -175,6 +178,7 @@ function mapDbProjectToAssigned(
       ? p.stage.charAt(0).toUpperCase() + p.stage.slice(1)
       : 'Pre-Construction',
     lifecycleStage: p.stage ? stageMap[p.stage] || 'Pre-Construction' : 'Pre-Construction',
+    milestones: (p.milestones as StageMilestoneDates) || seed?.milestones || undefined,
     assignedRoles: roles,
   };
 }
@@ -266,7 +270,11 @@ function mapDbNocToItem(
 export async function getNocTrackerData(): Promise<NocTrackerData> {
   const fallbackData: NocTrackerData = {
     projects: SEED_PROJECTS,
-    nocs: [...INITIAL_NOCS_PROJECT_23016, ...INITIAL_NOCS_PROJECT_23015],
+    nocs: [
+      ...INITIAL_NOCS_PROJECT_26001,
+      ...INITIAL_NOCS_PROJECT_23016,
+      ...INITIAL_NOCS_PROJECT_23015,
+    ],
     isLive: false,
   };
 
@@ -286,6 +294,7 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
         stage,
         contractor_name,
         client_contractor_amount,
+        milestones,
         project_members (
           user_id,
           discipline,
@@ -409,27 +418,34 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
       .in('project_id', projectIds)
       .order('sequence_no', { ascending: true });
 
-    if (nocsError || !dbNocs || dbNocs.length === 0) {
-      return {
-        projects: Array.from(projectMap.values()),
-        nocs: [],
-        isLive: true,
-      };
-    }
+    const seedNocsMap: Record<string, ProjectNocItem[]> = {
+      '26001': INITIAL_NOCS_PROJECT_26001,
+      '23016': INITIAL_NOCS_PROJECT_23016,
+      '23015': INITIAL_NOCS_PROJECT_23015,
+    };
 
-    // 5. Map NOC records
-    const mappedNocs: ProjectNocItem[] = (dbNocs as unknown as RawDbNoc[]).map(
+    // 5. Map NOC records from database
+    const mappedNocs: ProjectNocItem[] = (dbNocs || []).map(
       (row) => {
-        const projectCode = projectDbIdToCode.get(row.project_id) || '23016';
+        const projectCode = projectDbIdToCode.get(row.project_id) || '26001';
         const reviewingAuthName = (revAuthMap.get(row.reviewing_authority_id) ||
           `Authority #${row.reviewing_authority_id}`) as ReviewingAuthority;
-        return mapDbNocToItem(row, projectCode, reviewingAuthName);
+        return mapDbNocToItem(row as unknown as RawDbNoc, projectCode, reviewingAuthName);
       },
     );
 
+    // Ensure every accessible project has NOCs available (fallback to seed if DB has none)
+    const combinedNocs = [...mappedNocs];
+    for (const projectCode of projectMap.keys()) {
+      const hasNocs = combinedNocs.some((n) => n.projectCode === projectCode);
+      if (!hasNocs && seedNocsMap[projectCode]) {
+        combinedNocs.push(...seedNocsMap[projectCode]);
+      }
+    }
+
     return {
       projects: Array.from(projectMap.values()),
-      nocs: mappedNocs,
+      nocs: combinedNocs,
       isLive: true,
     };
   } catch {

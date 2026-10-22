@@ -169,7 +169,7 @@ console.log('✓ TC-AM-10 Passed: AM user management, role modification, and pro
 // Navigation Map Verification
 // -----------------------------------------------------------------------------
 const amNav = navFor('area_manager').map((item) => item.href);
-const expectedNavHrefs = ['/', '/noc-tracker', '/documents', '/review'];
+const expectedNavHrefs = ['/dashboard', '/noc-tracker', '/documents', '/review'];
 const omittedNavHrefs = ['/users', '/noc-matrix', '/archive'];
 
 for (const href of expectedNavHrefs) {

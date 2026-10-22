@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   X,
   CheckCircle2,
@@ -17,7 +17,9 @@ import {
   ChevronUp,
   Send,
   FileCheck,
+  FileText,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { SubmissionModal } from './submission-modal';
 import { AuthorityResultModal } from './authority-result-modal';
 import { Button } from '@/components/ui/button';
@@ -46,6 +48,7 @@ import type {
   NocStatus,
   NocPayerType,
   NocResubmissionEntry,
+  ProjectDocumentItem,
 } from '@/types/noc';
 import { calculateDaysRemaining } from '@/lib/noc-tracker';
 import { can } from '@/lib/permissions';
@@ -59,6 +62,7 @@ import { toast } from 'sonner';
 interface NocInspectorDrawerProps {
   item: ProjectNocItem | null;
   allNocs: ProjectNocItem[];
+  projectDocuments?: ProjectDocumentItem[];
   isOpen: boolean;
   currentUserRole?: string;
   onClose: () => void;
@@ -74,6 +78,7 @@ const PAYER_OPTIONS: { value: NocPayerType; label: string }[] = [
 export function NocInspectorDrawer({
   item,
   allNocs,
+  projectDocuments = [],
   isOpen,
   currentUserRole = 'engineer',
   onClose,
@@ -117,6 +122,10 @@ export function NocInspectorDrawer({
   }, [item]);
 
   if (!isOpen || !item) return null;
+
+  const readyDocs = (projectDocuments || []).filter(
+    (d) => d.status === 'ready_for_authority' || d.status === 'approved',
+  );
 
   const daysRemaining = calculateDaysRemaining(item.expiryDate);
 
@@ -523,6 +532,95 @@ export function NocInspectorDrawer({
               )}
             </section>
           )}
+
+          {/* Approved Submittals Bundle (Ready for Authority from Step 3) */}
+          <section className="p-3 border rounded bg-card space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <FileCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-xs text-foreground uppercase font-semibold tracking-wider">
+                  Approved Submittals Bundle
+                </span>
+              </div>
+              <span className="text-xs px-2 py-0.5 rounded font-mono font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                {readyDocs.length} Package{readyDocs.length === 1 ? '' : 's'} Ready
+              </span>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Technical packages approved by Resident Engineer Lead and cleared for statutory submission.
+            </p>
+
+            {readyDocs.length === 0 ? (
+              <div className="p-3 rounded border border-dashed text-center text-xs text-muted-foreground bg-muted/20">
+                No drawings with &lsquo;Ready for Authority&rsquo; status in this project yet. Awaiting Resident Engineer Level-1 approval.
+              </div>
+            ) : (
+              <div className="space-y-2 pt-1">
+                {readyDocs.map((doc) => {
+                  const isMatched =
+                    (item.description.toLowerCase().includes('electrical') && doc.discipline?.toLowerCase() === 'mep') ||
+                    (item.description.toLowerCase().includes('dewa') && (doc.docNumber.toLowerCase().includes('mep') || doc.discipline?.toLowerCase() === 'mep')) ||
+                    (item.description.toLowerCase().includes('traffic') && (doc.docNumber.toLowerCase().includes('arc') || doc.discipline?.toLowerCase() === 'architect')) ||
+                    (item.description.toLowerCase().includes('rta') && (doc.docNumber.toLowerCase().includes('arc') || doc.discipline?.toLowerCase() === 'architect')) ||
+                    (item.description.toLowerCase().includes('structural') && (doc.docNumber.toLowerCase().includes('struct') || doc.docNumber.toLowerCase().includes('cad')));
+
+                  return (
+                    <div
+                      key={doc.id}
+                      className={cn(
+                        'p-2.5 rounded border text-xs transition-colors space-y-1.5',
+                        isMatched
+                          ? 'bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/40 dark:border-emerald-800'
+                          : 'bg-muted/30 border-border',
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono font-bold text-foreground">
+                            {doc.docNumber}
+                          </span>
+                          <span className="px-1.5 py-0.2 rounded bg-muted text-[10px] font-mono border">
+                            Rev {doc.revision}
+                          </span>
+                          {doc.discipline && (
+                            <span className="px-1.5 py-0.2 rounded bg-primary/10 text-primary text-[10px] font-medium uppercase">
+                              {doc.discipline}
+                            </span>
+                          )}
+                          {isMatched && (
+                            <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 text-[10px] font-semibold uppercase tracking-wider">
+                              Primary Submittal
+                            </span>
+                          )}
+                        </div>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 shrink-0">
+                          <CheckCircle2 className="h-3 w-3" /> Ready for Authority
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-foreground font-medium leading-snug">
+                        {doc.title}
+                      </p>
+
+                      <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground border-t border-border/60">
+                        <span className="truncate max-w-[200px] font-mono text-[10px]">
+                          {doc.fileName || `${doc.docNumber}-${doc.revision}.pdf`}
+                        </span>
+                        <a
+                          href={`/documents?search=${encodeURIComponent(doc.docNumber)}`}
+                          className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                        >
+                          <span>Open Package</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
           {/* Authority Reference */}
           <section className="p-3 border rounded bg-card space-y-2">
@@ -1093,6 +1191,7 @@ export function NocInspectorDrawer({
         open={isSubmissionModalOpen}
         onOpenChange={setIsSubmissionModalOpen}
         noc={item}
+        readyDocs={readyDocs}
         onSubmitted={(updated) => onUpdateNoc(updated)}
       />
 
