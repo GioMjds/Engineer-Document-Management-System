@@ -139,6 +139,9 @@
   --expired-fg: #7f1d1d;
   --danger-subtle: #fee2e2;
   --danger-fg: #7f1d1d;
+
+  --skeleton-base: #e8ecf2;
+  --skeleton-highlight: #f7f9fb;
 }
 
 .dark {
@@ -210,6 +213,9 @@
   --expired-fg: #fecaca;
   --danger-subtle: #7f1d1d;
   --danger-fg: #fecaca;
+
+  --skeleton-base: #162a42;
+  --skeleton-highlight: #1f3a5c;
 }
 
 @layer base {

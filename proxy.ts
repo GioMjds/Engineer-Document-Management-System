@@ -21,9 +21,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Only redirect away from login/forgot-password if user is already signed in.
+  // Only redirect away from login/forgot-password or root if user is already signed in.
   // Do NOT redirect away from /set-password or /confirm so new users can set their password.
-  if (user && isGuestOnlyRoute) {
+  if (user && (isGuestOnlyRoute || pathname === '/')) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 

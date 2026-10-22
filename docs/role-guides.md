@@ -173,8 +173,14 @@ Full governance and operational authority. Responsible for user lifecycle, proje
 8. Add notification emails:
    - Type client contact emails in the **Client Emails** input.
    - Type contractor contact emails in the **Contractor Emails** input.
-9. Click **"Create Project"**.
-   - _Result_: The system creates the project, stores confidential financials, and automatically clones all statutory NOC checklist items from the selected Master Authority template.
+9. Choose creation path:
+   - **Quick Register (Skip Staffing)**: Creates the project immediately with no initial member assignments.
+   - **Next: Assign Team**: Advances to **Phase 2: Consultant Staffing**.
+10. In **Phase 2: Consultant Staffing (Optional)**:
+    - Select oversight personnel: **Resident Engineer (RE)**, **Area Manager (AM)**, **Authority Engineer**, and **Document Controller (DC)**.
+    - Select discipline engineering leads: **Architectural Lead**, **Structural Lead**, **MEP Lead**, and **Civil Lead**.
+    - Click **"Register Project with Team"** (or **"Skip Staffing & Register"**).
+    - _Result_: The system creates the project, stores confidential financials, assigns selected consultant team members to `public.project_members`, and automatically clones all statutory NOC checklist items from the selected Master Authority template.
 
 ##### B. Inviting a New User & Managing Roles
 

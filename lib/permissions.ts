@@ -206,6 +206,7 @@ export const NAV_ITEMS: ReadonlyArray<{
   { href: '/documents', label: 'Documents', capability: 'document.view' },
   { href: '/review', label: 'Review', capability: 'review.queue' },
   { href: '/archive', label: 'Archive', capability: 'archive.view' },
+  { href: '/authorities', label: 'Master Authorities', capability: 'authority.master.manage' },
   { href: '/users', label: 'Users', capability: 'users.manage' },
   { href: '/audit-logs', label: 'Audit Logs', capability: 'audit.view' },
 ];

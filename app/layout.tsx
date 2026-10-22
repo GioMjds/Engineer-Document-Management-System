@@ -1,4 +1,5 @@
 import './globals.css';
+import 'react-loading-skeleton/dist/skeleton.css';
 import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans, Manrope } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';

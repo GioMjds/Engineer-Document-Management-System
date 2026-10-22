@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { requireCan } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { RoleSelect } from './role-select';
@@ -11,7 +12,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import type { AppRole } from '@/lib/permissions';
+import { normalizeRole, type AppRole } from '@/lib/permissions';
+
+export const metadata: Metadata = {
+  title: 'Manage Users',
+  description: 'Manage users and their access permissions.',
+};
 
 export default async function UsersPage() {
   const me = await requireCan('users.manage');
@@ -47,7 +53,7 @@ export default async function UsersPage() {
           </TableHeader>
           <TableBody>
             {users?.map((u) => {
-              const isSelf = u.id === me.id;
+              const isSelf = u.id === me.id || (Boolean(me.email) && u.email?.toLowerCase() === me.email?.toLowerCase());
               return (
                 <TableRow key={u.id}>
                   <TableCell className="font-medium text-foreground">
@@ -62,7 +68,7 @@ export default async function UsersPage() {
                   <TableCell>
                     <RoleSelect
                       userId={u.id}
-                      currentRole={u.role as AppRole}
+                      currentRole={(normalizeRole(u.role) ?? 'engineer') as AppRole}
                       isSelf={isSelf}
                     />
                   </TableCell>

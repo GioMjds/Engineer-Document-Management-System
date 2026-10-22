@@ -137,9 +137,18 @@ export function InviteUserDialog() {
                 name="role"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    items={ROLES.map((r) => ({
+                      value: r,
+                      label: ROLE_LABELS[r],
+                    }))}
+                  >
                     <SelectTrigger id="role">
-                      <SelectValue />
+                      <SelectValue>
+                        {ROLE_LABELS[field.value] ?? field.value}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {ROLES.map((r) => (

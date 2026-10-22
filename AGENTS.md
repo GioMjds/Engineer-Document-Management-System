@@ -21,7 +21,8 @@
 
 - Right data structures and algorithms for problem.
 - Don't expose data needlessly (least priviledge).
-- No external libraries unless aboslutely necessary.
+- No external libraries unless absolutely necessary.
+  - Exceptions: `react-loading-skeleton`, `react-icons`, `clsx`, `date-fns`, `zod`, `prisma`, `next-auth`, `next-sitemap`, `react-hook-form`.
 - Use project dependency file for correct versions.
 - Avoid redundancy unless improves usability.
 - Prioritize semantic markup/tags and accessibility attributes over `.tsx` component or page files.

@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
-import 'react-loading-skeleton/dist/skeleton.css';
 
 const RADIUS = 'var(--radius-md)';
 

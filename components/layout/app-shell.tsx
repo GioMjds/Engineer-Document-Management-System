@@ -9,6 +9,7 @@ import {
   Building2,
   CheckSquare,
   FileText,
+  Landmark,
   Layers,
   LayoutDashboard,
   LogOut,
@@ -35,6 +36,7 @@ const NAV_META = {
   'document.view': { group: 'Documents', icon: FileText },
   'review.queue': { group: 'Documents', icon: CheckSquare },
   'archive.view': { group: 'Documents', icon: Archive },
+  'authority.master.manage': { group: 'Administration', icon: Landmark },
   'users.manage': { group: 'Administration', icon: Users },
   'audit.view': { group: 'Administration', icon: ScrollText },
 } satisfies Partial<Record<Capability, { group: string; icon: LucideIcon }>>;

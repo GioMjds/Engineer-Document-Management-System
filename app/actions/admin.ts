@@ -7,9 +7,6 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { type AppRole } from '@/lib/permissions';
 import { sendUserInviteEmail } from '@/lib/email/notifications';
-// ---------------------------------------------------------------------------
-// Schemas
-// ---------------------------------------------------------------------------
 
 const roleSchema = z.enum([
   'admin',
@@ -46,19 +43,34 @@ const createProjectSchema = z.object({
   client_contractor_amount: z.number().nonnegative().default(0),
   client_consultant_amount: z.number().nonnegative().default(0),
   master_authority_id: z.number().int().default(1),
+  members: z
+    .array(
+      z.object({
+        userId: z.uuid(),
+        discipline: z
+          .enum(['mep', 'architect', 'structure', 'civil'])
+          .optional(),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 
-// ---------------------------------------------------------------------------
 // User Management Actions
-// ---------------------------------------------------------------------------
+
+type ActionPromise = {
+  ok: boolean;
+  error?: string;
+  projectId?: string;
+};
 
 export async function inviteUser(input: {
   email: string;
   full_name: string;
   role: AppRole;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<ActionPromise> {
   const caller = await requireCan('users.manage');
 
   const parsed = inviteUserSchema.safeParse(input);
@@ -163,7 +175,7 @@ export async function inviteUser(input: {
 export async function updateUserRole(input: {
   user_id: string;
   role: AppRole;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<ActionPromise> {
   const caller = await requireCan('users.manage');
 
   const parsed = updateRoleSchema.safeParse(input);
@@ -230,7 +242,7 @@ export async function updateUserRole(input: {
 
 export async function deactivateUser(
   userId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ActionPromise> {
   const caller = await requireCan('users.manage');
 
   if (userId === caller.id) {
@@ -286,13 +298,11 @@ export async function deactivateUser(
   return { ok: true };
 }
 
-// ---------------------------------------------------------------------------
 // Project Administration Actions
-// ---------------------------------------------------------------------------
 
 export async function createProject(
   input: CreateProjectInput,
-): Promise<{ ok: boolean; projectId?: string; error?: string }> {
+): Promise<ActionPromise> {
   const caller = await requireCan('project.create');
 
   const parsed = createProjectSchema.safeParse(input);
@@ -376,6 +386,16 @@ export async function createProject(
     return { ok: false, error: confError.message };
   }
 
+  // Insert initial project team members if specified
+  if (parsed.data.members && parsed.data.members.length > 0) {
+    const memberRows = parsed.data.members.map((m) => ({
+      project_id: project.id,
+      user_id: m.userId,
+      discipline: m.discipline ?? null,
+    }));
+    await adminClient.from('project_members').insert(memberRows);
+  }
+
   let instantiatedNocsCount = 0;
 
   // Instantiate statutory project NOCs from template matrix items for this authority
@@ -455,6 +475,7 @@ export async function createProject(
         contractor_amount: parsed.data.client_contractor_amount,
         consultant_amount: parsed.data.client_consultant_amount,
         instantiated_nocs_count: instantiatedNocsCount,
+        members_count: parsed.data.members?.length ?? 0,
       },
     });
   } catch {
@@ -475,7 +496,7 @@ export async function updateProjectMembers(
     userId: string;
     discipline?: 'mep' | 'architect' | 'structure' | 'civil';
   }>,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ActionPromise> {
   const caller = await requireCan('users.manage');
 
   const supabase = await createClient();
@@ -511,14 +532,12 @@ export async function updateProjectMembers(
   return { ok: true };
 }
 
-// ---------------------------------------------------------------------------
 // NOC Sequence Override
-// ---------------------------------------------------------------------------
 
 export async function overrideNocSequence(
   nocId: string,
   reason: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ActionPromise> {
   const caller = await requireCan('noc.sequence.override');
 
   const trimmedReason = reason.trim();
@@ -556,13 +575,11 @@ export async function overrideNocSequence(
   return { ok: true };
 }
 
-// ---------------------------------------------------------------------------
 // Permanent Purge
-// ---------------------------------------------------------------------------
 
 export async function purgeDocument(
   docId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ActionPromise> {
   const caller = await requireCan('archive.purge');
 
   const supabase = await createClient();

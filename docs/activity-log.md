@@ -1,5 +1,34 @@
 # Activity Log
 
+## Session 2026-10-22
+
+- Fixed select display label (true role title instead of lowercase ID) in `app/(app)/users`:
+  - Updated `SelectValue` in `app/(app)/users/role-select.tsx` and `app/(app)/users/invite-user-dialog.tsx` to render `{LABELS[value] ?? value}` and passed registered `items` map to Base UI `Select`.
+  - Resolved issue where trigger was rendering raw lowercase identifier (e.g. `resident_engineer`) instead of formatted true role title (e.g. `Resident Engineer`).
+  - Added `normalizeRole` in `app/(app)/users/page.tsx` for consistent role resolution.
+- Updated self-identity verification check in `app/(app)/users/page.tsx`:
+  - Strengthened `isSelf` condition to compare both `u.id === me.id` and normalized email `u.email?.toLowerCase() === me.email?.toLowerCase()`.
+  - Ensures logged-in user row correctly receives "you" badge and disables self-demotion role selection even if authentication IDs differ across profiles.
+
+
+- Built 2-phase project registration wizard in `app/(app)/projects/new/project-form.tsx`:
+  - Added Phase 1 (Scope & Commercials) and Phase 2 (Consultant Staffing) wizard stepper with active indicators.
+  - Phase 1 handles metadata validation and provides both "Quick Register (Skip Staffing)" and "Next: Assign Team".
+  - Phase 2 enables direct assignment of Management & Permitting roles (Resident Engineer, Area Manager, Authority Engineer, Document Controller) and Multidisciplinary Engineering Leads (Architectural, Structural, MEP, Civil).
+  - Integrated active user profile querying in `app/(app)/projects/new/page.tsx` via `createClient()`.
+  - Augmented `createProject` in `app/actions/admin.ts` to accept optional `members` payload, inserting records directly into `public.project_members` upon creation and recording `members_count` in audit log.
+  - Updated `docs/role-guides.md` section 4.1.A step-by-step click guide to document Phase 2 consultant team assignment.
+- Aligned project registration form labels in `app/(app)/projects/new/project-form.tsx` with role guide specifications:
+  - Updated field labels from "Client Entity" to "Client Name" and "General Contractor" to "Contractor Name".
+  - Updated Zod validation error messages to reference "Client name is required." and "Contractor name is required.".
+- Built Master Authorities management workspace at `app/(app)/authorities`:
+  - Created server action module `app/actions/authorities.ts` with `getMasterAuthoritiesWithStats`, `createMasterAuthorityAction`, `updateMasterAuthorityAction`, `deleteMasterAuthorityAction`, and `seedBaselineMasterAuthoritiesAction`.
+  - Created `app/(app)/authorities/authorities-workspace.tsx` featuring KPI metrics strip, instant filtering, CRUD dialogs with validation, and safety checks preventing deletion of authorities with active projects or matrix templates.
+  - Replaced placeholder `app/(app)/authorities/page.tsx` with role-guarded server route calling `requireCan('authority.master.manage')`.
+  - Created zero-CLS skeleton loader `app/(app)/authorities/loading.tsx` using `react-loading-skeleton`.
+  - Registered `/authorities` under `Administration` in `lib/permissions.ts` and `components/layout/app-shell.tsx` with `Landmark` icon.
+  - Enhanced `app/(app)/projects/new/project-form.tsx` with fallback notification linking directly to authority registration when no authorities are configured.
+
 ## Session 2026-10-19
 
 - Integrated Resend email service and resolved Supabase free tier rate limits:
@@ -582,4 +611,13 @@
   - Provisioned 16 additional user accounts (23 total profiles) across `resident_engineer` (RE), `authority_engineer` (AE), `area_manager` (AM), `dc` (DC), and `engineer` (Architect, MEP, Structural, Civil disciplines).
   - Configured uniform credentials (`cvtec123456`) and active status.
   - Automatically mapped initial multidisciplinary project team onto active project `23020`.
+
+## Session 2026-10-22
+
+- Configured root route (`/`) redirection:
+  - Updated `proxy.ts` to redirect authenticated users visiting `/` to `/dashboard`.
+  - Confirmed unauthenticated users visiting `/` redirect to `/login` via existing proxy gate.
+  - Created `app/page.tsx` server route as a defense-in-depth fallback redirecting based on session status.
+  - Verified TypeScript compilation (`tsc --noEmit`) and production build (`next build`) pass with 0 errors.
+
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import type { EmailOtpType } from '@supabase/supabase-js';
 import { CircleAlert, CheckCircle2, Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -30,13 +31,13 @@ export function ConfirmForm() {
     async function initAuth() {
       try {
         const tokenHash = searchParams.get('token_hash');
-        const type = searchParams.get('type') as any;
+        const type = (searchParams.get('type') as EmailOtpType) || 'invite';
         const code = searchParams.get('code');
 
         if (tokenHash && type) {
           const { error } = await supabase.auth.verifyOtp({
             token_hash: tokenHash,
-            type: type || 'invite',
+            type,
           });
           if (error) {
             setErrorMsg(error.message);

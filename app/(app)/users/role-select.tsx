@@ -19,7 +19,7 @@ const LABELS: Record<AppRole, string> = {
   resident_engineer: 'Resident Engineer',
   authority_engineer: 'Authority Engineer',
   engineer: 'Engineer',
-  dc: 'Document Controller (DC)',
+  dc: 'Document Controller',
 };
 
 export function RoleSelect({
@@ -33,6 +33,11 @@ export function RoleSelect({
 }) {
   const [value, setValue] = useState<AppRole>(currentRole);
   const [pending, startTransition] = useTransition();
+
+  const roleOptions = (Object.keys(LABELS) as AppRole[]).map((r) => ({
+    value: r,
+    label: LABELS[r],
+  }));
 
   function onChange(next: AppRole) {
     const previous = value;
@@ -54,14 +59,17 @@ export function RoleSelect({
       value={value}
       onValueChange={(v) => onChange(v as AppRole)}
       disabled={pending || isSelf}
+      items={roleOptions}
     >
       <SelectTrigger className="w-52">
-        <SelectValue />
+        <SelectValue>
+          {LABELS[value] ?? value}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {(Object.keys(LABELS) as AppRole[]).map((r) => (
-          <SelectItem key={r} value={r}>
-            {LABELS[r]}
+        {roleOptions.map((r) => (
+          <SelectItem key={r.value} value={r.value}>
+            {r.label}
           </SelectItem>
         ))}
       </SelectContent>
