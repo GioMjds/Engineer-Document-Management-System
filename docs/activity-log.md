@@ -2,6 +2,31 @@
 
 ## Session 2026-10-22
 
+- Built and Seeded Project 26002 MVP Rapid Presentation Testbed:
+  - Background & Objective: Earlier walkthrough in Project 26001 stopped at the Construction Stage transition. User needed an immediate, concise, presentation-ready MVP user workflow tackling all 7 canonical roles across all 3 lifecycle stages (Pre-Construction -> Construction -> Handover) with nearest realistic dates aligned with `CVTEC_EDMS.md` (14–22 Oct 2026).
+  - Implementation:
+    - In [lib/project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts): Added Project `26002` milestone baseline (`preConstruction`, `construction`, `handover`) with kickoff (14 Oct 2026), Concept Sign-off (18 Oct 2026), Building Permit (22 Oct 2026), Construction mobilization (22 Oct 2026), and Handover completion (30 Nov 2026).
+    - In [lib/noc-tracker.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/noc-tracker.ts): Added Project `26002` ("Dubai Hills Commercial Pavilion", Contractor: Al Futtaim Construction, AED 28M public sum, AED 2.1M confidential sum) to `SEED_PROJECTS` with all 8 multidisciplinary and oversight assignments.
+    - Created [scripts/seed-26002-mvp.ts](file:///D:/giomj/Projects/engineer-docs-collab/scripts/seed-26002-mvp.ts): Seeds Project `26002` in Supabase with 6 statutory lifecycle NOCs (including Seq 2 RTA permit expiring in 13 days to trigger the 14-day expiry warning), assigned project members across all 7 roles, and 6 sample drawings across all workflow review states (`submitted`, `escalated`, `ready_for_authority`, `draft`, `approved`).
+    - Created [scripts/verify-26002-workflow.ts](file:///D:/giomj/Projects/engineer-docs-collab/scripts/verify-26002-workflow.ts): Verified 100% Pre-Construction gate readiness, Construction stage progression, Handover stage initialization, and the 14-day expiry radar trigger.
+    - Created [docs/mvp-presentation-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/mvp-presentation-workflow.md): Formulated a rapid 7-Act (5 to 7 minute) presentation script covering Admin, Engineer, Resident Engineer, Area Manager, Authority Engineer, Document Controller, and CEO across all 3 stages.
+  - Verification:
+    - Executed `scripts/verify-26002-workflow.ts`: 4/4 test criteria passed.
+    - Executed `scripts/verify-foundation-and-admin.ts`: 11/11 tests passed.
+
+
+- Resolved Hydration Error issues in NOC Tracker:
+  - Root Cause: In [components/noc/noc-tracker-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-tracker-client.tsx), `useState` lazy initializers checked `typeof window !== 'undefined'` and read directly from `localStorage` (`getStoredProjectStage`, `getStoredProjectMilestones`). During SSR, `window` was undefined so server HTML rendered database/seed fallbacks, while client initial hydration read browser `localStorage`, producing conflicting virtual DOM trees in [ProjectLifecycleStepper](file:///D:/giomj/Projects/engineer-docs-collab/components/lifecycle/project-lifecycle-stepper.tsx) and gate calculations. Additionally, [noc-data-table.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-data-table.tsx) and [noc-inspector-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-inspector-drawer.tsx) rendered `paymentFee.toLocaleString()` without locale pinning, and `calculateDaysRemaining` in [lib/noc-tracker.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/noc-tracker.ts) used local `.setHours()` on UTC ISO dates.
+  - Fixes Implemented:
+    - In [components/noc/noc-tracker-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-tracker-client.tsx): Aligned `lifecycleStage` and `milestones` state to initialize with server-provided props. Moved `localStorage` synchronization into post-mount `useEffect`. Added `useEffect` synchronization for `initialNocs` on server revalidation.
+    - In [components/noc/noc-data-table.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-data-table.tsx) & [components/noc/noc-inspector-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-inspector-drawer.tsx): Pinned currency formatting to `paymentFee.toLocaleString('en-US')`.
+    - In [lib/noc-tracker.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/noc-tracker.ts): Updated `calculateDaysRemaining` and `isPlanDueOrAtRisk` to use UTC calendar date differences (`Date.UTC(...)`) rather than mutating Date objects with local timezone hours.
+    - In [lib/project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts): Safeguarded `getStorage()` to ensure `window` is checked before accessing storage.
+  - Verification:
+    - Tested `verify-milestone-persistence.ts` (16/16 passed).
+    - Tested `verify-authority-engineer.ts` (13/13 passed).
+    - Verified `npx tsc --noEmit` and `pnpm run build` pass with zero errors across all 24 routes.
+
 - Resolved Record Authority Decision Check Constraint Bug:
   - Root Cause: In [components/noc/authority-result-modal.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/authority-result-modal.tsx), the official document input label and placeholder state `Official NOC Certificate / Document URL (Optional)` and `https://... or certificate ref`. When user inputs a plain text certificate reference such as `CERT-DEWA-APPROVED`, [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts) attempted saving it directly into `project_nocs.file_url`. PostgreSQL enforces `project_nocs_file_url_check` (`CHECK (file_url IS NULL OR file_url ~* '^https?://')`), which rejected plain text references.
   - Fixes Implemented:
@@ -717,3 +742,9 @@
   - Added structured "Review Decision Panel" header with clear visual separation between destructive action (`Reject Drawing`) and workflow approvals (`Approve & Escalate`, `Approve Direct`, `Approve Ready for Authority`).
   - Streamlined rejection feedback panel with mandatory validation counter (min 5 chars) and accessible labels.
   - Verified TypeScript compilation (`npx tsc --noEmit`) and production Next.js build (`pnpm run build`): 24 routes built with 0 errors.
+
+- Seeded consistent test account password `cvtec123` across Supabase Auth:
+  - Updated [scripts/set-test-passwords.ts](file:///D:/giomj/Projects/engineer-docs-collab/scripts/set-test-passwords.ts) with `loadEnv()`, default password `cvtec123`, and safety filters to identify and update all `@test.com` accounts while strictly preserving non-test accounts.
+  - Updated [scripts/seed-users.ts](file:///D:/giomj/Projects/engineer-docs-collab/scripts/seed-users.ts) default password to `cvtec123`.
+  - Executed password update: 25 test user accounts updated to `cvtec123`; 1 real user account (`giomjds@gmail.com`) preserved intact.
+  - Verified authentication with `cvtec123` across representative test accounts.

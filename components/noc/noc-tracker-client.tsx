@@ -83,31 +83,13 @@ export function NocTrackerClient({
 }: NocTrackerClientProps) {
   const router = useRouter();
   const [lifecycleStage, setLifecycleStage] = useState<ProjectLifecycleStage>(
-    () =>
-      (typeof window !== 'undefined'
-        ? getStoredProjectStage(
-            project.code,
-            project.lifecycleStage || 'Pre-Construction',
-          )
-        : project.lifecycleStage) || 'Pre-Construction',
+    project.lifecycleStage || 'Pre-Construction',
   );
-  const [milestones, setMilestones] = useState<StageMilestoneDates>(() => {
-    if (project.milestones && Object.keys(project.milestones).length > 0) {
-      return project.milestones;
-    }
-
-    if (typeof window !== 'undefined') {
-      const storedMilestones = getStoredProjectMilestones(
-        project.code,
-        project.milestones,
-      );
-      if (storedMilestones && Object.keys(storedMilestones).length > 0) {
-        return storedMilestones;
-      }
-    }
-
-    return INITIAL_PROJECT_MILESTONES[project.code] ?? {};
-  });
+  const [milestones, setMilestones] = useState<StageMilestoneDates>(
+    project.milestones && Object.keys(project.milestones).length > 0
+      ? project.milestones
+      : INITIAL_PROJECT_MILESTONES[project.code] ?? {},
+  );
   const [isGateDrawerOpen, setIsGateDrawerOpen] = useState(false);
   const [nocItems, setNocItems] = useState<ProjectNocItem[]>(initialNocs);
   const [activeStage, setActiveStage] = useState<string>('Design NOC');
@@ -117,12 +99,33 @@ export function NocTrackerClient({
   const [urgentFilter, setUrgentFilter] = useState<string | null>(null);
   const [selectedNoc, setSelectedNoc] = useState<ProjectNocItem | null>(null);
 
-  // Persist server-provided milestones after hydration.
+  // Sync initialNocs when parent server component re-renders.
   useEffect(() => {
-    if (project.milestones && Object.keys(project.milestones).length > 0) {
+    setNocItems(initialNocs);
+  }, [initialNocs]);
+
+  // Synchronize stored milestones and lifecycle stages after mount.
+  useEffect(() => {
+    const storedStage = getStoredProjectStage(
+      project.code,
+      project.lifecycleStage || 'Pre-Construction',
+    );
+    if (storedStage && storedStage !== (project.lifecycleStage || 'Pre-Construction')) {
+      setLifecycleStage(storedStage);
+    }
+
+    if (!project.milestones || Object.keys(project.milestones).length === 0) {
+      const storedMilestones = getStoredProjectMilestones(
+        project.code,
+        project.milestones,
+      );
+      if (storedMilestones && Object.keys(storedMilestones).length > 0) {
+        setMilestones(storedMilestones);
+      }
+    } else {
       saveStoredProjectMilestones(project.code, project.milestones);
     }
-  }, [project.code, project.milestones]);
+  }, [project.code, project.lifecycleStage, project.milestones]);
 
   // Subscribe to real-time database changes for milestone synchronization across roles.
   useEffect(() => {

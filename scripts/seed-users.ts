@@ -37,7 +37,7 @@ if (!supabaseUrl || !supabaseSecret) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseSecret);
-const TEST_PASSWORD = process.env.TEST_ACCOUNTS_PASSWORD || 'cvtec123456';
+const TEST_PASSWORD = process.env.TEST_ACCOUNTS_PASSWORD || 'cvtec123';
 
 export interface SeedUser {
   email: string;

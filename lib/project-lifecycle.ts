@@ -43,6 +43,26 @@ export const INITIAL_PROJECT_MILESTONES: Record<string, StageMilestoneDates> = {
       commissioningDate: '2028-01-15',
     },
   },
+  '26002': {
+    preConstruction: {
+      kickoffDate: '2026-10-14',
+      surveyCompletionDate: '2026-10-16',
+      conceptApprovalDate: '2026-10-18',
+      commencementDate: '2026-10-19',
+      plannedCompletionDate: '2026-10-21',
+      buildingPermitDate: '2026-10-22',
+    },
+    construction: {
+      commencementDate: '2026-10-22',
+      targetCompletionDate: '2026-11-15',
+    },
+    handover: {
+      commissioningDate: '2026-11-20',
+      civilDefenceInspectionDate: '2026-11-25',
+      bccIssuanceDate: '2026-11-30',
+      targetCompletionDate: '2026-12-15',
+    },
+  },
 };
 
 export function getNextLifecycleStage(
@@ -69,9 +89,14 @@ export function canUserAdvanceStage(role: string): boolean {
 
 function getStorage(): Storage | null {
   if (typeof window !== 'undefined' && window.localStorage) {
-    return window.localStorage;
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
   }
   if (
+    typeof window === 'undefined' &&
     typeof globalThis !== 'undefined' &&
     (globalThis as unknown as { localStorage?: Storage }).localStorage
   ) {

@@ -70,6 +70,29 @@ export const SEED_PROJECTS: AssignedProject[] = [
       docController: 'Principal Document Controller',
     },
   },
+  {
+    code: '26002',
+    name: 'Dubai Hills Commercial Pavilion',
+    masterAuthority: 'Nakheel and Trakhees',
+    projectType: 'Commercial',
+    location: 'Dubai Hills Estate, Dubai',
+    contractType: 'Design & Supervision',
+    contractorName: 'Al Futtaim Construction',
+    clientContractorAmount: 28000000,
+    clientConsultantAmount: 2100000,
+    currentStage: 'Pre-Construction',
+    lifecycleStage: 'Pre-Construction',
+    assignedRoles: {
+      authorityEngineer: 'Zayed Al-Hashimi (Statutory Liaison)',
+      architectEngineer: 'Liam Thorne (Architectural Engineer)',
+      mepEngineer: 'Omar Farooq (MEP Engineer)',
+      structureEngineer: 'David Chen (Structural Engineer)',
+      civilEngineer: 'Aisha Al-Nuaimi (Civil Engineer)',
+      residentEngineer: 'Resident Engineer Lead',
+      areaManager: 'Hassan Al-Maktoum (Operations Area Manager)',
+      docController: 'Principal Document Controller',
+    },
+  },
 ];
 
 export const INITIAL_NOCS_PROJECT_23016: ProjectNocItem[] = [
@@ -516,13 +539,23 @@ export const INITIAL_NOCS_PROJECT_26001: ProjectNocItem[] = [
   },
 ];
 
+function parseDatePartsToUtc(dateStr: string): number | null {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return null;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+  return Date.UTC(year, month, day);
+}
+
 export function calculateDaysRemaining(expiryDateStr: string | null): number | null {
   if (!expiryDateStr) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const expiry = new Date(expiryDateStr);
-  expiry.setHours(0, 0, 0, 0);
-  const diffTime = expiry.getTime() - today.getTime();
+  const expiryUtc = parseDatePartsToUtc(expiryDateStr);
+  if (expiryUtc === null) return null;
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const diffTime = expiryUtc - todayUtc;
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
@@ -539,11 +572,11 @@ export function isLapsed(expiryDateStr: string | null): boolean {
 // Evaluates if an unsubmitted NOC has reached plan date or is due within the threshold window.
 export function isPlanDueOrAtRisk(planDateStr: string | null, daysThreshold = 7): boolean {
   if (!planDateStr) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const plan = new Date(planDateStr);
-  plan.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil((plan.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const planUtc = parseDatePartsToUtc(planDateStr);
+  if (planUtc === null) return false;
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const diffDays = Math.ceil((planUtc - todayUtc) / (1000 * 60 * 60 * 24));
   return diffDays <= daysThreshold;
 }
 

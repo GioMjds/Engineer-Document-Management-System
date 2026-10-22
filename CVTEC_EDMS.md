@@ -64,7 +64,7 @@ X --> X1["Archive a file"]
 R --> R1["Restore or purge"]
 ```
 
-Create: users, assignmentsDelete: archive / purgeOverride with reasonUpload, edit, approve (either level)Edit NOC MatrixOnly Admin registers projects
+Create: users, assignmentsDelete: archive / purgeOverride with reasonUpload, edit, approve (either level). Edit NOC MatrixOnly Admin registers projects
 
 ### CEO
 
@@ -79,7 +79,7 @@ D --> X["Documents (view, download)"]
 D --> A["Amounts: consultant + contractor"]
 ```
 
-View everything in scopeNo create / edit / delete / approveSees all projects, read-only
+View everything in scope. No create / edit / delete / approveSees all projects, read-only
 
 ### Area Manager (AM)
 
@@ -97,7 +97,7 @@ D --> T["NOC Tracker (view)"]
 D --> M["Amounts: consultant + contractor"]
 ```
 
-Approve / reject (second level)No upload, no deleteNo NOC fee recording
+Approve / reject (second level). No upload, no deleteNo NOC fee recording
 
 ### Resident Engineer (RE)
 
@@ -116,7 +116,7 @@ A -- "Reject" --> C["Comment required, back to uploader"]
 D --> X["Documents (view, upload, edit own)"]
 ```
 
-Approve / reject (first level)No delete, no consultant amountUpload; edit own uploads
+Approve / reject (first level), No delete, no consultant amountUpload; edit own uploads
 
 ### Authority Engineer
 

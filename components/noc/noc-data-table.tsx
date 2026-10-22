@@ -184,7 +184,7 @@ export function NocDataTable({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="font-mono font-medium">
-                    {item.paymentFee.toLocaleString()}
+                    {item.paymentFee.toLocaleString('en-US')}
                   </div>
                   {item.isPaid && (
                     <div className="mt-0.5 flex justify-end">

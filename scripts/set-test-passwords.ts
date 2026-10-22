@@ -1,4 +1,32 @@
 import { createClient } from '@supabase/supabase-js';
+import * as fs from 'fs';
+import * as path from 'path';
+
+function loadEnv() {
+  for (const file of ['.env.local', '.env']) {
+    const fullPath = path.resolve(process.cwd(), file);
+    if (fs.existsSync(fullPath)) {
+      const content = fs.readFileSync(fullPath, 'utf8');
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx !== -1) {
+          const key = trimmed.slice(0, eqIdx).trim();
+          let val = trimmed.slice(eqIdx + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          if (!process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      }
+    }
+  }
+}
+
+loadEnv();
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecret = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -10,7 +38,7 @@ if (!supabaseUrl || !supabaseSecret) {
 
 const supabase = createClient(supabaseUrl, supabaseSecret);
 
-const TEST_PASSWORD = process.env.TEST_ACCOUNTS_PASSWORD || 'cvtec123456';
+const TEST_PASSWORD = process.env.TEST_ACCOUNTS_PASSWORD || 'cvtec123';
 
 const TEST_EMAILS = [
   'admin@test.com',
@@ -38,35 +66,50 @@ const TEST_EMAILS = [
   'civil2@test.com',
 ];
 
+function isTestUser(email: string | undefined): boolean {
+  if (!email) return false;
+  const lower = email.toLowerCase().trim();
+  if (lower.endsWith('@gmail.com') || lower.endsWith('@cvtec.ae')) {
+    return false;
+  }
+  return lower.endsWith('@test.com') || TEST_EMAILS.includes(lower);
+}
+
 async function setTestPasswords() {
   console.log(`Setting password for test accounts to: ${TEST_PASSWORD}\n`);
 
-  const { data, error } = await supabase.auth.admin.listUsers();
+  const { data, error } = await supabase.auth.admin.listUsers({ perPage: 1000 });
   if (error || !data?.users) {
     console.error('Failed to list users:', error?.message);
     process.exit(1);
   }
 
-  for (const email of TEST_EMAILS) {
-    const user = data.users.find((u) => u.email === email);
-    if (!user) {
-      console.log(`- User not found: ${email}`);
-      continue;
-    }
+  const allUsers = data.users;
+  const testUsers = allUsers.filter((u) => isTestUser(u.email));
+  const nonTestUsers = allUsers.filter((u) => !isTestUser(u.email));
 
+  console.log(`Found ${allUsers.length} total users in Supabase Auth.`);
+  console.log(`- Test users to update: ${testUsers.length}`);
+  console.log(`- Non-test users preserved (unmodified): ${nonTestUsers.length}`);
+  nonTestUsers.forEach((u) => console.log(`  [PRESERVED] ${u.email} (${u.id})`));
+  console.log('');
+
+  let updatedCount = 0;
+  for (const user of testUsers) {
     const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
       password: TEST_PASSWORD,
       email_confirm: true,
     });
 
     if (updateError) {
-      console.error(`- Failed to update ${email}:`, updateError.message);
+      console.error(`- Failed to update ${user.email}:`, updateError.message);
     } else {
-      console.log(`✓ Updated password for: ${email}`);
+      console.log(`✓ Updated password for: ${user.email}`);
+      updatedCount++;
     }
   }
 
-  console.log('\nAll test accounts are ready for login!');
+  console.log(`\nAll ${updatedCount} test accounts are ready for login with password: ${TEST_PASSWORD}`);
 }
 
-setTestPasswords();
+setTestPasswords().catch(console.error);

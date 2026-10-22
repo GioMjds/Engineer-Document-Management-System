@@ -801,7 +801,7 @@ export function NocInspectorDrawer({
               <div className="space-y-2">
                 <div className="flex items-baseline justify-between pt-1">
                   <span className="text-lg font-bold font-mono">
-                    AED {item.paymentFee.toLocaleString()}
+                    AED {item.paymentFee.toLocaleString('en-US')}
                   </span>
                   {can(currentUserRole, 'noc.tracker.update') && (
                     <div className="flex items-center gap-1.5">
