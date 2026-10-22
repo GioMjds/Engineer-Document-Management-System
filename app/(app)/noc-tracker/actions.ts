@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { requireUser, requireRole, requireCan } from '@/lib/auth';
+import { requireUser, requireCan } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { NocPayerType } from '@/types/noc';
 
@@ -121,12 +121,13 @@ export async function resubmitNocRevision(
       }
 
       // Update project_nocs status to Not Started
+      const isFileUrl = Boolean(resubmitFileName && /^https?:\/\//i.test(resubmitFileName));
       const { error: updateError } = await supabase
         .from('project_nocs')
         .update({
           current_revision: newRevision,
-          status_code: 'NOT_STARTED',
-          file_url: resubmitFileName || null,
+          status_code: 'not_started',
+          file_url: isFileUrl ? resubmitFileName : null,
           remarks: null,
           updated_at: now,
           updated_by: user.id,

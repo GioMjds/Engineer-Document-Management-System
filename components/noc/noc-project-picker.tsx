@@ -54,7 +54,7 @@ const STAGE_ITEMS = [
   { value: 'Pre-Construction', label: 'Pre-Construction' },
   { value: 'Construction', label: 'Construction' },
   { value: 'Handover', label: 'Handover' },
-];
+] as const;
 
 const TONES = {
   expired: 'bg-expired-subtle text-expired-fg',

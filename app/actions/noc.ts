@@ -112,7 +112,7 @@ export async function submitNocApplication(
         .update({
           reference_no: authorityReference,
           apply_date: submittedAt,
-          status_code: 'submitted',
+          status_code: 'applied',
           receipt_file_url: submissionProofUrl || null,
           updated_at: now,
           updated_by: user.id,
@@ -179,13 +179,19 @@ export async function recordAuthorityDecision(
       }
 
       if (decision === 'obtained') {
+        const trimmedDoc = officialDocumentUrl?.trim();
+        const isHttpUrl = Boolean(trimmedDoc && /^https?:\/\//i.test(trimmedDoc));
+        const fileUrl = isHttpUrl ? trimmedDoc : null;
+        const certRemark = trimmedDoc && !isHttpUrl ? `Certificate #${trimmedDoc}` : null;
+
         const { error: updateError } = await supabase
           .from('project_nocs')
           .update({
-            status_code: 'obtained',
+            status_code: 'approved',
             expiry_date: expiryDate!,
             receive_date: now.split('T')[0],
-            file_url: officialDocumentUrl || null,
+            file_url: fileUrl,
+            remarks: certRemark,
             updated_at: now,
             updated_by: user.id,
           })
@@ -200,7 +206,7 @@ export async function recordAuthorityDecision(
           actor_id: user.id,
           entity: 'project_nocs',
           entity_id: nocId,
-          metadata: { decision, expiryDate },
+          metadata: { decision, expiryDate, officialDocumentUrl: trimmedDoc || null },
         });
       } else {
         const currentRev = currentNoc.current_revision || 'R00';

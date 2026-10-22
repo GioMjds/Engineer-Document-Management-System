@@ -137,11 +137,21 @@ function mapDbProjectToAssigned(
         case 'engineer':
           if (pm.discipline === 'mep' || lower.includes('mep')) {
             roles.mepEngineer = name;
-          } else if (pm.discipline === 'architect' || lower.includes('architect')) {
+          } else if (
+            pm.discipline === 'architect' ||
+            lower.includes('architect')
+          ) {
             roles.architectEngineer = name;
-          } else if (pm.discipline === 'structure' || lower.includes('structur')) {
+          } else if (
+            pm.discipline === 'structure' ||
+            lower.includes('structur')
+          ) {
             roles.structureEngineer = name;
-          } else if (pm.discipline === 'civil' || lower.includes('civil') || lower.includes('ismail')) {
+          } else if (
+            pm.discipline === 'civil' ||
+            lower.includes('civil') ||
+            lower.includes('ismail')
+          ) {
             roles.civilEngineer = name;
           } else if (roles.civilEngineer === 'Unassigned') {
             roles.civilEngineer = name;
@@ -171,14 +181,17 @@ function mapDbProjectToAssigned(
     clientContractorAmount:
       p.client_contractor_amount != null
         ? Number(p.client_contractor_amount)
-        : seed?.clientContractorAmount ?? 0,
+        : (seed?.clientContractorAmount ?? 0),
     clientConsultantAmount:
       clientConsultantAmount ?? seed?.clientConsultantAmount ?? undefined,
     currentStage: p.stage
       ? p.stage.charAt(0).toUpperCase() + p.stage.slice(1)
       : 'Pre-Construction',
-    lifecycleStage: p.stage ? stageMap[p.stage] || 'Pre-Construction' : 'Pre-Construction',
-    milestones: (p.milestones as StageMilestoneDates) || seed?.milestones || undefined,
+    lifecycleStage: p.stage
+      ? stageMap[p.stage] || 'Pre-Construction'
+      : 'Pre-Construction',
+    milestones:
+      (p.milestones as StageMilestoneDates) || seed?.milestones || undefined,
     assignedRoles: roles,
   };
 }
@@ -189,32 +202,33 @@ function mapDbNocToItem(
   projectCode: string,
   reviewingAuth: ReviewingAuthority,
 ): ProjectNocItem {
-  const stageMap: Record<string, NocStage> = {
+  const stageMap = {
     design: 'Design NOC',
     information: 'Information NOC',
     construction: 'Construction NOC',
     handover: 'Handover NOC',
-  };
+  } satisfies Record<string, NocStage>;
 
-  const statusMap: Record<string, NocStatus> = {
+  const statusMap = {
     approved: 'Approved',
     obtained: 'Approved',
     rejected: 'Rejected',
     submitted: 'Submitted',
+    applied: 'Submitted',
     not_started: 'Not Started',
     pending_payment: 'Pending for Payment',
     pending_for_payment: 'Pending for Payment',
     not_needed: 'Not Needed',
     expired: 'Expired',
-  };
+  } satisfies Record<string, NocStatus>;
 
-  const submitterMap: Record<string, SubmittedBy> = {
+  const submitterMap = {
     consultant: 'Consultant',
     client: 'Client',
     contractor: 'Contractor',
     specialist: 'Specialists',
     specialists: 'Specialists',
-  };
+  } satisfies Record<string, SubmittedBy>;
 
   const requirements: NocRequirement[] = (
     row.project_noc_requirements || []
@@ -241,12 +255,15 @@ function mapDbNocToItem(
     id: row.id,
     projectCode,
     sequenceNumber: row.sequence_no,
-    stage: stageMap[row.stage] || 'Design NOC',
+    stage: stageMap[row.stage as keyof typeof stageMap] || 'Design NOC',
     reviewingAuthority: reviewingAuth,
     description: row.description,
-    submittedBy: submitterMap[row.submitted_by] || 'Consultant',
+    submittedBy:
+      submitterMap[row.submitted_by as keyof typeof submitterMap] ||
+      'Consultant',
     referenceNumber: row.reference_no || '',
-    status: statusMap[row.status_code] || 'Not Started',
+    status:
+      statusMap[row.status_code as keyof typeof statusMap] || 'Not Started',
     paymentFee: Number(row.payment_fee) || 0,
     isPaid: Boolean(row.is_paid),
     payerType: (row.payer_type as NocPayerType) || undefined,
@@ -361,16 +378,23 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
     const projectDbIdToCode = new Map<string, string>();
 
     for (const rawProj of dbProjects as unknown as RawDbProject[]) {
-      const masterAuth = getAuthorityName(rawProj.master_authority_id, masterAuthMap);
+      const masterAuth = getAuthorityName(
+        rawProj.master_authority_id,
+        masterAuthMap,
+      );
       const consultantAmt = confidentialMap.get(rawProj.id);
-      const assigned = mapDbProjectToAssigned(rawProj, masterAuth, consultantAmt);
+      const assigned = mapDbProjectToAssigned(
+        rawProj,
+        masterAuth,
+        consultantAmt,
+      );
       projectMap.set(rawProj.code, assigned);
       projectDbIdToCode.set(rawProj.id, rawProj.code);
     }
 
     // 4. Fetch project NOCs for accessible projects
     const projectIds = Array.from(projectDbIdToCode.keys());
-    const { data: dbNocs, error: nocsError } = await supabase
+    const { data: dbNocs } = await supabase
       .from('project_nocs')
       .select(
         `
@@ -425,14 +449,16 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
     };
 
     // 5. Map NOC records from database
-    const mappedNocs: ProjectNocItem[] = (dbNocs || []).map(
-      (row) => {
-        const projectCode = projectDbIdToCode.get(row.project_id) || '26001';
-        const reviewingAuthName = (revAuthMap.get(row.reviewing_authority_id) ||
-          `Authority #${row.reviewing_authority_id}`) as ReviewingAuthority;
-        return mapDbNocToItem(row as unknown as RawDbNoc, projectCode, reviewingAuthName);
-      },
-    );
+    const mappedNocs: ProjectNocItem[] = (dbNocs || []).map((row) => {
+      const projectCode = projectDbIdToCode.get(row.project_id) || '26001';
+      const reviewingAuthName = (revAuthMap.get(row.reviewing_authority_id) ||
+        `Authority #${row.reviewing_authority_id}`) as ReviewingAuthority;
+      return mapDbNocToItem(
+        row as unknown as RawDbNoc,
+        projectCode,
+        reviewingAuthName,
+      );
+    });
 
     // Ensure every accessible project has NOCs available (fallback to seed if DB has none)
     const combinedNocs = [...mappedNocs];

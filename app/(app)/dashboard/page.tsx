@@ -6,7 +6,7 @@ import { getNocTrackerData } from '@/lib/server/noc-data';
 import { getExecutiveDashboardSummary } from '@/app/loaders/ceo';
 
 export const metadata: Metadata = {
-  title: 'Executive Command Deck',
+  title: 'Dashboard',
   description:
     'Executive dashboard, discipline transmittal tracking, and authority expiration alerts',
 };

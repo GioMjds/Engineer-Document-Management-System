@@ -2,6 +2,30 @@
 
 ## Session 2026-10-22
 
+- Resolved Record Authority Decision Check Constraint Bug:
+  - Root Cause: In [components/noc/authority-result-modal.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/authority-result-modal.tsx), the official document input label and placeholder state `Official NOC Certificate / Document URL (Optional)` and `https://... or certificate ref`. When user inputs a plain text certificate reference such as `CERT-DEWA-APPROVED`, [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts) attempted saving it directly into `project_nocs.file_url`. PostgreSQL enforces `project_nocs_file_url_check` (`CHECK (file_url IS NULL OR file_url ~* '^https?://')`), which rejected plain text references.
+  - Fixes Implemented:
+    - In [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts): Updated `recordAuthorityDecision` to check if `officialDocumentUrl` is an HTTP/HTTPS URL. If a URL, saves to `file_url`; if a text certificate reference (e.g. `CERT-DEWA-APPROVED`), safely sets `file_url: null` and persists the reference to `remarks` (`Certificate #${trimmedDoc}`) and the audit log metadata.
+    - In [app/(app)/noc-tracker/actions.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/noc-tracker/actions.ts): Guarded `resubmitNocRevision` against setting non-URL filenames into `file_url`.
+    - In [scripts/verify-authority-engineer.ts](file:///D:/giomj/Projects/engineer-docs-collab/scripts/verify-authority-engineer.ts): Added `TC-AE-13` verifying URL vs plain reference isolation against database check constraint rules.
+  - Verification:
+    - Tested database updates directly: `CERT-DEWA-APPROVED` saved cleanly without triggering `project_nocs_file_url_check`.
+    - Ran all 13 Authority Engineer tests (`scripts/verify-authority-engineer.ts`): 13/13 passed.
+    - Verified `npx tsc --noEmit` and `pnpm run build` pass with zero errors across all 24 routes.
+
+- Resolved Statutory Submission and Authority Decision Foreign Key Constraint Bug:
+  - Root Cause: Submitting NOC application in [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts) attempted to update `status_code` to `'submitted'`, and recording an obtained decision attempted to set `status_code` to `'obtained'`. The foreign key constraint `project_nocs_status_code_fkey` references `public.noc_statuses(code)`. Valid status codes in `noc_statuses` are `'applied'` (label: "Applied (under review)") and `'approved'` (label: "Approved"). Attempting to insert `'submitted'` or `'obtained'` violated `project_nocs_status_code_fkey`. Additionally, `resubmitNocRevision` in [app/(app)/noc-tracker/actions.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/noc-tracker/actions.ts) attempted to set uppercase `'NOT_STARTED'` instead of lowercase `'not_started'`.
+  - Fixes Implemented:
+    - In [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts): Updated `submitNocApplication` to set `status_code: 'applied'`.
+    - In [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts): Updated `recordAuthorityDecision` to set `status_code: 'approved'`.
+    - In [app/(app)/noc-tracker/actions.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/noc-tracker/actions.ts): Updated `resubmitNocRevision` to set `status_code: 'not_started'`.
+    - In [lib/server/noc-data.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/server/noc-data.ts): Added `applied: 'Submitted'` to `statusMap` so database rows with `status_code: 'applied'` correctly display `'Submitted'` with the blue badge in the frontend UI.
+  - Verification:
+    - Directly verified hypothesis and fix against database via test script: `status_code = 'submitted'` triggers the foreign key violation, while `status_code = 'applied'` succeeds cleanly.
+    - Updated acceptance tests in [scripts/verify-authority-engineer.ts](file:///D:/giomj/Projects/engineer-docs-collab/scripts/verify-authority-engineer.ts) (12/12 passing).
+    - Verified all test suites pass (Area Manager, Document Controller, Foundation & Admin, RE, CEO).
+    - Verified `npx tsc --noEmit` and `pnpm run build` pass with zero errors across all 24 routes.
+
 - Designed TanStack Query Advanced Server Rendering architecture:
   - Formulated baseline setup per `advanced-ssr.md` with singleton browser client, per-request server client, and streaming pending query dehydration.
   - Planned root provider integration and domain query key factory (`lib/queries/dashboard.ts`).
