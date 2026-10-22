@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import {
   ArrowLeft,
   ArrowRight,
+  Check,
+  ChevronsUpDown,
   HardHat,
   ShieldCheck,
   Users,
@@ -33,6 +35,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { createProject } from '@/app/actions/admin';
 import type { MasterAuthorityRecord } from '@/types/noc';
 import type { ProfileItem } from '@/components/projects/project-team-dialog';
@@ -81,6 +96,127 @@ const parseEmails = (str?: string) =>
     .map((e) => e.trim())
     .filter((e) => e.length > 0);
 
+const UNASSIGNED = 'unassigned';
+
+interface StaffOption {
+  id: string;
+  name: string;
+  role?: string;
+  suggested: boolean;
+}
+
+const formatRole = (role?: string) => (role ?? '').replace(/_/g, ' ');
+
+interface StaffSelectProps {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: StaffOption[];
+}
+
+function StaffSelect({
+  id,
+  label,
+  value,
+  onChange,
+  options,
+}: StaffSelectProps) {
+  const [open, setOpen] = useState(false);
+
+  const selected = options.find((o) => o.id === value);
+  const hasValue = value !== UNASSIGNED && !!selected;
+  const suggested = options.filter((o) => o.id !== UNASSIGNED && o.suggested);
+  const others = options.filter((o) => o.id !== UNASSIGNED && !o.suggested);
+
+  const pick = (nextId: string) => {
+    onChange(nextId);
+    setOpen(false);
+  };
+
+  const renderItem = (o: StaffOption) => (
+    <CommandItem
+      key={o.id}
+      value={o.id}
+      keywords={[o.name, formatRole(o.role)]}
+      onSelect={() => pick(o.id)}
+      className="gap-2 text-xs"
+    >
+      <Check
+        className={cn(
+          'size-3.5 shrink-0',
+          value === o.id ? 'opacity-100' : 'opacity-0',
+        )}
+      />
+      <span className="truncate">{o.name}</span>
+      <span className="ml-auto shrink-0 text-[10px] capitalize text-muted-foreground">
+        {formatRole(o.role)}
+      </span>
+    </CommandItem>
+  );
+
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="text-xs">
+        {label}
+      </Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          id={id}
+          type="button"
+          className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-left text-xs shadow-xs outline-none transition-colors hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <span
+            className={cn('truncate', !hasValue && 'text-muted-foreground')}
+          >
+            {hasValue ? selected.name : '— Unassigned —'}
+          </span>
+          <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-80 p-0">
+          <Command>
+            <CommandInput
+              placeholder="Search name or role…"
+              className="text-xs"
+            />
+            <CommandList className="max-h-64">
+              <CommandEmpty className="py-4 text-xs">
+                No staff found.
+              </CommandEmpty>
+              <CommandGroup>
+                <CommandItem
+                  value={UNASSIGNED}
+                  keywords={['unassigned', 'none', 'clear']}
+                  onSelect={() => pick(UNASSIGNED)}
+                  className="gap-2 text-xs text-muted-foreground"
+                >
+                  <Check
+                    className={cn(
+                      'size-3.5 shrink-0',
+                      value === UNASSIGNED ? 'opacity-100' : 'opacity-0',
+                    )}
+                  />
+                  — Unassigned —
+                </CommandItem>
+              </CommandGroup>
+              {suggested.length > 0 && (
+                <CommandGroup heading="Suggested for this role">
+                  {suggested.map(renderItem)}
+                </CommandGroup>
+              )}
+              {others.length > 0 && (
+                <CommandGroup heading="Other staff">
+                  {others.map(renderItem)}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 export function ProjectRegistrationForm({
   authorities = [],
   teamProfiles = [],
@@ -125,26 +261,15 @@ export function ProjectRegistrationForm({
   const projectCode = useWatch({ control, name: 'code' });
   const projectName = useWatch({ control, name: 'name' });
 
-  const getOptionsForRole = (primaryRole?: string) => {
-    const matched = primaryRole
-      ? teamProfiles.filter((p) => p.role === primaryRole)
-      : [];
-    const others = primaryRole
-      ? teamProfiles.filter((p) => p.role !== primaryRole)
-      : teamProfiles;
-
-    return [
-      { id: 'unassigned', label: '— Unassigned —' },
-      ...matched.map((p) => ({
-        id: p.id,
-        label: `${p.full_name || p.email} (${p.role})`,
-      })),
-      ...others.map((p) => ({
-        id: p.id,
-        label: `${p.full_name || p.email} (${p.role})`,
-      })),
-    ];
-  };
+  const getOptionsForRole = (primaryRole?: string): StaffOption[] => [
+    { id: UNASSIGNED, name: '— Unassigned —', suggested: false },
+    ...teamProfiles.map((p) => ({
+      id: p.id,
+      name: p.full_name || p.email || 'Unknown',
+      role: p.role,
+      suggested: !primaryRole || p.role === primaryRole,
+    })),
+  ];
 
   const collectMembers = () => {
     const members: {
@@ -584,117 +709,34 @@ export function ProjectRegistrationForm({
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="re-select" className="text-xs">
-                      Resident Engineer (RE)
-                    </Label>
-                    <Select
-                      value={reId}
-                      onValueChange={(val) => setReId(val ?? 'unassigned')}
-                    >
-                      <SelectTrigger
-                        id="re-select"
-                        className="w-full h-9 text-xs"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getOptionsForRole('resident_engineer').map((opt) => (
-                          <SelectItem
-                            key={opt.id}
-                            value={opt.id}
-                            className="text-xs"
-                          >
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="am-select" className="text-xs">
-                      Area Manager (AM)
-                    </Label>
-                    <Select
-                      value={amId}
-                      onValueChange={(val) => setAmId(val ?? 'unassigned')}
-                    >
-                      <SelectTrigger
-                        id="am-select"
-                        className="w-full h-9 text-xs"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getOptionsForRole('area_manager').map((opt) => (
-                          <SelectItem
-                            key={opt.id}
-                            value={opt.id}
-                            className="text-xs"
-                          >
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="ae-select" className="text-xs">
-                      Authority Engineer
-                    </Label>
-                    <Select
-                      value={aeId}
-                      onValueChange={(val) => setAeId(val ?? 'unassigned')}
-                    >
-                      <SelectTrigger
-                        id="ae-select"
-                        className="w-full h-9 text-xs"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getOptionsForRole('authority_engineer').map((opt) => (
-                          <SelectItem
-                            key={opt.id}
-                            value={opt.id}
-                            className="text-xs"
-                          >
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="dc-select" className="text-xs">
-                      Document Controller (DC)
-                    </Label>
-                    <Select
-                      value={dcId}
-                      onValueChange={(val) => setDcId(val ?? 'unassigned')}
-                    >
-                      <SelectTrigger
-                        id="dc-select"
-                        className="w-full h-9 text-xs"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getOptionsForRole('dc').map((opt) => (
-                          <SelectItem
-                            key={opt.id}
-                            value={opt.id}
-                            className="text-xs"
-                          >
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <StaffSelect
+                    id="re-select"
+                    label="Resident Engineer (RE)"
+                    value={reId}
+                    onChange={setReId}
+                    options={getOptionsForRole('resident_engineer')}
+                  />
+                  <StaffSelect
+                    id="am-select"
+                    label="Area Manager (AM)"
+                    value={amId}
+                    onChange={setAmId}
+                    options={getOptionsForRole('area_manager')}
+                  />
+                  <StaffSelect
+                    id="ae-select"
+                    label="Authority Engineer"
+                    value={aeId}
+                    onChange={setAeId}
+                    options={getOptionsForRole('authority_engineer')}
+                  />
+                  <StaffSelect
+                    id="dc-select"
+                    label="Document Controller (DC)"
+                    value={dcId}
+                    onChange={setDcId}
+                    options={getOptionsForRole('dc')}
+                  />
                 </div>
               </div>
 
@@ -706,117 +748,34 @@ export function ProjectRegistrationForm({
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="arch-select" className="text-xs">
-                      Architectural Lead
-                    </Label>
-                    <Select
-                      value={archId}
-                      onValueChange={(val) => setArchId(val ?? 'unassigned')}
-                    >
-                      <SelectTrigger
-                        id="arch-select"
-                        className="w-full h-9 text-xs"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getOptionsForRole('engineer').map((opt) => (
-                          <SelectItem
-                            key={opt.id}
-                            value={opt.id}
-                            className="text-xs"
-                          >
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="struct-select" className="text-xs">
-                      Structural Lead
-                    </Label>
-                    <Select
-                      value={structId}
-                      onValueChange={(val) => setStructId(val ?? 'unassigned')}
-                    >
-                      <SelectTrigger
-                        id="struct-select"
-                        className="w-full h-9 text-xs"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getOptionsForRole('engineer').map((opt) => (
-                          <SelectItem
-                            key={opt.id}
-                            value={opt.id}
-                            className="text-xs"
-                          >
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mep-select" className="text-xs">
-                      MEP Lead
-                    </Label>
-                    <Select
-                      value={mepId}
-                      onValueChange={(val) => setMepId(val ?? 'unassigned')}
-                    >
-                      <SelectTrigger
-                        id="mep-select"
-                        className="w-full h-9 text-xs"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getOptionsForRole('engineer').map((opt) => (
-                          <SelectItem
-                            key={opt.id}
-                            value={opt.id}
-                            className="text-xs"
-                          >
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="civil-select" className="text-xs">
-                      Civil Lead
-                    </Label>
-                    <Select
-                      value={civilId}
-                      onValueChange={(val) => setCivilId(val ?? 'unassigned')}
-                    >
-                      <SelectTrigger
-                        id="civil-select"
-                        className="w-full h-9 text-xs"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getOptionsForRole('engineer').map((opt) => (
-                          <SelectItem
-                            key={opt.id}
-                            value={opt.id}
-                            className="text-xs"
-                          >
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <StaffSelect
+                    id="arch-select"
+                    label="Architectural Lead"
+                    value={archId}
+                    onChange={setArchId}
+                    options={getOptionsForRole('engineer')}
+                  />
+                  <StaffSelect
+                    id="struct-select"
+                    label="Structural Lead"
+                    value={structId}
+                    onChange={setStructId}
+                    options={getOptionsForRole('engineer')}
+                  />
+                  <StaffSelect
+                    id="mep-select"
+                    label="MEP Lead"
+                    value={mepId}
+                    onChange={setMepId}
+                    options={getOptionsForRole('engineer')}
+                  />
+                  <StaffSelect
+                    id="civil-select"
+                    label="Civil Lead"
+                    value={civilId}
+                    onChange={setCivilId}
+                    options={getOptionsForRole('engineer')}
+                  />
                 </div>
               </div>
             </CardContent>

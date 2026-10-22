@@ -26,8 +26,8 @@ interface Crumb {
  * Add a line here when a new [param] route appears.
  */
 const DYNAMIC_SEGMENT_LABEL: Record<string, (value: string) => string> = {
-  'noc-tracker': (v) => `Project ${v}`,
-  projects: (v) => `Project ${v}`,
+  'noc-tracker': (v: string) => `Project ${v}`,
+  projects: (v: string) => `Project ${v}`,
 };
 
 /** Static child routes that must not be treated as a dynamic value. */
@@ -50,7 +50,7 @@ function buildCrumbs(
 
     let label = navLabels[href];
     if (!label && parent && !STATIC_CHILDREN.has(value)) {
-      label = DYNAMIC_SEGMENT_LABEL[parent]?.(value) ?? '';
+      label = DYNAMIC_SEGMENT_LABEL[parent as keyof typeof DYNAMIC_SEGMENT_LABEL]?.(value) ?? '';
     }
     return { label: label || titleCase(value), href: href as Route };
   });
@@ -64,12 +64,17 @@ export function AppBreadcrumbs({
 }) {
   const pathname = usePathname();
 
+  const dashboardHref = (navLabels['/dashboard'] ? '/dashboard' : '/') as Route;
+  const dashboardLabel = navLabels[dashboardHref] ?? navLabels['/'] ?? 'Dashboard';
+
   const crumbs: Crumb[] = [
-    { label: navLabels['/'] ?? 'Dashboard', href: '/' as Route },
+    { label: dashboardLabel, href: dashboardHref },
     ...buildCrumbs(pathname, navLabels),
   ].filter(
-    // Guards against "Dashboard / Dashboard" if the dashboard lives at /dashboard.
-    (crumb, i, all) => i === 0 || crumb.label !== all[i - 1].label,
+    // Guards against duplicate root crumbs when visiting the dashboard page.
+    (crumb, i, all) =>
+      i === 0 ||
+      (crumb.href !== all[i - 1].href && crumb.label !== all[i - 1].label),
   );
 
   const last = crumbs.length - 1;

@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   AssignedProject,
   ProjectNocItem,
   ProjectDisciplineStatus,
@@ -65,6 +65,95 @@ export function canUserAdvanceStage(role: string): boolean {
     normalized === 'resident_engineer'
   );
 }
+
+function getStorage(): Storage | null {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    return window.localStorage;
+  }
+  if (
+    typeof globalThis !== 'undefined' &&
+    (globalThis as unknown as { localStorage?: Storage }).localStorage
+  ) {
+    return (globalThis as unknown as { localStorage: Storage }).localStorage;
+  }
+  return null;
+}
+
+export function canUserModifyMilestones(role: string): boolean {
+  return canUserAdvanceStage(role);
+}
+
+export function getStoredProjectMilestones(
+  code: string,
+  fallback?: StageMilestoneDates,
+): StageMilestoneDates {
+  const defaultMilestones = fallback || INITIAL_PROJECT_MILESTONES[code] || {};
+  const storage = getStorage();
+  if (!storage) return defaultMilestones;
+  try {
+    const raw = storage.getItem(`cvtec_project_milestones_${code}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return defaultMilestones;
+}
+
+export function saveStoredProjectMilestones(
+  code: string,
+  milestones: StageMilestoneDates,
+): void {
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(
+      `cvtec_project_milestones_${code}`,
+      JSON.stringify(milestones),
+    );
+  } catch {
+    // ignore
+  }
+}
+
+export function getStoredProjectStage(
+  code: string,
+  fallback: ProjectLifecycleStage,
+): ProjectLifecycleStage {
+  const storage = getStorage();
+  if (!storage) return fallback;
+  try {
+    const raw = storage.getItem(`cvtec_project_stage_${code}`);
+    if (
+      raw === 'Pre-Construction' ||
+      raw === 'Construction' ||
+      raw === 'Handover'
+    ) {
+      return raw;
+    }
+  } catch {
+    // fallback
+  }
+  return fallback;
+}
+
+export function saveStoredProjectStage(
+  code: string,
+  stage: ProjectLifecycleStage,
+): void {
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(`cvtec_project_stage_${code}`, stage);
+  } catch {
+    // ignore
+  }
+}
+
 
 export function evaluateStageGateReadiness(
   project: AssignedProject,

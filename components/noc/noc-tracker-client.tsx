@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
@@ -13,12 +13,17 @@ import {
 import { NocAlertBanner } from './noc-alert-banner';
 import { NocDataTable } from './noc-data-table';
 import { NocInspectorDrawer } from './noc-inspector-drawer';
+import { updateProjectMilestonesAction, advanceProjectStageAction } from '@/app/actions/noc';
 import { NocProjectHeader } from './noc-project-header';
 import { ProjectLifecycleStepper } from '@/components/lifecycle/project-lifecycle-stepper';
 import { StageGateDrawer } from '@/components/lifecycle/stage-gate-drawer';
 import {
   evaluateStageGateReadiness,
   INITIAL_PROJECT_MILESTONES,
+  getStoredProjectMilestones,
+  saveStoredProjectMilestones,
+  getStoredProjectStage,
+  saveStoredProjectStage,
 } from '@/lib/project-lifecycle';
 import { INITIAL_PROJECT_DISCIPLINE_STATUS } from '@/lib/project-status';
 import { matchesUrgentFilter } from '@/lib/noc-summary';
@@ -82,6 +87,24 @@ export function NocTrackerClient({
   const [urgentFilter, setUrgentFilter] = useState<string | null>(null);
   const [selectedNoc, setSelectedNoc] = useState<ProjectNocItem | null>(null);
 
+  // Sync stored stage and milestones on mount after hydration.
+  useEffect(() => {
+    const storedMilestones = getStoredProjectMilestones(
+      project.code,
+      project.milestones,
+    );
+    if (storedMilestones && Object.keys(storedMilestones).length > 0) {
+      setMilestones(storedMilestones);
+    }
+    const storedStage = getStoredProjectStage(
+      project.code,
+      project.lifecycleStage || 'Pre-Construction',
+    );
+    if (storedStage && storedStage !== lifecycleStage) {
+      setLifecycleStage(storedStage);
+    }
+  }, [project.code, project.milestones, project.lifecycleStage]);
+
   const currentProject = useMemo(
     () => ({ ...project, lifecycleStage, milestones }),
     [project, lifecycleStage, milestones],
@@ -142,13 +165,17 @@ export function NocTrackerClient({
     if (selectedNoc?.id === updated.id) setSelectedNoc(updated);
   }
 
-  function handleAdvanceStage(newStage: ProjectLifecycleStage) {
+  async function handleAdvanceStage(newStage: ProjectLifecycleStage) {
     setLifecycleStage(newStage);
+    saveStoredProjectStage(project.code, newStage);
     setIsGateDrawerOpen(false);
+    await advanceProjectStageAction(project.code, newStage);
   }
 
-  function handleUpdateMilestones(updated: StageMilestoneDates) {
+  async function handleUpdateMilestones(updated: StageMilestoneDates) {
     setMilestones(updated);
+    saveStoredProjectMilestones(project.code, updated);
+    await updateProjectMilestonesAction(project.code, updated);
   }
 
   return (

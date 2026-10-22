@@ -54,15 +54,32 @@ export default async function UsersPage() {
           <TableBody>
             {users?.map((u) => {
               const isSelf = u.id === me.id || (Boolean(me.email) && u.email?.toLowerCase() === me.email?.toLowerCase());
+              const match = u.full_name?.match(/^(.*?)\s*\((.*?)\)$/);
+              const displayName = match ? match[1] : (u.full_name || '-');
+              const specialtyTag = match ? match[2] : null;
+
               return (
                 <TableRow key={u.id}>
                   <TableCell className="font-medium text-foreground">
-                    {u.full_name || '-'}
-                    {isSelf && (
-                      <Badge variant="outline" className="ml-2 text-[10px] py-0 px-1 border-(--site-cyan)/30 text-(--site-cyan)">
-                        you
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span>{displayName}</span>
+                      {specialtyTag && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] font-normal py-0 px-1.5 border border-border bg-muted/60 text-muted-foreground"
+                        >
+                          {specialtyTag}
+                        </Badge>
+                      )}
+                      {isSelf && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] py-0 px-1 border-(--site-cyan)/30 text-(--site-cyan)"
+                        >
+                          you
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{u.email}</TableCell>
                   <TableCell>

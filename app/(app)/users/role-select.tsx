@@ -12,7 +12,7 @@ import {
 import { updateUserRole } from '@/app/actions/admin';
 import type { AppRole } from '@/lib/permissions';
 
-const LABELS: Record<AppRole, string> = {
+const LABELS = {
   admin: 'Admin',
   ceo: 'CEO',
   area_manager: 'Area Manager',
@@ -20,7 +20,7 @@ const LABELS: Record<AppRole, string> = {
   authority_engineer: 'Authority Engineer',
   engineer: 'Engineer',
   dc: 'Document Controller',
-};
+} satisfies Record<AppRole, string>;
 
 export function RoleSelect({
   userId,

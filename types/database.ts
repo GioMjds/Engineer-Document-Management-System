@@ -759,6 +759,7 @@ export type Database = {
           image_path: string | null
           master_authority_id: number
           stage: Database["public"]["Enums"]["project_stage"]
+          milestones: Json | null
           updated_at: string
         }
         Insert: {
@@ -776,6 +777,7 @@ export type Database = {
           image_path?: string | null
           master_authority_id: number
           stage?: Database["public"]["Enums"]["project_stage"]
+          milestones?: Json | null
           updated_at?: string
         }
         Update: {
@@ -793,6 +795,7 @@ export type Database = {
           image_path?: string | null
           master_authority_id?: number
           stage?: Database["public"]["Enums"]["project_stage"]
+          milestones?: Json | null
           updated_at?: string
         }
         Relationships: [

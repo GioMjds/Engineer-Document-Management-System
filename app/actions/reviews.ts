@@ -49,7 +49,7 @@ async function canAccessProject(
   }
   const { data } = await supabase
     .from('project_members')
-    .select('id')
+    .select('project_id')
     .eq('project_id', projectId)
     .eq('user_id', userId)
     .maybeSingle();

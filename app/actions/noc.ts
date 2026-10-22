@@ -4,6 +4,10 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireCan } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import type { StageMilestoneDates, ProjectLifecycleStage } from '@/types/noc';
+import { canUserAdvanceStage, canUserModifyMilestones } from '@/lib/project-lifecycle';
+import type { Json } from '@/types/database';
+
 
 const feePaymentSchema = z.object({
   amount: z.number().nonnegative('Amount must be non-negative'),
@@ -416,3 +420,132 @@ export async function updateNocMatrixItem(
     return { success: false, error: message };
   }
 }
+
+/** Updates project milestone dates in public.projects */
+export async function updateProjectMilestonesAction(
+  projectCode: string,
+  milestones: StageMilestoneDates,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    const role = profile?.role || '';
+    if (!canUserModifyMilestones(role)) {
+      return {
+        success: false,
+        error: 'Only Resident Engineers or Managers can modify milestones.',
+      };
+    }
+
+    const { error } = await supabase
+      .from('projects')
+      .update({
+        milestones: milestones as unknown as Json,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('code', projectCode);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    await supabase.from('audit_log').insert({
+      actor_id: user.id,
+      action: 'UPDATE_PROJECT_MILESTONES',
+      entity: 'projects',
+      entity_id: projectCode,
+      metadata: { projectCode, milestones: milestones as unknown as Json },
+    });
+
+    revalidatePath('/noc-tracker');
+    revalidatePath(`/noc-tracker/${projectCode}`);
+    revalidatePath('/dashboard');
+    revalidatePath('/');
+
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to update milestones';
+    return { success: false, error: message };
+  }
+}
+
+/** Advances project lifecycle stage in public.projects */
+export async function advanceProjectStageAction(
+  projectCode: string,
+  newStage: ProjectLifecycleStage,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    const role = profile?.role || '';
+    if (!canUserAdvanceStage(role)) {
+      return {
+        success: false,
+        error: 'Advancing stage requires Resident Engineer or Management approval.',
+      };
+    }
+
+    const stageEnumMap: Record<ProjectLifecycleStage, 'design' | 'construction' | 'handover'> = {
+      'Pre-Construction': 'design',
+      'Construction': 'construction',
+      'Handover': 'handover',
+    };
+
+    const { error } = await supabase
+      .from('projects')
+      .update({
+        stage: stageEnumMap[newStage] || 'design',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('code', projectCode);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    await supabase.from('audit_log').insert({
+      actor_id: user.id,
+      action: 'ADVANCE_PROJECT_STAGE',
+      entity: 'projects',
+      entity_id: projectCode,
+      metadata: { projectCode, newStage },
+    });
+
+    revalidatePath('/noc-tracker');
+    revalidatePath(`/noc-tracker/${projectCode}`);
+    revalidatePath('/dashboard');
+    revalidatePath('/');
+
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to advance project stage';
+    return { success: false, error: message };
+  }
+}
+

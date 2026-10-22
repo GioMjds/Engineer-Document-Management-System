@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Building2, FolderPlus, UserCheck } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { StageGateDrawer } from '@/components/lifecycle/stage-gate-drawer';
+import { updateProjectMilestonesAction, advanceProjectStageAction } from '@/app/actions/noc';
 import { cn } from '@/lib/utils';
 import type {
   AssignedProject,
@@ -25,6 +26,10 @@ import type {
 import {
   evaluateStageGateReadiness,
   INITIAL_PROJECT_MILESTONES,
+  getStoredProjectMilestones,
+  saveStoredProjectMilestones,
+  getStoredProjectStage,
+  saveStoredProjectStage,
 } from '@/lib/project-lifecycle';
 import { INITIAL_PROJECT_DISCIPLINE_STATUS } from '@/lib/project-status';
 import { ActionQueue } from './action-queue';
@@ -125,6 +130,25 @@ export function ExecutiveDashboardClient({
   const [scope, setScope] = useState<string>('all');
   const [queueFilter, setQueueFilter] = useState<QueueFilter>('all');
   const [nocItems] = useState<ProjectNocItem[]>(initialNocs);
+
+  // Sync stored milestones and lifecycle stages from local storage on mount.
+  useEffect(() => {
+    setProjectList((prev) =>
+      prev.map((p) => {
+        const storedMilestones = getStoredProjectMilestones(p.code, p.milestones);
+        const storedStage = getStoredProjectStage(
+          p.code,
+          p.lifecycleStage || 'Pre-Construction',
+        );
+        return {
+          ...p,
+          milestones: storedMilestones,
+          lifecycleStage: storedStage,
+          currentStage: `${storedStage} Stage`,
+        };
+      }),
+    );
+  }, []);
 
   const data = useDashboardData(projectList, nocItems, scope);
   const isEngineer =
@@ -286,10 +310,11 @@ export function ExecutiveDashboardClient({
       ),
     }));
 
-  const handleAdvanceProjectStage = (
+  const handleAdvanceProjectStage = async (
     code: string,
     newStage: ProjectLifecycleStage,
-  ) =>
+  ) => {
+    saveStoredProjectStage(code, newStage);
     setProjectList((prev) =>
       prev.map((p) =>
         p.code === code
@@ -301,15 +326,19 @@ export function ExecutiveDashboardClient({
           : p,
       ),
     );
+    await advanceProjectStageAction(code, newStage);
+  };
 
-  const handleUpdateProjectMilestones = (
+  const handleUpdateProjectMilestones = async (
     code: string,
     milestones: StageMilestoneDates,
   ) => {
+    saveStoredProjectMilestones(code, milestones);
     setMilestonesMap((prev) => ({ ...prev, [code]: milestones }));
     setProjectList((prev) =>
       prev.map((p) => (p.code === code ? { ...p, milestones } : p)),
     );
+    await updateProjectMilestonesAction(code, milestones);
   };
 
   /* ---------- derived ---------- */

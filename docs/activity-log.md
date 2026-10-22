@@ -1,7 +1,46 @@
-# Activity Log
+﻿# Activity Log
 
 ## Session 2026-10-22
 
+- Applied database schema migration for cross-session milestone synchronization:
+  - Created and pushed migration supabase/migrations/20261022000000_project_milestones.sql adding milestones JSONB column to public.projects.
+  - Updated types/database.ts and lib/server/noc-data.ts to query and map project milestones from Supabase.
+  - Implemented updateProjectMilestonesAction and advanceProjectStageAction in app/actions/noc.ts with audit log tracking.
+  - Integrated server actions into components/noc/noc-tracker-client.tsx and components/dashboard/executive-dashboard-client.tsx.
+  - Verified live database persistence with scripts/verify-db-milestones.ts and confirmed production build passes on all 25 routes.
+
+- Fixed Milestone Dates & Stage Gate persistence and role authorization:
+  - Added persistent storage engine (getStoredProjectMilestones, saveStoredProjectMilestones, getStoredProjectStage, saveStoredProjectStage) in lib/project-lifecycle.ts ensuring edited dates survive browser refreshes.
+  - Role-gated Edit Dates button in stage-gate-drawer.tsx using isAuthorized (admin, area_manager, resident_engineer).
+  - Added hydration-safe mount synchronization in noc-tracker-client.tsx and executive-dashboard-client.tsx.
+  - Created test suite scripts/verify-milestone-persistence.ts (16/16 tests passing).
+
+- Resolved project access denied bug during engineering document uploads and reviews:
+  - Fixed canAccessProject() in app/actions/documents.ts and app/actions/reviews.ts.
+  - Replaced non-existent id column selection with valid project_id primary key column from public.project_members.
+  - Resolved Postgres runtime error 42703 (column project_members.id does not exist) that incorrectly rejected assigned engineers (such as Liam) when submitting drawings.
+  - Verified TypeScript compilation and ESLint validation pass cleanly.
+
+- Documented end-to-end multi-role operational workflow:
+  - Created [project-lifecycle-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/project-lifecycle-workflow.md) detailing complete lifecycle actions across all 7 assigned roles for Project 26001.
+  - Included Pre-Construction stage gate readiness calculations, milestone reference baseline, document review lifecycle, statutory permitting, and role boundaries.
+- Customized application-wide scrollbars:
+  - Added --scrollbar-track, --scrollbar-thumb, and --scrollbar-thumb-hover tokens to :root and .dark in app/globals.css.
+  - Configured cross-browser scrollbar styling with 6px width/height, pill radius, slate thumb, and CVTEC cyan hover across all elements.
+  - Added utility .no-scrollbar class for intentional scrollbar suppression.
+  - Resolved fallback type mismatch for StaffOption.name in app/(app)/projects/new/project-form.tsx.
+  - Captured preview screenshot in docs/screenshots/custom-scrollbar.png.
+
+- Added Engineering Specialization workflow in user invitations and directory view:
+  - Augmented [invite-user-dialog.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/users/invite-user-dialog.tsx) with dynamic Engineering Specialty selector when role is engineer (Architectural Engineer, MEP Engineer, Structural Engineer, Civil Engineer, Custom).
+  - Automatically appends specialization alongside name (e.g. Liam Thorne (Architectural Engineer)) upon invitation with live display preview.
+  - Enhanced [page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/users/page.tsx) user table to parse parenthetical specialty tags and render dedicated secondary badge beside engineer's base name.
+  - Typed DYNAMIC_SEGMENT_LABEL in [app-breadcrumbs.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/app-breadcrumbs.tsx) to resolve implicit any compilation error.
+
+- Corrected root breadcrumb href and active navigation resolution for Dashboard:
+  - Updated [app-breadcrumbs.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/app-breadcrumbs.tsx) to resolve dashboardHref dynamically from navLabels['/dashboard'] (falling back to /) and deduplicate consecutive identical crumbs by both href and label.
+  - Resolved issue where hovering or clicking Dashboard breadcrumb linked to / (localhost:3000) instead of direct /dashboard route.
+  - Updated [app-shell.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/app-shell.tsx) active route matching to keep Dashboard item active on /dashboard, /dashboard/*, and /.
 - Fixed select display label (true role title instead of lowercase ID) in `app/(app)/users`:
   - Updated `SelectValue` in `app/(app)/users/role-select.tsx` and `app/(app)/users/invite-user-dialog.tsx` to render `{LABELS[value] ?? value}` and passed registered `items` map to Base UI `Select`.
   - Resolved issue where trigger was rendering raw lowercase identifier (e.g. `resident_engineer`) instead of formatted true role title (e.g. `Resident Engineer`).
@@ -614,6 +653,9 @@
 
 ## Session 2026-10-22
 
+- Documented end-to-end multi-role operational workflow:
+  - Created [project-lifecycle-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/project-lifecycle-workflow.md) detailing complete lifecycle actions across all 7 assigned roles for Project 26001.
+  - Included Pre-Construction stage gate readiness calculations, milestone reference baseline, document review lifecycle, statutory permitting, and role boundaries.
 - Configured root route (`/`) redirection:
   - Updated `proxy.ts` to redirect authenticated users visiting `/` to `/dashboard`.
   - Confirmed unauthenticated users visiting `/` redirect to `/login` via existing proxy gate.

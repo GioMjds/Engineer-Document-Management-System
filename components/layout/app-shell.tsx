@@ -78,9 +78,11 @@ export function AppShell({
       // Match on a segment boundary so '/review' doesn't light up on
       // '/reviews' and '/noc' doesn't light up on '/noc-tracker'.
       active:
-        item.href === '/'
-          ? pathname === '/'
-          : pathname === item.href || pathname.startsWith(`${item.href}/`),
+        item.href === '/dashboard'
+          ? pathname === '/dashboard' || pathname === '/' || pathname.startsWith('/dashboard/')
+          : item.href === '/'
+            ? pathname === '/'
+            : pathname === item.href || pathname.startsWith(`${item.href}/`),
     };
   });
   const navLabels = Object.fromEntries(

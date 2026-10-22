@@ -446,7 +446,7 @@ function StageGateDrawerContent({
                 <Calendar className="h-3.5 w-3.5" />
                 <span>Milestone Dates Reference</span>
               </h3>
-              {onUpdateMilestones && (
+              {isAuthorized && onUpdateMilestones && (
                 <button
                   type="button"
                   onClick={() => setIsEditingMilestones(!isEditingMilestones)}
