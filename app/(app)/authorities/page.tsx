@@ -1,16 +1,28 @@
 import type { Metadata } from 'next';
 import { requireCan } from '@/lib/auth';
-import { getMasterAuthoritiesWithStats } from '@/app/actions/authorities';
+import {
+  getMasterAuthoritiesWithStats,
+  getReviewingAuthoritiesWithStats,
+} from '@/app/actions/authorities';
 import { AuthoritiesWorkspace } from './authorities-workspace';
 
 export const metadata: Metadata = {
-  title: 'Master Authorities',
-  description: 'Manage master authorities and their associated statistics.',
-}
+  title: 'Authorities | CVTEC EDMS',
+  description:
+    'Admin governance: Unified management of statutory Master Authorities and Reviewing Authorities.',
+};
 
-export default async function MasterAuthoritiesPage() {
+export default async function AuthoritiesPage() {
   await requireCan('authority.master.manage');
-  const res = await getMasterAuthoritiesWithStats();
+  const [masterRes, reviewingRes] = await Promise.all([
+    getMasterAuthoritiesWithStats(),
+    getReviewingAuthoritiesWithStats(),
+  ]);
 
-  return <AuthoritiesWorkspace initialAuthorities={res.ok ? res.data : []} />;
+  return (
+    <AuthoritiesWorkspace
+      initialMasterAuthorities={masterRes.ok ? masterRes.data : []}
+      initialReviewingAuthorities={reviewingRes.ok ? reviewingRes.data : []}
+    />
+  );
 }

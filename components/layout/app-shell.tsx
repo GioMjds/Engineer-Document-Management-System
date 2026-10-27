@@ -47,7 +47,7 @@ const GROUP_ORDER = [
   'Documents',
   'Administration',
   'More',
-];
+] as const;
 
 interface AppShellProps {
   user: { email?: string | null; full_name?: string | null; role: string };

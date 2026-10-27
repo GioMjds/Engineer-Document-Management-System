@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import type { Route } from 'next';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -28,6 +29,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -51,6 +60,7 @@ import {
 import { createProject } from '@/app/actions/admin';
 import type { MasterAuthorityRecord } from '@/types/noc';
 import type { ProfileItem } from '@/components/projects/project-team-dialog';
+import { useProjectModal } from '@/components/projects/project-dialog-modal';
 
 const STAGE_LABELS = {
   planning: 'Planning',
@@ -222,7 +232,10 @@ export function ProjectRegistrationForm({
   teamProfiles = [],
 }: ProjectRegistrationFormProps) {
   const router = useRouter();
+  const modalContext = useProjectModal();
   const [pending, startTransition] = useTransition();
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [showStandaloneConfirm, setShowStandaloneConfirm] = useState(false);
   // 2-step wizard state for creating projects
   const [step, setStep] = useState<1 | 2>(1);
 
@@ -241,7 +254,7 @@ export function ProjectRegistrationForm({
     handleSubmit,
     control,
     trigger,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
     defaultValues: {
@@ -260,6 +273,59 @@ export function ProjectRegistrationForm({
 
   const projectCode = useWatch({ control, name: 'code' });
   const projectName = useWatch({ control, name: 'name' });
+  const clientName = useWatch({ control, name: 'client_name' });
+  const contractorName = useWatch({ control, name: 'contractor_name' });
+
+  const hasTeamAssignments =
+    reId !== 'unassigned' ||
+    amId !== 'unassigned' ||
+    aeId !== 'unassigned' ||
+    dcId !== 'unassigned' ||
+    archId !== 'unassigned' ||
+    structId !== 'unassigned' ||
+    mepId !== 'unassigned' ||
+    civilId !== 'unassigned';
+
+  const hasFilledText = Boolean(
+    (projectCode && projectCode.trim().length > 0) ||
+    (projectName && projectName.trim().length > 0) ||
+    (clientName && clientName.trim().length > 0) ||
+    (contractorName && contractorName.trim().length > 0),
+  );
+
+  const isFormDirty = isDirty || step > 1 || hasTeamAssignments || hasFilledText;
+
+  // Sync form dirty state with modal context.
+  useEffect(() => {
+    if (isSubmitted || pending) {
+      modalContext?.setIsDirty(false);
+      return;
+    }
+    modalContext?.setIsDirty(isFormDirty);
+  }, [isFormDirty, isSubmitted, modalContext, pending]);
+
+  // Prevent accidental tab closing or reload when unsaved data exists.
+  useEffect(() => {
+    if (!isFormDirty || pending || isSubmitted) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isFormDirty, pending, isSubmitted]);
+
+  const handleCancel = () => {
+    if (modalContext) {
+      modalContext.requestClose();
+    } else if (isFormDirty) {
+      setShowStandaloneConfirm(true);
+    } else {
+      router.back();
+    }
+  };
 
   const getOptionsForRole = (primaryRole?: string): StaffOption[] => [
     { id: UNASSIGNED, name: '— Unassigned —', suggested: false },
@@ -332,17 +398,27 @@ export function ProjectRegistrationForm({
         return;
       }
 
+      setIsSubmitted(true);
+      modalContext?.setIsDirty(false);
+
       toast.success(
         members.length > 0
           ? `Project ${values.code} created with ${members.length} team members.`
           : `Project ${values.code} created successfully.`,
       );
-      router.push('/noc-tracker');
+
+      if (modalContext) {
+        modalContext.closeModal();
+      } else {
+        router.push('/noc-tracker');
+        router.refresh();
+      }
     });
   };
 
   return (
-    <Card className="border-border bg-card shadow-xs">
+    <>
+      <Card className="border-border bg-card shadow-xs">
       {/* 2-Phase Wizard Stepper */}
       <div className="flex items-center justify-between border-b border-border/80 px-6 py-3.5 bg-muted/15">
         <div className="flex items-center gap-2.5">
@@ -636,7 +712,7 @@ export function ProjectRegistrationForm({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.back()}
+                onClick={handleCancel}
                 disabled={pending}
               >
                 Cancel
@@ -815,5 +891,47 @@ export function ProjectRegistrationForm({
         )}
       </form>
     </Card>
+
+    {!modalContext && (
+      <Dialog
+        open={showStandaloneConfirm}
+        disablePointerDismissal
+        onOpenChange={(open) => {
+          if (!open) setShowStandaloneConfirm(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-md z-[60]" showCloseButton={false}>
+          <DialogHeader>
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="size-5 shrink-0" />
+              <DialogTitle>Discard Unsaved Project?</DialogTitle>
+            </div>
+            <DialogDescription>
+              You have unsaved changes in this project registration form. Exiting now will discard all entered details and team assignments.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-2 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowStandaloneConfirm(false)}
+            >
+              Continue Editing
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                setShowStandaloneConfirm(false);
+                router.back();
+              }}
+            >
+              Discard and Exit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )}
+    </>
   );
 }

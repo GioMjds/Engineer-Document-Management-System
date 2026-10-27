@@ -1,5 +1,20 @@
 # Activity Log
 
+## Session 2026-10-27
+
+- Built Unified Authorities Workspace with Dynamic Reviewing Authorities:
+  - Background & Objective: Admin side had no unified workspace to dynamically view, add, edit, or delete Reviewing Authorities (e.g., DEWA, Civil Defence, RTA, DM Drainage, Empower, Etisalat) alongside Master Authorities. Nav item was labelled "Master Authorities" and lacked reviewing agency governance.
+  - Implementation:
+    - In [lib/permissions.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/permissions.ts): Renamed navigation entry from `Master Authorities` to `Authorities` with capability `authority.master.manage`.
+    - In [app/actions/authorities.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/authorities.ts): Added `ReviewingAuthorityWithStats` interface, `getReviewingAuthoritiesWithStats`, `createReviewingAuthorityAction`, `updateReviewingAuthorityAction`, and `deleteReviewingAuthorityAction` with case-insensitive deduplication, dependency referencing guards (rejecting deletions if referenced by `noc_matrix_items` or `project_nocs`), and audit logging.
+    - In [app/(app)/authorities/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/authorities/page.tsx): Updated page metadata to "Authorities | CVTEC EDMS", parallel fetched both master authorities and reviewing authorities with usage statistics.
+    - In [app/(app)/authorities/authorities-workspace.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/authorities/authorities-workspace.tsx): Re-architected as a unified two-tab interface (`Master Authorities` and `Reviewing Authorities`) with dedicated KPI metric cards, search filters, data tables, and modal dialogs for registering, editing, and deleting reviewing agencies.
+    - Created [scripts/verify-authorities-management.ts](file:///D:/giomj/Projects/engineer-docs-collab/scripts/verify-authorities-management.ts): Verified navigation menu update, database query, dynamic record creation, update, and deletion against live Supabase database.
+  - Verification:
+    - Executed `scripts/verify-authorities-management.ts`: All checks passed.
+    - Executed `scripts/verify-foundation-and-admin.ts`: 11/11 tests passed.
+    - Checked `npx tsc --noEmit`: zero compilation errors.
+
 ## Session 2026-10-22
 
 - Created Manual Click-by-Click MVP Presentation Guide:
@@ -754,3 +769,17 @@
   - Updated [scripts/seed-users.ts](file:///D:/giomj/Projects/engineer-docs-collab/scripts/seed-users.ts) default password to `cvtec123`.
   - Executed password update: 25 test user accounts updated to `cvtec123`; 1 real user account (`giomjds@gmail.com`) preserved intact.
   - Verified authentication with `cvtec123` across representative test accounts.
+
+## Session 2026-10-27
+
+- Implemented accidental exit prevention and outside-click protection for project registration modal:
+  - Configured `disablePointerDismissal` on Base UI `Dialog` in [project-dialog-modal.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-dialog-modal.tsx) to prevent accidental closure when clicking backdrop.
+  - Added `ProjectModalContext` to track form dirty status between [project-form.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/new/project-form.tsx) and [project-dialog-modal.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-dialog-modal.tsx).
+  - Added exit confirmation dialog intercepting Escape key, top-right close icon, and cancel button when unsaved changes exist.
+  - Added browser `beforeunload` listener while form is dirty to guard against accidental page reloads or tab closures.
+  - Added team profiles data fetch to intercepted route [page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/@modal/(.)projects/new/page.tsx) so consultant assignments populate in modal Step 2.
+  - Resolved modal persistence bug on successful project creation:
+    - Added `closeModal` to `ProjectModalContext` in [project-dialog-modal.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-dialog-modal.tsx) that sets `isOpen = false`, unmounts the modal from the DOM, and navigates to `/noc-tracker` with `router.refresh()`.
+    - Updated `submitProject` in [project-form.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/new/project-form.tsx) to invoke `modalContext.closeModal()` instead of leaving the modal open via unhandled `router.push`.
+  - Verified compilation with `npx tsc --noEmit` (0 errors) and `pnpm build` (24/24 routes compiled cleanly).
+

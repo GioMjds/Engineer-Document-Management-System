@@ -286,3 +286,313 @@ export async function deleteMasterAuthorityAction(
   }
 }
 
+export interface ReviewingAuthorityWithStats {
+  id: number;
+  name: string;
+  matrixItemsCount: number;
+  projectNocsCount: number;
+}
+
+const reviewingAuthoritySchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, 'Reviewing authority name must be at least 2 characters.')
+    .max(100, 'Name cannot exceed 100 characters.'),
+});
+
+// Fetches reviewing authorities joined with NOC matrix and project NOC counts.
+export async function getReviewingAuthoritiesWithStats(): Promise<{
+  ok: boolean;
+  data: ReviewingAuthorityWithStats[];
+  error?: string;
+}> {
+  try {
+    await requireCan('authority.master.manage');
+    const supabase = await createClient();
+
+    const { data: reviewingAuths, error: revErr } = await supabase
+      .from('reviewing_authorities')
+      .select('id, name')
+      .order('id', { ascending: true });
+
+    if (revErr) {
+      return { ok: false, data: [], error: revErr.message };
+    }
+
+    if (!reviewingAuths || reviewingAuths.length === 0) {
+      return { ok: true, data: [] };
+    }
+
+    const { data: matrixItems } = await supabase
+      .from('noc_matrix_items')
+      .select('reviewing_authority_id');
+
+    const { data: projectNocs } = await supabase
+      .from('project_nocs')
+      .select('reviewing_authority_id');
+
+    const matrixCounts = (matrixItems ?? []).reduce<Record<number, number>>(
+      (acc, m) => {
+        if (m.reviewing_authority_id) {
+          acc[m.reviewing_authority_id] =
+            (acc[m.reviewing_authority_id] || 0) + 1;
+        }
+        return acc;
+      },
+      {},
+    );
+
+    const projectNocCounts = (projectNocs ?? []).reduce<
+      Record<number, number>
+    >((acc, p) => {
+      if (p.reviewing_authority_id) {
+        acc[p.reviewing_authority_id] =
+          (acc[p.reviewing_authority_id] || 0) + 1;
+      }
+      return acc;
+    }, {});
+
+    const data: ReviewingAuthorityWithStats[] = reviewingAuths.map((r) => ({
+      id: r.id,
+      name: r.name,
+      matrixItemsCount: matrixCounts[r.id] || 0,
+      projectNocsCount: projectNocCounts[r.id] || 0,
+    }));
+
+    return { ok: true, data };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : 'Failed to fetch reviewing authorities.';
+    return { ok: false, data: [], error: message };
+  }
+}
+
+// Registers a new statutory reviewing authority body.
+export async function createReviewingAuthorityAction(input: {
+  name: string;
+}): Promise<{
+  ok: boolean;
+  data?: ReviewingAuthorityWithStats;
+  error?: string;
+}> {
+  try {
+    const caller = await requireCan('authority.master.manage');
+    const parsed = reviewingAuthoritySchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? 'Invalid input data.',
+      };
+    }
+
+    const adminClient = createAdminClient();
+
+    const { data: existing } = await adminClient
+      .from('reviewing_authorities')
+      .select('id, name')
+      .ilike('name', parsed.data.name)
+      .maybeSingle();
+
+    if (existing) {
+      return {
+        ok: false,
+        error: `Reviewing authority "${existing.name}" already exists.`,
+      };
+    }
+
+    const { data, error } = await adminClient
+      .from('reviewing_authorities')
+      .insert({
+        name: parsed.data.name,
+      })
+      .select('id, name')
+      .single();
+
+    if (error || !data) {
+      return {
+        ok: false,
+        error: error?.message || 'Failed to register reviewing authority.',
+      };
+    }
+
+    try {
+      await adminClient.from('audit_log').insert({
+        actor_id: caller.id,
+        action: 'REVIEWING_AUTHORITY_CREATE',
+        entity: 'reviewing_authorities',
+        entity_id: String(data.id),
+        metadata: {
+          name: data.name,
+        },
+      });
+    } catch {
+      // Non-fatal audit log catch.
+    }
+
+    revalidatePath('/authorities');
+    revalidatePath('/noc-matrix');
+    revalidatePath('/noc-tracker');
+
+    return {
+      ok: true,
+      data: {
+        id: data.id,
+        name: data.name,
+        matrixItemsCount: 0,
+        projectNocsCount: 0,
+      },
+    };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : 'Server error occurred.';
+    return { ok: false, error: message };
+  }
+}
+
+// Updates an existing reviewing authority title.
+export async function updateReviewingAuthorityAction(input: {
+  id: number;
+  name: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const caller = await requireCan('authority.master.manage');
+    const parsed = reviewingAuthoritySchema.safeParse({ name: input.name });
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? 'Invalid input data.',
+      };
+    }
+
+    const adminClient = createAdminClient();
+
+    const { data: existing } = await adminClient
+      .from('reviewing_authorities')
+      .select('id, name')
+      .ilike('name', parsed.data.name)
+      .neq('id', input.id)
+      .maybeSingle();
+
+    if (existing) {
+      return {
+        ok: false,
+        error: `Another reviewing authority with name "${existing.name}" already exists.`,
+      };
+    }
+
+    const { error } = await adminClient
+      .from('reviewing_authorities')
+      .update({
+        name: parsed.data.name,
+      })
+      .eq('id', input.id);
+
+    if (error) {
+      return {
+        ok: false,
+        error: error.message || 'Failed to update reviewing authority.',
+      };
+    }
+
+    try {
+      await adminClient.from('audit_log').insert({
+        actor_id: caller.id,
+        action: 'REVIEWING_AUTHORITY_UPDATE',
+        entity: 'reviewing_authorities',
+        entity_id: String(input.id),
+        metadata: {
+          name: parsed.data.name,
+        },
+      });
+    } catch {
+      // Non-fatal audit log catch.
+    }
+
+    revalidatePath('/authorities');
+    revalidatePath('/noc-matrix');
+    revalidatePath('/noc-tracker');
+    return { ok: true };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : 'Server error occurred.';
+    return { ok: false, error: message };
+  }
+}
+
+// Deletes a reviewing authority if no matrix templates or project NOCs reference it.
+export async function deleteReviewingAuthorityAction(
+  id: number,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const caller = await requireCan('authority.master.manage');
+    const adminClient = createAdminClient();
+
+    const { data: linkedMatrix, error: matErr } = await adminClient
+      .from('noc_matrix_items')
+      .select('id')
+      .eq('reviewing_authority_id', id)
+      .limit(5);
+
+    if (matErr) {
+      return { ok: false, error: matErr.message };
+    }
+
+    if (linkedMatrix && linkedMatrix.length > 0) {
+      return {
+        ok: false,
+        error: `Cannot delete: reviewing authority is assigned to ${linkedMatrix.length} NOC matrix template item(s). Reassign them first.`,
+      };
+    }
+
+    const { data: linkedProjectNocs, error: nocErr } = await adminClient
+      .from('project_nocs')
+      .select('id')
+      .eq('reviewing_authority_id', id)
+      .limit(5);
+
+    if (nocErr) {
+      return { ok: false, error: nocErr.message };
+    }
+
+    if (linkedProjectNocs && linkedProjectNocs.length > 0) {
+      return {
+        ok: false,
+        error: `Cannot delete: reviewing authority is referenced by ${linkedProjectNocs.length} active project NOC(s).`,
+      };
+    }
+
+    const { error: delErr } = await adminClient
+      .from('reviewing_authorities')
+      .delete()
+      .eq('id', id);
+
+    if (delErr) {
+      return { ok: false, error: delErr.message };
+    }
+
+    try {
+      await adminClient.from('audit_log').insert({
+        actor_id: caller.id,
+        action: 'REVIEWING_AUTHORITY_DELETE',
+        entity: 'reviewing_authorities',
+        entity_id: String(id),
+      });
+    } catch {
+      // Non-fatal audit log catch.
+    }
+
+    revalidatePath('/authorities');
+    revalidatePath('/noc-matrix');
+    revalidatePath('/noc-tracker');
+    return { ok: true };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : 'Server error occurred.';
+    return { ok: false, error: message };
+  }
+}
+
+
