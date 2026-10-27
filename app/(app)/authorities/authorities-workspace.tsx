@@ -12,7 +12,6 @@ import {
   FolderKanban,
   Edit2,
   Trash2,
-  Sparkles,
   AlertCircle,
   Loader2,
 } from 'lucide-react';
@@ -41,7 +40,6 @@ import {
   createMasterAuthorityAction,
   updateMasterAuthorityAction,
   deleteMasterAuthorityAction,
-  seedBaselineMasterAuthoritiesAction,
   type MasterAuthorityWithStats,
 } from '@/app/actions/authorities';
 
@@ -212,22 +210,6 @@ export function AuthoritiesWorkspace({
     });
   };
 
-  // Handle seed baseline standard authorities
-  const handleSeedBaseline = () => {
-    startTransition(async () => {
-      const res = await seedBaselineMasterAuthoritiesAction();
-      if (!res.ok) {
-        toast.error(res.error || 'Failed to populate standard authorities.');
-        return;
-      }
-
-      toast.success(`Inserted ${res.count} standard UAE authorities.`);
-      router.refresh();
-      // Reload page state
-      window.location.reload();
-    });
-  };
-
   return (
     <section className="space-y-6" aria-label="Master Authorities Management">
       {/* Header and Actions */}
@@ -244,20 +226,6 @@ export function AuthoritiesWorkspace({
         </div>
 
         <div className="flex items-center gap-2">
-          {authorities.length === 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleSeedBaseline}
-              disabled={isPending}
-              className="h-8 gap-1.5 text-xs border-dashed cursor-pointer"
-            >
-              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-              <span>Seed UAE Baseline</span>
-            </Button>
-          )}
-
           <Button
             type="button"
             size="sm"

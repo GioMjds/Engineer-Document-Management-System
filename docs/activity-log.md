@@ -2,6 +2,12 @@
 
 ## Session 2026-10-22
 
+- Created Manual Click-by-Click MVP Presentation Guide:
+  - Documented at [docs/manual-mvp-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/manual-mvp-workflow.md).
+  - Designed for user to manually drive a fresh test project (e.g. Project `26003`) from scratch through `/projects/new` to Handover completion.
+  - Covers all 7 canonical roles, nearest dates matching `CVTEC_EDMS.md` (14–22 Oct 2026, 04 Nov 2026 expiry, 30 Nov 2026 BCC), and clear steps for transitioning Construction $\rightarrow$ Handover via the Stage Gate Drawer footer (`Advance to Handover (Advisory Override)`).
+
+
 - Built and Seeded Project 26002 MVP Rapid Presentation Testbed:
   - Background & Objective: Earlier walkthrough in Project 26001 stopped at the Construction Stage transition. User needed an immediate, concise, presentation-ready MVP user workflow tackling all 7 canonical roles across all 3 lifecycle stages (Pre-Construction -> Construction -> Handover) with nearest realistic dates aligned with `CVTEC_EDMS.md` (14–22 Oct 2026).
   - Implementation:
