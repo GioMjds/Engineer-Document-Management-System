@@ -2,6 +2,32 @@
 
 ## Session 2026-10-27
 
+- Completely Removed Hardcoded Project Code Special-Casing (`isBaselineDemoProject`):
+  - Background & Objective: User identified anti-pattern in `lib/project-lifecycle.ts` where `isBaselineDemoProject = project.code === '26001' || project.code === '26002'` branched into hardcoded DEWA/RTA prerequisites for demo projects versus other projects.
+  - Implementation:
+    - Removed `isBaselineDemoProject` and all project code branching from `evaluateStageGateReadiness` in [lib/project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts).
+    - Unified the entire stage gate evaluation engine: every project (26001, 26002, 26003, and all future projects) executes identical, purely dynamic evaluation directly against its actual assigned `project_nocs`, milestones, and documents.
+    - Updated [scripts/verify-milestone-persistence.ts](file:///D:/giomj/Projects/engineer-docs-collab/scripts/verify-milestone-persistence.ts) to pass real project NOCs (`INITIAL_NOCS_PROJECT_26001`).
+    - Updated [scripts/verify-dynamic-gate-readiness.ts](file:///D:/giomj/Projects/engineer-docs-collab/scripts/verify-dynamic-gate-readiness.ts) verifying dynamic derivation without project code special-casing.
+  - Verification:
+    - Executed `scripts/verify-dynamic-gate-readiness.ts`: 4/4 tests passed.
+    - Executed `scripts/verify-milestone-persistence.ts`: 16/16 tests passed.
+    - Full production build `pnpm run build`: 24/24 routes passed.
+
+- Built Dynamic Project-Linked Stage Gate Evaluation:
+  - Background & Objective: Inspect Gate Checklist previously injected hardcoded DEWA and RTA prerequisites into every project regardless of project authority or actual assigned NOCs (e.g. Project 26003 in screenshot showed pending DEWA/RTA prerequisites even though none existed).
+  - Implementation:
+    - In [lib/project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts): Enhanced `evaluateStageGateReadiness` to dynamically derive authority NOC prerequisites from the project's actual assigned `project_nocs` for each stage (Design/Information NOCs for Pre-Construction, Construction NOCs for Construction, Handover NOCs for Handover).
+    - Preserved exact 7-item demo baseline compatibility for canonical test projects (26001, 26002).
+    - Added admin exemption support: NOCs marked `status === 'Not Needed'` evaluate as `isSatisfied = true` to allow admin-level statutory exemptions.
+    - Created [scripts/verify-dynamic-gate-readiness.ts](file:///D:/giomj/Projects/engineer-docs-collab/scripts/verify-dynamic-gate-readiness.ts) verifying dynamic derivation, absence of phantom NOCs, and admin exemption.
+  - Verification:
+    - Executed `scripts/verify-dynamic-gate-readiness.ts`: 4/4 tests passed.
+    - Executed `scripts/verify-milestone-persistence.ts`: 16/16 tests passed.
+    - Executed `scripts/verify-foundation-and-admin.ts`: 11/11 tests passed.
+    - Executed `scripts/verify-authorities-management.ts`: passed.
+    - Checked `npx tsc --noEmit`: 0 errors.
+
 - Built Unified Authorities Workspace with Dynamic Reviewing Authorities:
   - Background & Objective: Admin side had no unified workspace to dynamically view, add, edit, or delete Reviewing Authorities (e.g., DEWA, Civil Defence, RTA, DM Drainage, Empower, Etisalat) alongside Master Authorities. Nav item was labelled "Master Authorities" and lacked reviewing agency governance.
   - Implementation:

@@ -185,6 +185,11 @@ export function saveStoredProjectStage(
 }
 
 
+function isNocSatisfied(noc?: ProjectNocItem): boolean {
+  if (!noc) return false;
+  return noc.status === 'Approved' || noc.status === 'Not Needed';
+}
+
 export function evaluateStageGateReadiness(
   project: AssignedProject,
   allNocs: ProjectNocItem[],
@@ -256,41 +261,26 @@ export function evaluateStageGateReadiness(
       mandatoryForNextStage: true,
     });
 
-    const dewa = projectNocs.find(
-      (n) => n.reviewingAuthority === 'DEWA' && (n.stage === 'Design NOC' || n.stage === 'Information NOC'),
+    // Dynamic statutory authority NOCs assigned to this project for Pre-Construction
+    const preConNocs = projectNocs.filter(
+      (n) => n.stage === 'Design NOC' || n.stage === 'Information NOC',
     );
-    prerequisites.push({
-      id: 'gate-dewa',
-      title: 'DEWA Substation & Electrical Load NOC',
-      category: 'authority_noc',
-      isSatisfied: dewa?.status === 'Approved',
-      sourceReference: dewa?.referenceNumber,
-      mandatoryForNextStage: true,
-    });
-
-    const rtaOrTis = projectNocs.find((n) => n.reviewingAuthority === 'RTA');
-    prerequisites.push({
-      id: 'gate-rta',
-      title: 'RTA Traffic Impact & Right-of-Way Permit',
-      category: 'authority_noc',
-      isSatisfied: rtaOrTis?.status === 'Approved',
-      sourceReference: rtaOrTis?.referenceNumber,
-      mandatoryForNextStage: true,
-    });
-
-    const structural = projectNocs.find(
-      (n) =>
-        n.description.toLowerCase().includes('structural') ||
-        n.reviewingAuthority === 'Trakhees',
-    );
-    prerequisites.push({
-      id: 'gate-struct',
-      title: 'Master Authority Structural Engineering NOC',
-      category: 'authority_noc',
-      isSatisfied: structural?.status === 'Approved',
-      sourceReference: structural?.referenceNumber,
-      mandatoryForNextStage: true,
-    });
+    for (const noc of preConNocs) {
+      prerequisites.push({
+        id: `gate-noc-${noc.id || noc.sequenceNumber}`,
+        title: `${noc.reviewingAuthority ? noc.reviewingAuthority + ': ' : ''}${noc.description}`,
+        category: 'authority_noc',
+        isSatisfied: isNocSatisfied(noc),
+        sourceReference:
+          noc.referenceNumber ||
+          (noc.status === 'Approved'
+            ? 'Approved'
+            : noc.status === 'Not Needed'
+              ? 'Exempt'
+              : 'Pending Authority Clearance'),
+        mandatoryForNextStage: true,
+      });
+    }
 
     prerequisites.push({
       id: 'gate-permit',
@@ -302,17 +292,26 @@ export function evaluateStageGateReadiness(
       mandatoryForNextStage: true,
     });
   } else if (currentStage === 'Construction') {
-    const tempPower = projectNocs.find(
-      (n) => n.stage === 'Construction NOC' && n.reviewingAuthority === 'DEWA',
+    // Dynamic statutory authority NOCs assigned to this project for Construction
+    const constrNocs = projectNocs.filter(
+      (n) => n.stage === 'Construction NOC',
     );
-    prerequisites.push({
-      id: 'gate-temp-power',
-      title: 'Site Temporary Power & Dewatering NOC',
-      category: 'authority_noc',
-      isSatisfied: tempPower?.status === 'Approved',
-      sourceReference: tempPower?.referenceNumber,
-      mandatoryForNextStage: true,
-    });
+    for (const noc of constrNocs) {
+      prerequisites.push({
+        id: `gate-noc-${noc.id || noc.sequenceNumber}`,
+        title: `${noc.reviewingAuthority ? noc.reviewingAuthority + ': ' : ''}${noc.description}`,
+        category: 'authority_noc',
+        isSatisfied: isNocSatisfied(noc),
+        sourceReference:
+          noc.referenceNumber ||
+          (noc.status === 'Approved'
+            ? 'Approved'
+            : noc.status === 'Not Needed'
+              ? 'Exempt'
+              : 'Pending Authority Clearance'),
+        mandatoryForNextStage: true,
+      });
+    }
 
     const structStatus = disciplineStatus?.structure.status;
     prerequisites.push({
@@ -336,18 +335,37 @@ export function evaluateStageGateReadiness(
       mandatoryForNextStage: false,
     });
   } else {
-    // Handover Stage
-    const dcd = projectNocs.find(
-      (n) => n.reviewingAuthority === 'DCD' || n.stage === 'Handover NOC',
+    // Handover Stage: Dynamic statutory authority NOCs assigned to this project
+    const handoverNocs = projectNocs.filter(
+      (n) => n.stage === 'Handover NOC',
     );
-    prerequisites.push({
-      id: 'gate-dcd',
-      title: 'Civil Defence (DCD) Fire & Life Safety Clearance',
-      category: 'authority_noc',
-      isSatisfied: dwaApproved(dcd),
-      sourceReference: dcd?.referenceNumber || 'Pending DCD Inspection',
-      mandatoryForNextStage: true,
-    });
+    for (const noc of handoverNocs) {
+      prerequisites.push({
+        id: `gate-noc-${noc.id || noc.sequenceNumber}`,
+        title: `${noc.reviewingAuthority ? noc.reviewingAuthority + ': ' : ''}${noc.description}`,
+        category: 'authority_noc',
+        isSatisfied: isNocSatisfied(noc),
+        sourceReference:
+          noc.referenceNumber ||
+          (noc.status === 'Approved'
+            ? 'Approved'
+            : noc.status === 'Not Needed'
+              ? 'Exempt'
+              : 'Pending Authority Inspection'),
+        mandatoryForNextStage: true,
+      });
+    }
+
+    if (handoverNocs.length === 0) {
+      prerequisites.push({
+        id: 'gate-dcd',
+        title: 'Civil Defence (DCD) Fire & Life Safety Clearance',
+        category: 'authority_noc',
+        isSatisfied: false,
+        sourceReference: 'Pending DCD Inspection',
+        mandatoryForNextStage: true,
+      });
+    }
 
     prerequisites.push({
       id: 'gate-bcc',
@@ -379,6 +397,4 @@ export function evaluateStageGateReadiness(
   };
 }
 
-function dwaApproved(noc?: ProjectNocItem): boolean {
-  return noc?.status === 'Approved';
-}
+
