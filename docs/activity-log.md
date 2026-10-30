@@ -1,5 +1,43 @@
 # Activity Log
 
+## Session 2026-10-30
+
+- Enforced Strict Security and Validation Gates on Statutory Checklist Requirements:
+  - Background & Objective: Prevent unauthorized tampering or premature statutory submission when requirements are unsatisfied.
+  - Implementation:
+    - Pushed migration `20261030010000_lockdown_project_noc_requirements_rls.sql`: restricted RLS policy strictly to Admin, Authority Engineer, and DC roles.
+    - Added backend validation gate in [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts): blocked `submitNocApplication` if any requirement is unsatisfied unless Admin supplies documented statutory waiver (>= 15 chars).
+    - Locked requirement toggle in [app/(app)/noc-tracker/actions.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/noc-tracker/actions.ts): blocked toggling requirements on approved NOCs for non-admin users and logged audit trail event `NOC_REQUIREMENT_TOGGLED`.
+    - Added UI validation in [components/noc/submission-modal.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/submission-modal.tsx): renders warning banner for incomplete checklists, disables submission button for non-admins, and requires justification textarea for Admin waivers.
+    - Locked UI buttons in [components/noc/noc-inspector-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-inspector-drawer.tsx): disabled checklist buttons for read-only roles and locked approved NOCs.
+  - Verification:
+    - Pushed migration to Supabase: succeeded.
+    - Verified `pnpm build`: 24/24 static and dynamic routes compiled with 0 errors.
+
+- Synchronized NOC Matrix Blueprint Requirements with Live Project NOCs:
+  - Background & Objective: Checklist requirements in NOC Matrix blueprints failed to appear in Project 26003 NOC Tracker drawer (showing `0/0 satisfied`).
+  - Root Cause: Missing Postgres table grants on `project_noc_requirements`, omission of requirements propagation in `save_matrix_item_atomic` and `create_matrix_item_atomic` RPCs, and lack of a server action to persist toggled requirements.
+  - Implementation:
+    - Created migration `20261030000000_sync_project_noc_requirements.sql`: granted privileges on `project_noc_requirements` to `authenticated`, `service_role`, `anon`.
+    - Enhanced RPCs `save_matrix_item_atomic` and `create_matrix_item_atomic` to clone and propagate checklist items into `project_noc_requirements` for active projects.
+    - Backfilled missing requirements for Project 26003: populated 9 items for Seq #01 and 18 items for Seq #02.
+    - Added `toggleProjectNocRequirement` server action in [app/(app)/noc-tracker/actions.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/noc-tracker/actions.ts).
+    - Integrated optimistic toggle persistence into [components/noc/noc-inspector-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-inspector-drawer.tsx).
+  - Verification:
+    - Executed Supabase migration push: completed successfully.
+    - Verified live database: Project 26003 NOC #01 now has 9 requirements, NOC #02 has 18 requirements.
+    - Verified `next build`: 24/24 static and dynamic routes compiled with 0 errors.
+
+- Fixed Fee Payer Classification Display Value in NOC Inspector Drawer:
+  - Background & Objective: In [components/noc/noc-inspector-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-inspector-drawer.tsx), selecting a fee payer rendered the raw unformatted value (e.g. `contractor`) in a narrow button rather than the matched option label (`Contractor`).
+  - Root Cause: Base UI's `<Select>` was missing `items={PAYER_OPTIONS}` and `<SelectValue>` lacked child label resolution, defaulting to raw value display. The trigger was also missing `w-full`.
+  - Implementation:
+    - Passed `items={PAYER_OPTIONS}` to `<Select>`.
+    - Added `{PAYER_OPTIONS.find((opt) => opt.value === feePayer)?.label}` inside `<SelectValue>`.
+    - Set `<SelectTrigger>` to `w-full` for aligned layout with adjacent form fields.
+  - Verification:
+    - TypeScript check `tsc --noEmit` passed with 0 errors.
+
 ## Session 2026-10-27
 
 - Completely Removed Hardcoded Project Code Special-Casing (`isBaselineDemoProject`):

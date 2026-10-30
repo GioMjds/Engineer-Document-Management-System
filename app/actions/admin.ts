@@ -455,7 +455,12 @@ export async function createProject(
             title,
             is_satisfied: false,
           }));
-          await adminClient.from('project_noc_requirements').insert(reqInserts);
+          const { error: reqInsertError } = await adminClient
+            .from('project_noc_requirements')
+            .insert(reqInserts);
+          if (reqInsertError) {
+            console.error('Failed to clone project_noc_requirements:', reqInsertError);
+          }
         }
       }
     }

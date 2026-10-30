@@ -5,7 +5,7 @@
 > **Test Project Code**: `26003` (or any fresh 5-digit number, e.g., `26004`)  
 > **Baseline Reference**: [CVTEC_EDMS.md](file:///D:/giomj/Projects/engineer-docs-collab/CVTEC_EDMS.md)  
 > **Simulated System Date**: **22 Oct 2026**  
-> **Universal Password**: `Password123!`
+> **Universal Password**: `cvtec123`
 
 ---
 

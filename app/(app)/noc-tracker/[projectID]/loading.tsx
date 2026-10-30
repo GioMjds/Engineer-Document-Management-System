@@ -93,7 +93,7 @@ export default function NocProjectLoading() {
             <div className="flex flex-col items-stretch gap-2.5 md:flex-row w-full">
               {/* Active Stage (Stage 1: Pre-Construction) */}
               <div className="flex-1 flex flex-col">
-                <div className="flex h-full min-h-26 flex-col justify-between rounded border-2 border-zinc-900 bg-white p-3 shadow-xs dark:border-zinc-100 dark:bg-zinc-950">
+                <div className="flex h-full min-h-26 flex-col justify-between rounded bg-white p-3 shadow-xs dark:border-zinc-100 dark:bg-zinc-950">
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <Bone w={80} h={22} r={4} />

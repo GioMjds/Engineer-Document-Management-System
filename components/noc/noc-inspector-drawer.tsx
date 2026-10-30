@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import {
   X,
   CheckCircle2,
@@ -17,7 +18,6 @@ import {
   ChevronUp,
   Send,
   FileCheck,
-  FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SubmissionModal } from './submission-modal';
@@ -45,7 +45,6 @@ import {
 import { NocStatusBadge } from './noc-status-badge';
 import type {
   ProjectNocItem,
-  NocStatus,
   NocPayerType,
   NocResubmissionEntry,
   ProjectDocumentItem,
@@ -56,6 +55,7 @@ import {
   recordNocFeePayment,
   resubmitNocRevision,
   adminOverridePrerequisiteSequence,
+  toggleProjectNocRequirement,
 } from '@/app/(app)/noc-tracker/actions';
 import { toast } from 'sonner';
 
@@ -229,42 +229,51 @@ export function NocInspectorDrawer({
     toast.success('Marked fee as Unpaid.');
   }
 
-  function handleToggleRequirement(reqId: string) {
+  async function handleToggleRequirement(reqId: string) {
     if (!item) return;
+    if (!can(currentUserRole, 'noc.tracker.update')) {
+      toast.error('Only Authority Engineers, Document Controllers, or Admins can check statutory requirements.');
+      return;
+    }
+    if (item.status === 'Approved' && currentUserRole !== 'admin') {
+      toast.error('NOC is already Approved. Only Admins can modify requirements on approved NOCs.');
+      return;
+    }
+    const target = item.requirements.find((r) => r.id === reqId);
+    if (!target) return;
+    const nextIsSatisfied = !target.isSatisfied;
+    const previousRequirements = item.requirements;
+
     const nextRequirements = item.requirements.map((r) =>
-      r.id === reqId ? { ...r, isSatisfied: !r.isSatisfied } : r,
+      r.id === reqId ? { ...r, isSatisfied: nextIsSatisfied } : r,
     );
+
+    // Optimistic UI update
     onUpdateNoc({
       ...item,
       requirements: nextRequirements,
       updatedAt: new Date().toISOString(),
     });
-  }
 
-  function handleStatusChange(newStatus: NocStatus) {
-    if (!item) return;
-    if (newStatus === 'Approved' && currentUserRole === 'engineer') {
-      toast.error(
-        'Authority approvals require Resident Engineer, Area Manager, or Admin authority.',
-      );
-      return;
+    try {
+      const res = await toggleProjectNocRequirement(reqId, nextIsSatisfied);
+      if (!res.ok) {
+        toast.error(res.error || 'Failed to update requirement');
+        // Rollback on failure
+        onUpdateNoc({
+          ...item,
+          requirements: previousRequirements,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    } catch {
+      toast.error('Failed to update requirement');
+      onUpdateNoc({
+        ...item,
+        requirements: previousRequirements,
+        updatedAt: new Date().toISOString(),
+      });
     }
-    if (newStatus === 'Approved' && isBlocked) {
-      toast.error(
-        'Cannot mark Approved: prerequisite blocking sequence is not satisfied.',
-      );
-      return;
-    }
-    onUpdateNoc({
-      ...item,
-      status: newStatus,
-      issuanceDate:
-        newStatus === 'Approved' && !item.issuanceDate
-          ? new Date().toISOString().split('T')[0]
-          : item.issuanceDate,
-      updatedAt: new Date().toISOString(),
-    });
-    toast.success(`NOC status updated to ${newStatus}.`);
   }
 
   async function handleResubmit() {
@@ -604,16 +613,16 @@ export function NocInspectorDrawer({
                       </p>
 
                       <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground border-t border-border/60">
-                        <span className="truncate max-w-[200px] font-mono text-[10px]">
+                        <span className="truncate max-w-50 font-mono text-[10px]">
                           {doc.fileName || `${doc.docNumber}-${doc.revision}.pdf`}
                         </span>
-                        <a
+                        <Link
                           href={`/documents?search=${encodeURIComponent(doc.docNumber)}`}
                           className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
                         >
                           <span>Open Package</span>
                           <ExternalLink className="h-3 w-3" />
-                        </a>
+                        </Link>
                       </div>
                     </div>
                   );
@@ -741,10 +750,13 @@ export function NocInspectorDrawer({
                   </Label>
                   <Select
                     value={feePayer}
+                    items={PAYER_OPTIONS}
                     onValueChange={(val) => setFeePayer(val as NocPayerType)}
                   >
-                    <SelectTrigger id="fee-payer" className="h-8 text-xs mt-1">
-                      <SelectValue placeholder="Select fee payer" />
+                    <SelectTrigger id="fee-payer" className="w-full h-8 text-xs mt-1">
+                      <SelectValue placeholder="Select fee payer">
+                        {PAYER_OPTIONS.find((opt) => opt.value === feePayer)?.label}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {PAYER_OPTIONS.map((opt) => (
@@ -956,40 +968,59 @@ export function NocInspectorDrawer({
             </div>
 
             <ul className="space-y-1.5 pt-1">
-              {item.requirements.map((req) => (
-                <li
-                  key={req.id}
-                  className="flex items-start gap-2 p-1.5 rounded hover:bg-muted/50 text-xs transition-colors"
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleToggleRequirement(req.id)}
-                    className="mt-0.5 text-muted-foreground hover:text-foreground"
+              {item.requirements.map((req) => {
+                const canToggle =
+                  can(currentUserRole, 'noc.tracker.update') &&
+                  (item.status !== 'Approved' || currentUserRole === 'admin');
+
+                return (
+                  <li
+                    key={req.id}
+                    className="flex items-start gap-2 p-1.5 rounded hover:bg-muted/50 text-xs transition-colors"
                   >
-                    {req.isSatisfied ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    ) : (
-                      <Circle className="h-4 w-4 text-zinc-400" />
-                    )}
-                  </button>
-                  <div className="flex-1">
-                    <span
-                      className={
-                        req.isSatisfied
-                          ? 'line-through text-muted-foreground'
-                          : 'font-medium'
+                    <button
+                      type="button"
+                      disabled={!canToggle}
+                      onClick={() => handleToggleRequirement(req.id)}
+                      className={cn(
+                        'mt-0.5 transition-colors',
+                        canToggle
+                          ? 'text-muted-foreground hover:text-foreground cursor-pointer'
+                          : 'opacity-50 cursor-not-allowed',
+                      )}
+                      title={
+                        !can(currentUserRole, 'noc.tracker.update')
+                          ? 'Only Authority Engineers, Document Controllers, or Admins can check statutory requirements.'
+                          : item.status === 'Approved' && currentUserRole !== 'admin'
+                          ? 'NOC is approved. Locked.'
+                          : undefined
                       }
                     >
-                      {req.title}
-                    </span>
-                    {req.fileName && (
-                      <span className="block font-mono text-[11px] text-muted-foreground mt-0.5">
-                        Attached: {req.fileName}
+                      {req.isSatisfied ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      ) : (
+                        <Circle className="h-4 w-4 text-zinc-400" />
+                      )}
+                    </button>
+                    <div className="flex-1">
+                      <span
+                        className={
+                          req.isSatisfied
+                            ? 'line-through text-muted-foreground'
+                            : 'font-medium'
+                        }
+                      >
+                        {req.title}
                       </span>
-                    )}
-                  </div>
-                </li>
-              ))}
+                      {req.fileName && (
+                        <span className="block font-mono text-[11px] text-muted-foreground mt-0.5">
+                          Attached: {req.fileName}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </section>
 
@@ -1192,6 +1223,7 @@ export function NocInspectorDrawer({
         onOpenChange={setIsSubmissionModalOpen}
         noc={item}
         readyDocs={readyDocs}
+        currentUserRole={currentUserRole}
         onSubmitted={(updated) => onUpdateNoc(updated)}
       />
 

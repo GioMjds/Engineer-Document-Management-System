@@ -187,3 +187,71 @@ export async function adminOverridePrerequisiteSequence(
     return { ok: false, error: message };
   }
 }
+
+export async function toggleProjectNocRequirement(
+  requirementId: string,
+  isSatisfied: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireCan('noc.tracker.update');
+
+  if (!UUID_REGEX.test(requirementId)) {
+    return { ok: false, error: 'Invalid requirement ID' };
+  }
+
+  try {
+    const supabase = await createClient();
+    const now = new Date().toISOString();
+
+    // Verify requirement exists and check parent NOC approval lock
+    const { data: reqRow, error: reqFetchErr } = await supabase
+      .from('project_noc_requirements')
+      .select('id, title, project_noc_id, project_nocs!inner(status_code)')
+      .eq('id', requirementId)
+      .maybeSingle();
+
+    if (reqFetchErr || !reqRow) {
+      return { ok: false, error: 'Requirement not found' };
+    }
+
+    const nocStatus = (reqRow.project_nocs as { status_code?: string })?.status_code;
+    if (nocStatus === 'approved' && user.role !== 'admin') {
+      return {
+        ok: false,
+        error: 'NOC is already Approved. Only Admins can modify requirements on approved NOCs.',
+      };
+    }
+
+    const { error } = await supabase
+      .from('project_noc_requirements')
+      .update({
+        is_satisfied: isSatisfied,
+        updated_at: now,
+        updated_by: user.id,
+      })
+      .eq('id', requirementId);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    // Audit log requirement toggle
+    await supabase.from('audit_log').insert({
+      action: 'NOC_REQUIREMENT_TOGGLED',
+      actor_id: user.id,
+      entity: 'project_noc_requirements',
+      entity_id: requirementId,
+      metadata: {
+        title: reqRow.title,
+        project_noc_id: reqRow.project_noc_id,
+        is_satisfied: isSatisfied,
+      },
+    });
+
+    revalidatePath('/noc-tracker');
+    return { ok: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to update requirement';
+    return { ok: false, error: message };
+  }
+}
+

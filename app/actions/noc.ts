@@ -20,6 +20,7 @@ const submitNocSchema = z.object({
   authorityReference: z.string().trim().min(1, 'Authority reference number is required'),
   submittedAt: z.string().trim().min(1, 'Submission date is required'),
   submissionProofUrl: z.string().optional(),
+  statutoryWaiverReason: z.string().optional(),
 });
 
 const authorityDecisionSchema = z
@@ -65,6 +66,7 @@ export async function submitNocApplication(
     authorityReference: string;
     submittedAt: string;
     submissionProofUrl?: string;
+    statutoryWaiverReason?: string;
   },
 ): Promise<{ success: boolean; error?: string }> {
   const user = await requireCan('noc.tracker.update');
@@ -74,7 +76,7 @@ export async function submitNocApplication(
     return { success: false, error: parsed.error.issues[0]?.message || 'Invalid submission input' };
   }
 
-  const { authorityReference, submittedAt, submissionProofUrl } = parsed.data;
+  const { authorityReference, submittedAt, submissionProofUrl, statutoryWaiverReason } = parsed.data;
 
   try {
     const supabase = await createClient();
@@ -107,6 +109,32 @@ export async function submitNocApplication(
         }
       }
 
+      // Strict Validation: enforce all statutory checklist requirements are satisfied
+      const { data: requirements, error: reqErr } = await supabase
+        .from('project_noc_requirements')
+        .select('id, title, is_satisfied')
+        .eq('project_noc_id', nocId);
+
+      if (reqErr) {
+        return { success: false, error: reqErr.message };
+      }
+
+      const pendingReqs = (requirements || []).filter((r) => !r.is_satisfied);
+      if (pendingReqs.length > 0) {
+        const isAdmin = user.role === 'admin';
+        const trimmedWaiver = statutoryWaiverReason?.trim() || '';
+        const hasValidWaiver = isAdmin && trimmedWaiver.length >= 15;
+
+        if (!hasValidWaiver) {
+          const pendingTitles = pendingReqs.map((r) => `"${r.title}"`).slice(0, 3).join(', ');
+          const extra = pendingReqs.length > 3 ? ` and ${pendingReqs.length - 3} more` : '';
+          return {
+            success: false,
+            error: `Statutory submission blocked: ${pendingReqs.length} requirement(s) unsatisfied (${pendingTitles}${extra}). Complete all checklist items or provide documented Admin waiver (min 15 chars).`,
+          };
+        }
+      }
+
       const { error: updateError } = await supabase
         .from('project_nocs')
         .update({
@@ -114,6 +142,7 @@ export async function submitNocApplication(
           apply_date: submittedAt,
           status_code: 'applied',
           receipt_file_url: submissionProofUrl || null,
+          override_reason: statutoryWaiverReason?.trim() || currentNoc.override_reason,
           updated_at: now,
           updated_by: user.id,
         })
@@ -131,6 +160,8 @@ export async function submitNocApplication(
         metadata: {
           authorityReference,
           submittedAt,
+          statutoryWaiverReason: statutoryWaiverReason?.trim() || null,
+          pendingRequirementsCount: pendingReqs.length,
         },
       });
     }

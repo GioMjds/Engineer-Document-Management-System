@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Send, FileText, Calendar, Link as LinkIcon, CheckCircle2 } from 'lucide-react';
+import { Send, FileText, Calendar, Link as LinkIcon, CheckCircle2, AlertTriangle, ShieldAlert } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -16,13 +16,16 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { submitNocApplication } from '@/app/actions/noc';
 import type { ProjectNocItem, ProjectDocumentItem } from '@/types/noc';
+import type { AppRole } from '@/lib/permissions';
 
 const submissionSchema = z.object({
   referenceNo: z.string().trim().min(1, 'Authority tracking / reference number is required.'),
   submissionDate: z.string().min(1, 'Submission date is required.'),
   proofUrl: z.string(),
+  statutoryWaiverReason: z.string().optional(),
 });
 
 type SubmissionFormValues = z.infer<typeof submissionSchema>;
@@ -32,6 +35,7 @@ interface SubmissionModalProps {
   onOpenChange: (open: boolean) => void;
   noc: ProjectNocItem;
   readyDocs?: ProjectDocumentItem[];
+  currentUserRole?: string;
   onSubmitted: (updated: ProjectNocItem) => void;
 }
 
@@ -40,11 +44,17 @@ export function SubmissionModal({
   onOpenChange,
   noc,
   readyDocs = [],
+  currentUserRole,
   onSubmitted,
 }: SubmissionModalProps) {
+  const unsatisfiedReqs = (noc.requirements || []).filter((r) => !r.isSatisfied);
+  const isAdmin = currentUserRole === 'admin';
+  const isSubmissionBlocked = unsatisfiedReqs.length > 0 && !isAdmin;
+
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<SubmissionFormValues>({
     resolver: zodResolver(submissionSchema),
@@ -52,14 +62,29 @@ export function SubmissionModal({
       referenceNo: noc.referenceNumber || '',
       submissionDate: new Date().toISOString().split('T')[0],
       proofUrl: '',
+      statutoryWaiverReason: '',
     },
   });
 
+  const waiverReason = watch('statutoryWaiverReason') || '';
+  const canAdminSubmit = unsatisfiedReqs.length === 0 || (isAdmin && waiverReason.trim().length >= 15);
+
   async function onSubmit(values: SubmissionFormValues) {
+    if (unsatisfiedReqs.length > 0 && !isAdmin) {
+      toast.error('Submission blocked: all statutory checklist items must be satisfied.');
+      return;
+    }
+
+    if (unsatisfiedReqs.length > 0 && isAdmin && (!values.statutoryWaiverReason || values.statutoryWaiverReason.trim().length < 15)) {
+      toast.error('Admin waiver justification must be at least 15 characters.');
+      return;
+    }
+
     const res = await submitNocApplication(noc.id, {
       authorityReference: values.referenceNo,
       submittedAt: values.submissionDate,
       submissionProofUrl: values.proofUrl.trim() || undefined,
+      statutoryWaiverReason: values.statutoryWaiverReason?.trim() || undefined,
     });
 
     if (!res.success) {
@@ -74,6 +99,7 @@ export function SubmissionModal({
       referenceNumber: values.referenceNo,
       applyDate: values.submissionDate,
       receiptFileUrl: values.proofUrl.trim() || noc.receiptFileUrl,
+      overrideReason: values.statutoryWaiverReason?.trim() || noc.overrideReason,
       updatedAt: new Date().toISOString(),
     });
     onOpenChange(false);
@@ -94,6 +120,52 @@ export function SubmissionModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5 py-1">
+          {/* Statutory Checklist Validation Alert */}
+          {unsatisfiedReqs.length > 0 && (
+            <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
+              <div className="flex items-center gap-2 font-semibold text-amber-800 dark:text-amber-400">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>Statutory Checklist Incomplete ({unsatisfiedReqs.length} Pending)</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Authority rules require all statutory checklist items to be satisfied prior to submission:
+              </p>
+              <ul className="list-disc list-inside text-[11px] text-muted-foreground max-h-24 overflow-y-auto space-y-0.5 pl-1">
+                {unsatisfiedReqs.map((r) => (
+                  <li key={r.id} className="truncate">
+                    {r.title}
+                  </li>
+                ))}
+              </ul>
+              {isSubmissionBlocked && (
+                <div className="pt-1 border-t border-amber-500/20 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                  Submission is locked. Only an Admin can provide a statutory waiver to proceed.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Admin Waiver Justification Field */}
+          {unsatisfiedReqs.length > 0 && isAdmin && (
+            <div className="p-2.5 rounded bg-muted/60 border border-border space-y-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
+                <Label htmlFor="sub-waiver" className="text-xs font-semibold cursor-pointer">
+                  Admin Statutory Waiver Justification *
+                </Label>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Document reason for submitting with pending statutory items (min 15 characters). Logged to audit trail.
+              </p>
+              <Textarea
+                id="sub-waiver"
+                {...register('statutoryWaiverReason')}
+                placeholder="e.g. Preliminary submission authorized under authority fast-track memo #..."
+                className="text-xs h-16 resize-none"
+              />
+            </div>
+          )}
+
           {readyDocs.length > 0 && (
             <div className="p-2.5 rounded bg-emerald-50/70 border border-emerald-300 dark:bg-emerald-950/40 dark:border-emerald-800 text-xs space-y-1.5">
               <div className="flex items-center justify-between">
@@ -181,7 +253,7 @@ export function SubmissionModal({
             <Button
               type="submit"
               size="sm"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !canAdminSubmit}
               className="bg-primary text-primary-foreground font-semibold"
             >
               {isSubmitting ? 'Submitting...' : 'Confirm Submission'}
