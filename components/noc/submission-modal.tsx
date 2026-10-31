@@ -1,28 +1,38 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
-import { Send, FileText, Calendar, Link as LinkIcon, CheckCircle2, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { z } from 'zod';
+import { submitNocApplication } from '@/app/actions/noc';
+import { Button } from '@/components/ui/button';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  AlertTriangle,
+  Calendar,
+  CheckCircle2,
+  FileText,
+  Link as LinkIcon,
+  Send,
+  ShieldAlert,
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { submitNocApplication } from '@/app/actions/noc';
-import type { ProjectNocItem, ProjectDocumentItem } from '@/types/noc';
-import type { AppRole } from '@/lib/permissions';
+import type { ProjectDocumentItem, ProjectNocItem } from '@/types/noc';
 
 const submissionSchema = z.object({
-  referenceNo: z.string().trim().min(1, 'Authority tracking / reference number is required.'),
+  referenceNo: z
+    .string()
+    .trim()
+    .min(1, 'Authority tracking / reference number is required.'),
   submissionDate: z.string().min(1, 'Submission date is required.'),
   proofUrl: z.string(),
   statutoryWaiverReason: z.string().optional(),
@@ -47,14 +57,16 @@ export function SubmissionModal({
   currentUserRole,
   onSubmitted,
 }: SubmissionModalProps) {
-  const unsatisfiedReqs = (noc.requirements || []).filter((r) => !r.isSatisfied);
+  const unsatisfiedReqs = (noc.requirements || []).filter(
+    (r) => !r.isSatisfied,
+  );
   const isAdmin = currentUserRole === 'admin';
   const isSubmissionBlocked = unsatisfiedReqs.length > 0 && !isAdmin;
 
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<SubmissionFormValues>({
     resolver: zodResolver(submissionSchema),
@@ -66,16 +78,26 @@ export function SubmissionModal({
     },
   });
 
-  const waiverReason = watch('statutoryWaiverReason') || '';
-  const canAdminSubmit = unsatisfiedReqs.length === 0 || (isAdmin && waiverReason.trim().length >= 15);
+  const waiverReason = useWatch({ control, name: 'statutoryWaiverReason' }) || '';
+
+  const canAdminSubmit =
+    unsatisfiedReqs.length === 0 ||
+    (isAdmin && waiverReason.trim().length >= 15);
 
   async function onSubmit(values: SubmissionFormValues) {
     if (unsatisfiedReqs.length > 0 && !isAdmin) {
-      toast.error('Submission blocked: all statutory checklist items must be satisfied.');
+      toast.error(
+        'Submission blocked: all statutory checklist items must be satisfied.',
+      );
       return;
     }
 
-    if (unsatisfiedReqs.length > 0 && isAdmin && (!values.statutoryWaiverReason || values.statutoryWaiverReason.trim().length < 15)) {
+    if (
+      unsatisfiedReqs.length > 0 &&
+      isAdmin &&
+      (!values.statutoryWaiverReason ||
+        values.statutoryWaiverReason.trim().length < 15)
+    ) {
       toast.error('Admin waiver justification must be at least 15 characters.');
       return;
     }
@@ -99,7 +121,8 @@ export function SubmissionModal({
       referenceNumber: values.referenceNo,
       applyDate: values.submissionDate,
       receiptFileUrl: values.proofUrl.trim() || noc.receiptFileUrl,
-      overrideReason: values.statutoryWaiverReason?.trim() || noc.overrideReason,
+      overrideReason:
+        values.statutoryWaiverReason?.trim() || noc.overrideReason,
       updatedAt: new Date().toISOString(),
     });
     onOpenChange(false);
@@ -125,10 +148,14 @@ export function SubmissionModal({
             <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
               <div className="flex items-center gap-2 font-semibold text-amber-800 dark:text-amber-400">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span>Statutory Checklist Incomplete ({unsatisfiedReqs.length} Pending)</span>
+                <span>
+                  Statutory Checklist Incomplete ({unsatisfiedReqs.length}{' '}
+                  Pending)
+                </span>
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Authority rules require all statutory checklist items to be satisfied prior to submission:
+                Authority rules require all statutory checklist items to be
+                satisfied prior to submission:
               </p>
               <ul className="list-disc list-inside text-[11px] text-muted-foreground max-h-24 overflow-y-auto space-y-0.5 pl-1">
                 {unsatisfiedReqs.map((r) => (
@@ -139,7 +166,8 @@ export function SubmissionModal({
               </ul>
               {isSubmissionBlocked && (
                 <div className="pt-1 border-t border-amber-500/20 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                  Submission is locked. Only an Admin can provide a statutory waiver to proceed.
+                  Submission is locked. Only an Admin can provide a statutory
+                  waiver to proceed.
                 </div>
               )}
             </div>
@@ -150,12 +178,16 @@ export function SubmissionModal({
             <div className="p-2.5 rounded bg-muted/60 border border-border space-y-1.5">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                 <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
-                <Label htmlFor="sub-waiver" className="text-xs font-semibold cursor-pointer">
+                <Label
+                  htmlFor="sub-waiver"
+                  className="text-xs font-semibold cursor-pointer"
+                >
                   Admin Statutory Waiver Justification *
                 </Label>
               </div>
               <p className="text-[10px] text-muted-foreground">
-                Document reason for submitting with pending statutory items (min 15 characters). Logged to audit trail.
+                Document reason for submitting with pending statutory items (min
+                15 characters). Logged to audit trail.
               </p>
               <Textarea
                 id="sub-waiver"
@@ -173,7 +205,7 @@ export function SubmissionModal({
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                   Included Submission Package ({readyDocs.length})
                 </span>
-                <span className="text-[10px] font-mono uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-900 px-1 rounded">
+                <span className="text-[10px] font-mono uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 px-1 rounded">
                   RE Approved
                 </span>
               </div>
@@ -204,7 +236,9 @@ export function SubmissionModal({
               />
             </div>
             {errors.referenceNo && (
-              <p className="text-xs text-destructive mt-1">{errors.referenceNo.message}</p>
+              <p className="text-xs text-destructive mt-1">
+                {errors.referenceNo.message}
+              </p>
             )}
           </div>
 
@@ -222,7 +256,9 @@ export function SubmissionModal({
               />
             </div>
             {errors.submissionDate && (
-              <p className="text-xs text-destructive mt-1">{errors.submissionDate.message}</p>
+              <p className="text-xs text-destructive mt-1">
+                {errors.submissionDate.message}
+              </p>
             )}
           </div>
 

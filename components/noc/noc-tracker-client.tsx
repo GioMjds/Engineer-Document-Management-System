@@ -88,11 +88,11 @@ export function NocTrackerClient({
   const [milestones, setMilestones] = useState<StageMilestoneDates>(
     project.milestones && Object.keys(project.milestones).length > 0
       ? project.milestones
-      : INITIAL_PROJECT_MILESTONES[project.code] ?? {},
+      : (INITIAL_PROJECT_MILESTONES[project.code] ?? {}),
   );
   const [isGateDrawerOpen, setIsGateDrawerOpen] = useState(false);
   const [nocItems, setNocItems] = useState<ProjectNocItem[]>(initialNocs);
-  const [activeStage, setActiveStage] = useState<string>('Design NOC');
+  const [activeStage, setActiveStage] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [authorityFilter, setAuthorityFilter] =
     useState<string>(ALL_AUTHORITIES);
@@ -101,7 +101,8 @@ export function NocTrackerClient({
 
   // Sync initialNocs when parent server component re-renders.
   useEffect(() => {
-    setNocItems(initialNocs);
+    const timeoutId = window.setTimeout(() => setNocItems(initialNocs), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [initialNocs]);
 
   // Synchronize stored milestones and lifecycle stages after mount.
@@ -110,9 +111,12 @@ export function NocTrackerClient({
       project.code,
       project.lifecycleStage || 'Pre-Construction',
     );
-    if (storedStage && storedStage !== (project.lifecycleStage || 'Pre-Construction')) {
-      setLifecycleStage(storedStage);
-    }
+    const nextStage =
+      storedStage &&
+      storedStage !== (project.lifecycleStage || 'Pre-Construction')
+        ? storedStage
+        : null;
+    let nextMilestones: StageMilestoneDates | null = null;
 
     if (!project.milestones || Object.keys(project.milestones).length === 0) {
       const storedMilestones = getStoredProjectMilestones(
@@ -120,10 +124,18 @@ export function NocTrackerClient({
         project.milestones,
       );
       if (storedMilestones && Object.keys(storedMilestones).length > 0) {
-        setMilestones(storedMilestones);
+        nextMilestones = storedMilestones;
       }
     } else {
       saveStoredProjectMilestones(project.code, project.milestones);
+    }
+
+    if (nextStage || nextMilestones) {
+      const timeoutId = window.setTimeout(() => {
+        if (nextStage) setLifecycleStage(nextStage);
+        if (nextMilestones) setMilestones(nextMilestones);
+      }, 0);
+      return () => window.clearTimeout(timeoutId);
     }
   }, [project.code, project.lifecycleStage, project.milestones]);
 
@@ -292,6 +304,21 @@ export function NocTrackerClient({
           role="tablist"
           aria-label="NOC stage"
         >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeStage === 'all'}
+            onClick={() => {
+              setActiveStage('all');
+              setUrgentFilter(null);
+            }}
+            className={tabClass(activeStage === 'all')}
+          >
+            <span>All Stages</span>
+            <span className={countClass(activeStage === 'all')}>
+              {nocItems.length}
+            </span>
+          </button>
           {STAGES.map((st) => {
             const isActive = activeStage === st;
             return (
@@ -313,21 +340,6 @@ export function NocTrackerClient({
               </button>
             );
           })}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeStage === 'all'}
-            onClick={() => {
-              setActiveStage('all');
-              setUrgentFilter(null);
-            }}
-            className={tabClass(activeStage === 'all')}
-          >
-            <span>All Stages</span>
-            <span className={countClass(activeStage === 'all')}>
-              {nocItems.length}
-            </span>
-          </button>
         </div>
 
         <div className="flex items-center gap-2">

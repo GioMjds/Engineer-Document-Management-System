@@ -228,6 +228,8 @@ export function evaluateStageGateReadiness(
       isSatisfied: isTopoSatisfied,
       sourceReference: topoDoc?.docNumber || topo?.fileName,
       mandatoryForNextStage: true,
+      actionHint:
+        'Upload topographical survey document (CAD-E-001) in Technical Submittals or approve specialist study.',
     });
 
     const geotechDoc = projectDocuments?.find(
@@ -250,6 +252,8 @@ export function evaluateStageGateReadiness(
       isSatisfied: isGeotechSatisfied,
       sourceReference: geotechDoc?.docNumber || geotech?.fileName,
       mandatoryForNextStage: true,
+      actionHint:
+        'Upload geotechnical soil investigation (CAD-E-002) in Technical Submittals or approve specialist study.',
     });
 
     prerequisites.push({
@@ -259,6 +263,8 @@ export function evaluateStageGateReadiness(
       isSatisfied: Boolean(milestones.preConstruction?.conceptApprovalDate),
       sourceReference: milestones.preConstruction?.conceptApprovalDate,
       mandatoryForNextStage: true,
+      actionHint:
+        'Set Concept Approval date in Milestone Dates Reference below.',
     });
 
     // Dynamic statutory authority NOCs assigned to this project for Pre-Construction
@@ -279,6 +285,8 @@ export function evaluateStageGateReadiness(
               ? 'Exempt'
               : 'Pending Authority Clearance'),
         mandatoryForNextStage: true,
+        actionHint:
+          'Set NOC status to Approved or Not Needed (Exempt) in tracker table.',
       });
     }
 
@@ -290,6 +298,8 @@ export function evaluateStageGateReadiness(
       sourceReference:
         milestones.preConstruction?.buildingPermitDate || 'Pending Issuance',
       mandatoryForNextStage: true,
+      actionHint:
+        'Record Building Permit Issuance date in Milestone Dates Reference below.',
     });
   } else if (currentStage === 'Construction') {
     // Dynamic statutory authority NOCs assigned to this project for Construction
@@ -310,6 +320,8 @@ export function evaluateStageGateReadiness(
               ? 'Exempt'
               : 'Pending Authority Clearance'),
         mandatoryForNextStage: true,
+        actionHint:
+          'Set NOC status to Approved or Not Needed (Exempt) in tracker table.',
       });
     }
 
@@ -322,6 +334,8 @@ export function evaluateStageGateReadiness(
         structStatus === 'Approved' || structStatus === 'Client Approval',
       sourceReference: disciplineStatus?.structure.updatedBy,
       mandatoryForNextStage: true,
+      actionHint:
+        'Ensure Structure discipline status is marked Approved or Client Approval.',
     });
 
     prerequisites.push({
@@ -333,6 +347,8 @@ export function evaluateStageGateReadiness(
         disciplineStatus?.mep.status === 'Client Approval',
       sourceReference: disciplineStatus?.mep.updatedBy,
       mandatoryForNextStage: false,
+      actionHint:
+        'Ensure MEP discipline status is marked Approved or Client Approval.',
     });
   } else {
     // Handover Stage: Dynamic statutory authority NOCs assigned to this project
@@ -353,6 +369,8 @@ export function evaluateStageGateReadiness(
               ? 'Exempt'
               : 'Pending Authority Inspection'),
         mandatoryForNextStage: true,
+        actionHint:
+          'Set NOC status to Approved or Not Needed (Exempt) in tracker table.',
       });
     }
 
@@ -364,6 +382,8 @@ export function evaluateStageGateReadiness(
         isSatisfied: false,
         sourceReference: 'Pending DCD Inspection',
         mandatoryForNextStage: true,
+        actionHint:
+          'Clear Civil Defence Fire & Life Safety inspection and obtain clearance NOC.',
       });
     }
 
@@ -375,6 +395,8 @@ export function evaluateStageGateReadiness(
       sourceReference:
         milestones.handover?.bccIssuanceDate || 'Pending Authority Inspection',
       mandatoryForNextStage: true,
+      actionHint:
+        'Record Building Completion Certificate (BCC) issuance date in Milestone Dates Reference below.',
     });
   }
 

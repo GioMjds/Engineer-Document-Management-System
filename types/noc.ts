@@ -32,6 +32,7 @@ export interface StageGatePrerequisiteItem {
   isSatisfied: boolean;
   sourceReference?: string;
   mandatoryForNextStage: boolean;
+  actionHint?: string;
 }
 
 export interface StageGateReadiness {

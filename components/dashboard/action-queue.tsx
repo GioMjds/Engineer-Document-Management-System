@@ -77,11 +77,11 @@ function buildRows(
   return rows.sort((a, b) => b.rank - a.rank);
 }
 
-const SUBTITLE: Record<QueueFilter, string> = {
+const SUBTITLE = {
   all: 'Delayed submittals and expiring permits, most urgent first.',
   delayed: 'Showing delayed submittals only, most urgent first.',
   expiring: 'Showing NOCs expiring within 14 days, most urgent first.',
-};
+} satisfies Record<QueueFilter, string>;
 
 interface ActionQueueProps {
   delayItems: SubmittalDelayItem[];
@@ -174,7 +174,7 @@ export function ActionQueue({
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Link
-                      href={`/noc-tracker?project=${r.projectCode}`}
+                      href={`/noc-tracker/${r.projectCode}`}
                       className={cn(
                         buttonVariants({ variant: 'outline', size: 'sm' }),
                         'gap-1',

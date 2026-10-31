@@ -430,6 +430,24 @@ function StageGateDrawerContent({
                         )}
                       </div>
                     </div>
+                    {!p.isSatisfied && p.actionHint && (
+                      <div
+                        className="mt-2.5 pt-2 border-t border-amber-200/70 dark:border-amber-900/40 flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-900 dark:text-amber-200"
+                        role="note"
+                        aria-label={`Action required to satisfy ${p.title}`}
+                      >
+                        <ArrowRight
+                          className="h-3 w-3 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400"
+                          aria-hidden="true"
+                        />
+                        <span>
+                          <strong className="font-semibold text-amber-950 dark:text-amber-100">
+                            To satisfy:{' '}
+                          </strong>
+                          {p.actionHint}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))
               )}

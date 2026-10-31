@@ -2,6 +2,32 @@
 
 ## Session 2026-10-31
 
+- Built User Profile Update CRUD and Invitation Status Tracking:
+  - Background & Objective: The `/users` management page previously lacked an update/edit modal for users (particularly editing Engineer specializations, full names, roles, and active status), and showed all invited users as "Active" immediately upon invitation creation, obscuring whether an invitation had actually been accepted or remained pending.
+  - Implementation:
+    - Added `updateUser` and `resendUserInvite` server actions in [app/actions/admin.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/admin.ts) with strict admin security guards preventing self-demotion or deactivation and protecting the last active Admin.
+    - Updated [app/(app)/users/actions.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/users/actions.ts) with explicit async server action wrappers compatible with Next.js 16 Turbopack build constraints.
+    - Built [app/(app)/users/edit-user-dialog.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/users/edit-user-dialog.tsx) dialog with full name editing, dynamic role assignment, engineer specialty selection (`Architectural Engineer`, `MEP Engineer`, `Structural Engineer`, `Civil Engineer`, or custom specialty), live formatted name preview, and active/inactive status toggle.
+    - Built [app/(app)/users/resend-invite-button.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/users/resend-invite-button.tsx) client component enabling admins to re-trigger account activation emails for pending invitations.
+    - Updated [app/(app)/users/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/users/page.tsx) to query Supabase Auth user metadata (`confirmed_at`, `last_sign_in_at`), displaying accurate status badges (`Active`, `Pending Invite`, `Inactive`) and mounting row-level Edit and Resend actions.
+  - Verification:
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `pnpm build` passed compiling all 24 static and dynamic routes successfully.
+
+- Added Actionable Helping Guides to Pending Stage Gate Prerequisites:
+  - Background & Objective: In the NOC Tracker project detail view (`/noc-tracker/[projectID]`), users inspecting the Stage Gate Checklist saw only high-level status badges (`Pending Action`) without explicit instructions on how to resolve or satisfy blockers.
+  - Implementation:
+    - Updated [types/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/types/noc.ts) adding optional `actionHint` field to `StageGatePrerequisiteItem`.
+    - Updated [lib/project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts) populating concrete, category-specific resolution instructions across all lifecycle stages (`Pre-Construction`, `Construction`, `Handover`):
+      - Specialist studies: directs users to upload survey or soil report (`CAD-E-001`, `CAD-E-002`) in Technical Submittals or approve specialist studies.
+      - Regulatory milestones: directs users to record dates under Milestone Dates Reference section.
+      - Authority NOCs: directs users to mark NOC status as Approved or Not Needed (Exempt) in tracker table.
+      - Discipline sign-offs: directs users to ensure Structure/MEP disciplines reach Approved or Client Approval status.
+    - Updated [components/lifecycle/stage-gate-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/lifecycle/stage-gate-drawer.tsx) rendering an inline, high-density action guide label (`role="note"`, `aria-label`, semantic `<strong>To satisfy:</strong>`, Lucide `ArrowRight`) below each pending prerequisite card.
+  - Verification:
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `pnpm build` passed compiling 24/24 static and dynamic routes successfully.
+
 - Built Document Library Loading Skeleton with Zero Layout Shift and Strict A11y:
   - Background & Objective: Implement `loading.tsx` in `app/(app)/documents` using `react-loading-skeleton` following UI/UX Pro Max design intelligence rules to eliminate layout shifts (CLS < 0.1) and ensure seamless progressive loading feedback.
   - Implementation:
@@ -883,6 +909,20 @@
 
 
 ## Session 2026-10-31
+
+- Added Actionable Helping Guides to Pending Stage Gate Prerequisites:
+  - Background & Objective: In the NOC Tracker project detail view (`/noc-tracker/[projectID]`), users inspecting the Stage Gate Checklist saw only high-level status badges (`Pending Action`) without explicit instructions on how to resolve or satisfy blockers.
+  - Implementation:
+    - Updated [types/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/types/noc.ts) adding optional `actionHint` field to `StageGatePrerequisiteItem`.
+    - Updated [lib/project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts) populating concrete, category-specific resolution instructions across all lifecycle stages (`Pre-Construction`, `Construction`, `Handover`):
+      - Specialist studies: directs users to upload survey or soil report (`CAD-E-001`, `CAD-E-002`) in Technical Submittals or approve specialist studies.
+      - Regulatory milestones: directs users to record dates under Milestone Dates Reference section.
+      - Authority NOCs: directs users to mark NOC status as Approved or Not Needed (Exempt) in tracker table.
+      - Discipline sign-offs: directs users to ensure Structure/MEP disciplines reach Approved or Client Approval status.
+    - Updated [components/lifecycle/stage-gate-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/lifecycle/stage-gate-drawer.tsx) rendering an inline, high-density action guide label (`role="note"`, `aria-label`, semantic `<strong>To satisfy:</strong>`, Lucide `ArrowRight`) below each pending prerequisite card.
+  - Verification:
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `pnpm build` passed compiling 24/24 static and dynamic routes successfully.
 
 - Added intercepted route and modal for project documents:
   - Created [project-documents-modal-dialog.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-documents-modal-dialog.tsx) using Base UI `Dialog` for smooth router-backed overlay dismissal.

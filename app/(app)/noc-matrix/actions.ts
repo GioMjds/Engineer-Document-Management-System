@@ -219,13 +219,13 @@ export async function getMatrixTemplates(
       const reviewingAuthority =
         (reviewingAuthorityData?.name as ReviewingAuthority) || 'Authority';
       const rawReqs =
-        (item.requirements as Array<{
+        (item.requirements as {
           id: string;
           matrix_item_id: string;
           title: string;
           mandatory: boolean;
           sort_order: number;
-        }>) || [];
+        }[]) || [];
 
       return {
         id: item.id,

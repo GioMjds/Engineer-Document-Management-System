@@ -15,9 +15,7 @@ import type { Route } from 'next';
 
 export async function generateMetadata({
   params,
-}: {
-  params: Promise<{ code: string }>;
-}): Promise<Metadata> {
+}: PageProps<'/projects/[code]'>): Promise<Metadata> {
   const { code } = await params;
   return {
     title: `Project ${code} · Documents`,
