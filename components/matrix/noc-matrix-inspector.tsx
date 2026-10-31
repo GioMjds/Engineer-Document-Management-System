@@ -370,10 +370,10 @@ export function NocMatrixInspector({
                 </h4>
               </div>
               <Link
-                href={`/documents?q=${encodeURIComponent(item.reviewingAuthority)}`}
+                href="/documents"
                 className="inline-flex items-center gap-1 text-xs font-semibold text-(--site-cyan) hover:underline"
               >
-                <span>Jump to /documents</span>
+                <span>Jump to Documents</span>
                 <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
@@ -400,10 +400,10 @@ export function NocMatrixInspector({
                 </h4>
               </div>
               <Link
-                href={`/noc-tracker?authority=${encodeURIComponent(item.reviewingAuthority)}&stage=${encodeURIComponent(item.stage)}`}
+                href={`/noc-tracker/${item.masterAuthorityId}`}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline"
               >
-                <span>Jump to /noc-tracker</span>
+                <span>Jump to NOC Tracker</span>
                 <ArrowRight className="h-3 w-3" />
               </Link>
             </div>

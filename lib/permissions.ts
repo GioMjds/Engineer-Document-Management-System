@@ -24,6 +24,9 @@ export function normalizeRole(role: string | null | undefined): AppRole | null {
 
 const ALL = ROLES;
 
+// Crucial part of the app: which roles hold which capabilities. The PERMISSIONS object is used
+// to generate the navigation menu, to check access to pages and API routes, and to generate
+// the RLS policies for the database. It is also used in tests to verify that the matrix of capabilities is correct.
 export const PERMISSIONS = {
   'project.viewAll': ['admin', 'ceo', 'area_manager'],
   'project.create': ['admin'],
@@ -48,12 +51,7 @@ export const PERMISSIONS = {
   // Documents
   'document.view': ALL,
   // Upload includes uploading a new revision (R01, R02...) after a rejection.
-  'document.upload': [
-    'admin',
-    'authority_engineer',
-    'engineer',
-    'dc',
-  ],
+  'document.upload': ['admin', 'authority_engineer', 'engineer', 'dc'],
   // In-place edit or replace of ANY file in scope.
   'document.edit': ['admin', 'dc'],
   // In-place edit or replace of a file the user uploaded. Use canEditDocument(),
@@ -154,14 +152,11 @@ export type ExternalEvent = (typeof EXTERNAL_EVENTS)[number];
 export const EXPIRY_WARNING_DAYS = 14;
 
 /** Confirmed: all three events email both parties. */
-export const EXTERNAL_EMAIL_EVENTS: Record<
-  ExternalEvent,
-  readonly ExternalParty[]
-> = {
+export const EXTERNAL_EMAIL_EVENTS = {
   'noc.obtained': ['client', 'contractor'],
   'noc.expiring': ['client', 'contractor'],
   'noc.rejected': ['client', 'contractor'],
-};
+} satisfies Record<ExternalEvent, readonly ExternalParty[]>;
 
 export type AmountKind = 'client_consultant' | 'client_contractor';
 
@@ -170,13 +165,10 @@ export type AmountKind = 'client_consultant' | 'client_contractor';
  * The client is party to both contracts. The contractor is party only to the
  * client-contractor one, and must never be sent the (confidential) consultant amount.
  */
-export const EXTERNAL_EMAIL_AMOUNTS: Record<
-  ExternalParty,
-  readonly AmountKind[]
-> = {
+export const EXTERNAL_EMAIL_AMOUNTS = {
   client: ['client_consultant', 'client_contractor'],
   contractor: ['client_contractor'],
-};
+} satisfies Record<ExternalParty, readonly AmountKind[]>;
 
 export function externalRecipients(
   event: ExternalEvent,
@@ -206,8 +198,12 @@ export const NAV_ITEMS: ReadonlyArray<{
   { href: '/documents', label: 'Documents', capability: 'document.view' },
   { href: '/review', label: 'Review', capability: 'review.queue' },
   { href: '/archive', label: 'Archive', capability: 'archive.view' },
-  { href: '/authorities', label: 'Authorities', capability: 'authority.master.manage' },
-  { href: '/users', label: 'Users', capability: 'users.manage' },
+  {
+    href: '/authorities',
+    label: 'Authorities',
+    capability: 'authority.master.manage',
+  },
+  { href: '/users', label: 'Manage Users', capability: 'users.manage' },
   { href: '/audit-logs', label: 'Audit Logs', capability: 'audit.view' },
 ];
 

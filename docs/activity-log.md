@@ -2,6 +2,23 @@
 
 ## Session 2026-10-31
 
+- Added User Search, Status Filtering, and Soft-Delete Archive CRUD:
+  - Background & Objective: The `/users` management page lacked search capabilities and soft-delete archive mechanisms, preventing administrators from easily finding users by name, email, or discipline and archiving or restoring inactive users.
+  - Implementation:
+    - Added `archiveUser` and `reactivateUser` server actions in [app/actions/admin.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/admin.ts) and exported in [app/(app)/users/actions.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/users/actions.ts).
+    - Built [app/(app)/users/archive-user-dialog.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/users/archive-user-dialog.tsx) confirmation modal preventing accidental deactivation and explaining account suspension.
+    - Built [app/(app)/users/restore-user-button.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/users/restore-user-button.tsx) client component allowing admins to reactivate archived user accounts with one click.
+    - Built [app/(app)/users/user-table-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/users/user-table-client.tsx) client table featuring:
+      - Real-time text search across full name, email, and discipline specialty.
+      - Segmented status tabs (`All`, `Active`, `Pending`, `Archived`) with live count badges.
+      - System Role filter dropdown.
+      - Row-level actions (Edit, Resend Invite, Archive, Restore).
+      - Visual strikethrough and badge indicators for archived users.
+    - Refactored [app/(app)/users/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/users/page.tsx) to delegate table rendering to `UserTableClient`.
+  - Verification:
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `pnpm build` passed compiling all 24 static and dynamic routes successfully.
+
 - Built User Profile Update CRUD and Invitation Status Tracking:
   - Background & Objective: The `/users` management page previously lacked an update/edit modal for users (particularly editing Engineer specializations, full names, roles, and active status), and showed all invited users as "Active" immediately upon invitation creation, obscuring whether an invitation had actually been accepted or remained pending.
   - Implementation:
