@@ -5,6 +5,8 @@ import {
   updateUser as adminUpdateUser,
   updateUserRole as adminUpdateUserRole,
   deactivateUser as adminDeactivateUser,
+  archiveUser as adminArchiveUser,
+  reactivateUser as adminReactivateUser,
   resendUserInvite as adminResendUserInvite,
   type UpdateUserInput,
 } from '@/app/actions/admin';
@@ -31,6 +33,14 @@ export async function updateUserRole(input: {
 
 export async function deactivateUser(userId: string) {
   return adminDeactivateUser(userId);
+}
+
+export async function archiveUser(userId: string) {
+  return adminArchiveUser(userId);
+}
+
+export async function reactivateUser(userId: string) {
+  return adminReactivateUser(userId);
 }
 
 export async function resendUserInvite(email: string) {

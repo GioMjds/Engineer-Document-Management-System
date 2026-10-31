@@ -307,6 +307,52 @@ export async function deactivateUser(
   return { ok: true };
 }
 
+// Soft delete/archive a user profile by deactivating their account.
+export async function archiveUser(userId: string): Promise<ActionPromise> {
+  return deactivateUser(userId);
+}
+
+// Reactivate an archived user profile.
+export async function reactivateUser(userId: string): Promise<ActionPromise> {
+  const caller = await requireCan('users.manage');
+
+  const adminClient = createAdminClient();
+
+  const { data: targetProfile } = await adminClient
+    .from('profiles')
+    .select('role, email, full_name, active')
+    .eq('id', userId)
+    .single();
+
+  if (!targetProfile) {
+    return { ok: false, error: 'User profile not found.' };
+  }
+
+  const { error } = await adminClient
+    .from('profiles')
+    .update({ active: true })
+    .eq('id', userId);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  await adminClient.from('audit_log').insert({
+    actor_id: caller.id,
+    action: 'USER_REACTIVATE',
+    entity: 'profiles',
+    entity_id: userId,
+    metadata: {
+      target_email: targetProfile.email,
+      target_name: targetProfile.full_name,
+      role: targetProfile.role,
+    },
+  });
+
+  revalidatePath('/users');
+  return { ok: true };
+}
+
 // Update profile details, system role, and active status.
 export async function updateUser(
   input: UpdateUserInput,
