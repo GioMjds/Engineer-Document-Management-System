@@ -1,5 +1,24 @@
 # Activity Log
 
+## Session 2026-10-31
+
+- Redesigned Document Row Actions with Engineered Segmented Toolbar and Rich Tooltips:
+  - Background & Objective: The 4 document action buttons (Download file, Edit metadata, Upload revision, Archive document) were previously tiny (24x24px), unsegmented icon-only buttons with browser-native delayed `title` tooltips, lacking visual clarity and tactile touch feedback.
+  - Implementation:
+    - Created [components/ui/tooltip.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/ui/tooltip.tsx) using `@base-ui/react/tooltip` following project's Base Vega architecture.
+    - Redesigned [app/(app)/documents/document-row-actions.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/documents/document-row-actions.tsx):
+      - Desktop/Tablet: Segmented action pill (`border border-border/70 bg-card p-0.5 shadow-2xs`) with tactile 28px icon buttons and instant rich tooltips (action name, current revision, file name, descriptive hint).
+      - Semantic accents: Download (primary/spin loader), Edit (blue accent), Revise (signature cyan), Archive (destructive red separated by 1px vertical divider).
+      - Mobile: Adaptive `MoreHorizontal` popover menu featuring 44px touch targets and full labeled items.
+      - Polished Archive confirmation modal with document summary context.
+    - Updated [app/(app)/documents/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/documents/page.tsx) with a 4-tile engineering KPI metric ribbon (Total Documents, In Review, Approved/Ready, Revision Needed).
+    - Updated [app/(app)/documents/document-table-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/documents/document-table-client.tsx) table headers and padding (`w-36 text-right pr-3`).
+    - Captured automated screenshot at [docs/screenshots/documents-actions.png](file:///D:/giomj/Projects/engineer-docs-collab/docs/screenshots/documents-actions.png).
+  - Verification:
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `pnpm run build` completed successfully across all 24 routes.
+    - Captured live browser screenshot confirming rendering and interaction.
+
 ## Session 2026-10-30
 
 - Enforced Strict Security and Validation Gates on Statutory Checklist Requirements:
@@ -847,3 +866,13 @@
     - Updated `submitProject` in [project-form.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/new/project-form.tsx) to invoke `modalContext.closeModal()` instead of leaving the modal open via unhandled `router.push`.
   - Verified compilation with `npx tsc --noEmit` (0 errors) and `pnpm build` (24/24 routes compiled cleanly).
 
+
+## Session 2026-10-31
+
+- Added intercepted route and modal for project documents:
+  - Created [project-documents-modal-dialog.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-documents-modal-dialog.tsx) using Base UI `Dialog` for smooth router-backed overlay dismissal.
+  - Created [project-documents-view.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-documents-view.tsx) with document submittals table, real-time search, discipline filter tabs (with counts), status filter dropdown, summary counters, and secure single-click download actions.
+  - Implemented intercepted route [app/(app)/@modal/(.)projects/[code]/documents/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/@modal/(.)projects/[code]/documents/page.tsx) to render document details directly over the projects directory on client navigation without losing scroll or filters.
+  - Implemented standalone route [app/(app)/projects/[code]/documents/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/[code]/documents/page.tsx) with breadcrumb back navigation for direct URL navigation, bookmarking, and hard reloads.
+  - Updated [projects-workspace-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/projects-workspace-client.tsx) to link "Documents" in card view and "Docs" in table view to `/projects/${project.code}/documents`.
+  - Verified build with Next.js Turbopack (`npm run build`): compiled 25 routes with 0 errors.

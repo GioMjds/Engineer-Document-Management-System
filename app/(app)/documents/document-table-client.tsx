@@ -205,7 +205,7 @@ export function DocumentTableClient({
               <TableHead className="w-28 font-semibold whitespace-nowrap">
                 Submitted
               </TableHead>
-              <TableHead className="w-32 text-right font-semibold whitespace-nowrap">
+              <TableHead className="w-36 text-right font-semibold whitespace-nowrap pr-3">
                 Actions
               </TableHead>
             </TableRow>
@@ -295,7 +295,7 @@ export function DocumentTableClient({
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                       {new Date(d.created_at).toLocaleDateString()}
                     </TableCell>
-                    <TableCell className="text-right whitespace-nowrap">
+                    <TableCell className="text-right whitespace-nowrap pr-3">
                       <DocumentRowActions
                         document={{
                           id: d.id,

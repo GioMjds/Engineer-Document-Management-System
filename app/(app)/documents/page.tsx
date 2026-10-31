@@ -153,6 +153,67 @@ export default async function DocumentsPage() {
         )}
       </div>
 
+      {/* Quick Status Metric Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-2xs">
+          <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            Total Documents
+          </div>
+          <div className="mt-1 flex items-baseline justify-between">
+            <span className="text-xl font-bold font-mono text-foreground">
+              {mappedDocuments.length}
+            </span>
+            <span className="text-xs text-muted-foreground">in scope</span>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-3 shadow-2xs">
+          <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            In Review
+          </div>
+          <div className="mt-1 flex items-baseline justify-between">
+            <span className="text-xl font-bold font-mono text-[#0284c7]">
+              {
+                mappedDocuments.filter(
+                  (d) => d.status === 'submitted' || d.status === 'under_review',
+                ).length
+              }
+            </span>
+            <span className="text-xs text-muted-foreground">pending sign-off</span>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-3 shadow-2xs">
+          <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            Approved / Ready
+          </div>
+          <div className="mt-1 flex items-baseline justify-between">
+            <span className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+              {
+                mappedDocuments.filter(
+                  (d) =>
+                    d.status === 'approved' ||
+                    d.status === 'ready_for_authority',
+                ).length
+              }
+            </span>
+            <span className="text-xs text-muted-foreground">compliant</span>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-3 shadow-2xs">
+          <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            Revision Needed
+          </div>
+          <div className="mt-1 flex items-baseline justify-between">
+            <span className="text-xl font-bold font-mono text-amber-600 dark:text-amber-400">
+              {mappedDocuments.filter((d) => d.status === 'rejected').length}
+            </span>
+            <span className="text-xs text-muted-foreground">action required</span>
+          </div>
+        </div>
+      </div>
+
       <DocumentTableClient
         documents={mappedDocuments}
         projects={projects}

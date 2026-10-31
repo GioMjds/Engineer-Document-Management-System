@@ -684,7 +684,7 @@ function ProjectGridCard({
             NOC Tracker
           </Link>
           <Link
-            href={`/documents?project=${project.code}` as Route}
+            href={`/projects/${project.code}/documents` as Route}
             className={cn(
               buttonVariants({ variant: 'outline', size: 'sm' }),
               'h-8 gap-1.5 text-xs',
@@ -868,6 +868,15 @@ function ProjectsTableView({
                     </td>
                   )}
                   <td className="px-3 py-2.5 text-right space-x-1.5 whitespace-nowrap">
+                    <Link
+                      href={`/projects/${p.code}/documents` as Route}
+                      className={cn(
+                        buttonVariants({ variant: 'outline', size: 'sm' }),
+                        'h-7 px-2 text-[11px]',
+                      )}
+                    >
+                      Docs
+                    </Link>
                     <Link
                       href={`/noc-tracker/${p.code}` as Route}
                       className={cn(
