@@ -24,6 +24,15 @@ const inviteUserSchema = z.object({
   role: roleSchema,
 });
 
+const updateUserSchema = z.object({
+  user_id: z.uuid(),
+  full_name: z.string().min(2, 'Full name must be at least 2 characters.'),
+  role: roleSchema,
+  active: z.boolean(),
+});
+
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
 const updateRoleSchema = z.object({
   user_id: z.uuid(),
   role: roleSchema,
@@ -295,6 +304,174 @@ export async function deactivateUser(
   });
 
   revalidatePath('/users');
+  return { ok: true };
+}
+
+// Update profile details, system role, and active status.
+export async function updateUser(
+  input: UpdateUserInput,
+): Promise<ActionPromise> {
+  const caller = await requireCan('users.manage');
+
+  const parsed = updateUserSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? 'Invalid input.',
+    };
+  }
+
+  const { user_id, full_name, role, active } = parsed.data;
+
+  // Prevent admin from removing their own admin role or deactivating themselves.
+  if (user_id === caller.id) {
+    if (role !== 'admin') {
+      return { ok: false, error: 'You cannot remove your own Admin role.' };
+    }
+    if (active === false) {
+      return { ok: false, error: 'You cannot deactivate your own account.' };
+    }
+  }
+
+  const adminClient = createAdminClient();
+
+  // Prevent demoting or deactivating the last active Admin.
+  const { data: targetProfile } = await adminClient
+    .from('profiles')
+    .select('role, email, full_name, active')
+    .eq('id', user_id)
+    .single();
+
+  if (targetProfile?.role === 'admin' && (role !== 'admin' || !active)) {
+    const { count } = await adminClient
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('role', 'admin')
+      .eq('active', true);
+
+    if ((count ?? 0) <= 1) {
+      return {
+        ok: false,
+        error: 'Cannot demote or deactivate the last remaining active Admin.',
+      };
+    }
+  }
+
+  const { error: profileError } = await adminClient
+    .from('profiles')
+    .update({
+      full_name,
+      role,
+      active,
+    })
+    .eq('id', user_id);
+
+  if (profileError) {
+    return { ok: false, error: profileError.message };
+  }
+
+  // Synchronize role and name in auth metadata.
+  await adminClient.auth.admin.updateUserById(user_id, {
+    user_metadata: {
+      full_name,
+      role,
+    },
+  });
+
+  await adminClient.from('audit_log').insert({
+    actor_id: caller.id,
+    action: 'USER_UPDATE',
+    entity: 'profiles',
+    entity_id: user_id,
+    metadata: {
+      target_email: targetProfile?.email,
+      previous_name: targetProfile?.full_name,
+      new_name: full_name,
+      previous_role: targetProfile?.role,
+      new_role: role,
+      previous_active: targetProfile?.active,
+      new_active: active,
+    },
+  });
+
+  revalidatePath('/users');
+  return { ok: true };
+}
+
+// Resend invitation email with activation link to user.
+export async function resendUserInvite(email: string): Promise<ActionPromise> {
+  const caller = await requireCan('users.manage');
+
+  const parsedEmail = z.email().safeParse(email);
+  if (!parsedEmail.success) {
+    return { ok: false, error: 'Invalid email address.' };
+  }
+
+  const adminClient = createAdminClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+
+  const { data: targetProfile } = await adminClient
+    .from('profiles')
+    .select('id, full_name, role, active')
+    .eq('email', parsedEmail.data)
+    .single();
+
+  if (!targetProfile) {
+    return { ok: false, error: 'User profile not found.' };
+  }
+
+  const { data: linkData, error: linkError } =
+    await adminClient.auth.admin.generateLink({
+      type: 'invite',
+      email: parsedEmail.data,
+      options: {
+        data: {
+          full_name: targetProfile.full_name,
+          role: targetProfile.role,
+        },
+        redirectTo: `${siteUrl}/set-password`,
+      },
+    });
+
+  if (linkError || !linkData?.user) {
+    return {
+      ok: false,
+      error: linkError?.message ?? 'Failed to generate invitation link.',
+    };
+  }
+
+  const directActivationLink = linkData.properties?.hashed_token
+    ? `${siteUrl}/auth/confirm?token_hash=${linkData.properties.hashed_token}&type=invite&next=/set-password`
+    : (linkData.properties?.action_link ?? `${siteUrl}/set-password`);
+
+  if (process.env.RESEND_API_KEY) {
+    const emailResult = await sendUserInviteEmail({
+      email: parsedEmail.data,
+      fullName: targetProfile.full_name,
+      role: targetProfile.role,
+      actionLink: directActivationLink,
+    });
+
+    if (!emailResult.ok) {
+      return {
+        ok: false,
+        error: emailResult.error ?? 'Failed to send invite email.',
+      };
+    }
+  }
+
+  await adminClient.from('audit_log').insert({
+    actor_id: caller.id,
+    action: 'USER_INVITE_RESENT',
+    entity: 'profiles',
+    entity_id: targetProfile.id,
+    metadata: {
+      email: parsedEmail.data,
+      role: targetProfile.role,
+      full_name: targetProfile.full_name,
+    },
+  });
+
   return { ok: true };
 }
 

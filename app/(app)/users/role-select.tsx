@@ -63,7 +63,7 @@ export function RoleSelect({
     >
       <SelectTrigger className="w-52">
         <SelectValue>
-          {LABELS[value] ?? value}
+          {LABELS[value]}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
