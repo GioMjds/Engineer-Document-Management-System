@@ -544,9 +544,12 @@ function ProjectGridCard({
       {/* Top Banner */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="rounded bg-(--site-navy) px-2.5 py-0.5 font-mono text-xs font-bold text-white dark:bg-[#0e1c30] dark:text-(--site-cyan)">
+          <Link
+            href={`/projects/${project.code}` as Route}
+            className="rounded bg-(--site-navy) px-2.5 py-0.5 font-mono text-xs font-bold text-white transition-opacity hover:opacity-90 dark:bg-[#0e1c30] dark:text-(--site-cyan)"
+          >
             {project.code}
-          </span>
+          </Link>
           <Badge
             variant="outline"
             className={cn('text-xs font-medium', stageTone(project.lifecycleStage))}
@@ -569,7 +572,12 @@ function ProjectGridCard({
       {/* Project Title and Metadata */}
       <div className="mt-3 space-y-1.5">
         <h2 className="text-base font-bold tracking-tight text-foreground">
-          {project.name}
+          <Link
+            href={`/projects/${project.code}` as Route}
+            className="hover:underline"
+          >
+            {project.name}
+          </Link>
         </h2>
         <div className="grid grid-cols-1 gap-1 text-xs text-muted-foreground sm:grid-cols-2">
           <p className="flex items-center gap-1.5 truncate">
@@ -684,7 +692,7 @@ function ProjectGridCard({
             NOC Tracker
           </Link>
           <Link
-            href={`/projects/${project.code}/documents` as Route}
+            href={`/projects/${project.code}` as Route}
             className={cn(
               buttonVariants({ variant: 'outline', size: 'sm' }),
               'h-8 gap-1.5 text-xs',
@@ -815,12 +823,21 @@ function ProjectsTableView({
                   className="transition-colors hover:bg-muted/30"
                 >
                   <td className="px-3 py-2.5 font-mono font-bold text-foreground">
-                    {p.code}
+                    <Link
+                      href={`/projects/${p.code}` as Route}
+                      className="hover:underline"
+                    >
+                      {p.code}
+                    </Link>
                   </td>
                   <td className="px-3 py-2.5 font-medium text-foreground">
-                    <span className="block max-w-xs truncate" title={p.name}>
+                    <Link
+                      href={`/projects/${p.code}` as Route}
+                      className="block max-w-xs truncate hover:underline"
+                      title={p.name}
+                    >
                       {p.name}
-                    </span>
+                    </Link>
                     <span className="block text-[11px] text-muted-foreground truncate">
                       {p.location}
                     </span>
@@ -869,7 +886,7 @@ function ProjectsTableView({
                   )}
                   <td className="px-3 py-2.5 text-right space-x-1.5 whitespace-nowrap">
                     <Link
-                      href={`/projects/${p.code}/documents` as Route}
+                      href={`/projects/${p.code}` as Route}
                       className={cn(
                         buttonVariants({ variant: 'outline', size: 'sm' }),
                         'h-7 px-2 text-[11px]',

@@ -1,16 +1,33 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { getNocTrackerData } from '@/lib/server/noc-data';
-import { ProjectDocumentsModalDialog } from '@/components/projects/project-documents-modal-dialog';
 import {
   ProjectDocumentsView,
   type ProjectDocumentSummary,
 } from '@/components/projects/project-documents-view';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import type { Route } from 'next';
 
-export default async function InterceptedProjectDocumentsPage({
+export async function generateMetadata({
   params,
-}: PageProps<'/projects/[code]/documents'>) {
+}: {
+  params: Promise<{ code: string }>;
+}): Promise<Metadata> {
+  const { code } = await params;
+  return {
+    title: `Project ${code} · Documents`,
+    description: `Engineering submittals and document records for project ${code}`,
+  };
+}
+
+export default async function StandaloneProjectPage({
+  params,
+}: PageProps<'/projects/[code]'>) {
   const { code } = await params;
   await requireUser();
 
@@ -77,19 +94,34 @@ export default async function InterceptedProjectDocumentsPage({
   }
 
   return (
-    <ProjectDocumentsModalDialog>
-      <ProjectDocumentsView
-        project={{
-          id: projectId,
-          code: project.code,
-          name: project.name,
-          description: project.name,
-          masterAuthority: project.masterAuthority,
-          lifecycleStage: project.lifecycleStage,
-        }}
-        documents={documents}
-        isModal={true}
-      />
-    </ProjectDocumentsModalDialog>
+    <div className="space-y-4 py-2">
+      <div className="flex items-center gap-2">
+        <Link
+          href={'/projects' as Route}
+          className={cn(
+            buttonVariants({ variant: 'ghost', size: 'sm' }),
+            'h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <ArrowLeft className="mr-1.5 size-3.5" />
+          Back to Projects
+        </Link>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
+        <ProjectDocumentsView
+          project={{
+            id: projectId,
+            code: project.code,
+            name: project.name,
+            description: project.name,
+            masterAuthority: project.masterAuthority,
+            lifecycleStage: project.lifecycleStage,
+          }}
+          documents={documents}
+          isModal={false}
+        />
+      </div>
+    </div>
   );
 }

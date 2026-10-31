@@ -2,6 +2,21 @@
 
 ## Session 2026-10-31
 
+- Built Document Library Loading Skeleton with Zero Layout Shift and Strict A11y:
+  - Background & Objective: Implement `loading.tsx` in `app/(app)/documents` using `react-loading-skeleton` following UI/UX Pro Max design intelligence rules to eliminate layout shifts (CLS < 0.1) and ensure seamless progressive loading feedback.
+  - Implementation:
+    - Built [app/(app)/documents/loading.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/documents/loading.tsx) with semantic accessibility attributes (`role="status"`, `aria-busy="true"`, `aria-live="polite"`, `sr-only` description, `aria-hidden="true"` content tree).
+    - Integrated `SkeletonTheme` utilizing theme tokens `var(--skeleton-base)` and `var(--skeleton-highlight)` for light/dark mode support.
+    - Mirrored exact dimensions of `DocumentsPage`:
+      - Header: Document Library title, description, and primary CTA button skeleton.
+      - KPI Strip: 4 metric cards (Total Documents, In Review, Approved / Ready, Revision Needed) with exact padding and typography.
+      - Filters Bar: Search input shell, project dropdown, discipline dropdown, status dropdown, and document count bone.
+      - Data Table: Full `Table`, `TableHeader`, `TableRow`, `TableHead`, and `TableCell` hierarchy mirroring `DocumentTableClient` with 6 realistic data row presets and segmented action pill skeletons.
+    - Verified visual rendering and generated screenshot at [docs/screenshots/documents-loading.png](file:///D:/giomj/Projects/engineer-docs-collab/docs/screenshots/documents-loading.png).
+  - Verification:
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `pnpm run build` compiled 24/24 static and dynamic routes successfully.
+
 - Redesigned Document Row Actions with Engineered Segmented Toolbar and Rich Tooltips:
   - Background & Objective: The 4 document action buttons (Download file, Edit metadata, Upload revision, Archive document) were previously tiny (24x24px), unsegmented icon-only buttons with browser-native delayed `title` tooltips, lacking visual clarity and tactile touch feedback.
   - Implementation:
@@ -876,3 +891,11 @@
   - Implemented standalone route [app/(app)/projects/[code]/documents/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/[code]/documents/page.tsx) with breadcrumb back navigation for direct URL navigation, bookmarking, and hard reloads.
   - Updated [projects-workspace-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/projects-workspace-client.tsx) to link "Documents" in card view and "Docs" in table view to `/projects/${project.code}/documents`.
   - Verified build with Next.js Turbopack (`npm run build`): compiled 25 routes with 0 errors.
+
+- Updated intercepted route to clean `/projects/[code]` URL scheme:
+  - Created intercepted route [app/(app)/@modal/(.)projects/[code]/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/@modal/(.)projects/[code]/page.tsx) to intercept `/projects/[code]`.
+  - Created standalone fallback route [app/(app)/projects/[code]/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/[code]/page.tsx) for direct navigation and browser reloads.
+  - Removed outdated `[code]/documents` subdirectories from both `@modal/(.)projects` and `projects`.
+  - Cleared stale `.next/types/validator.ts` cache that caused missing module errors (`TS2307`).
+  - Updated [projects-workspace-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/projects-workspace-client.tsx) card code, card title, Documents button, table row code, table row title, and Docs button to link to `/projects/${project.code}`.
+  - Verified with `npx tsc --noEmit`: 0 errors.
