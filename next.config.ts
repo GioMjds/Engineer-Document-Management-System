@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     useOffline: true,
+    turbopackRustReactCompiler: true,
+    turbopackGc: true,
+    turbopackPluginRuntimeStrategy: 'workerThreads',
   },
   async headers() {
     return [
