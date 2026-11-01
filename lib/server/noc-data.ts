@@ -1,24 +1,24 @@
-import { createClient } from '@/lib/supabase/server';
-import {
-  SEED_PROJECTS,
-  INITIAL_NOCS_PROJECT_26001,
-  INITIAL_NOCS_PROJECT_23016,
-  INITIAL_NOCS_PROJECT_23015,
-} from '@/lib/noc-tracker';
 import { getAuthorityName } from '@/lib/noc-matrix';
+import {
+  INITIAL_NOCS_PROJECT_23015,
+  INITIAL_NOCS_PROJECT_23016,
+  INITIAL_NOCS_PROJECT_26001,
+  SEED_PROJECTS,
+} from '@/lib/noc-tracker';
+import { createClient } from '@/lib/supabase/server';
 import type {
   AssignedProject,
-  ProjectNocItem,
   MasterAuthority,
-  ReviewingAuthority,
-  NocStage,
-  NocStatus,
-  SubmittedBy,
   NocPayerType,
   NocRequirement,
   NocResubmissionEntry,
+  NocStage,
+  NocStatus,
   ProjectLifecycleStage,
+  ProjectNocItem,
+  ReviewingAuthority,
   StageMilestoneDates,
+  SubmittedBy,
 } from '@/types/noc';
 
 export interface NocTrackerData {
@@ -114,6 +114,8 @@ function mapDbProjectToAssigned(
     docController: seed?.assignedRoles.docController ?? 'Unassigned',
   };
 
+  const memberIds: NonNullable<AssignedProject['assignedMemberIds']> = {};
+
   if (p.project_members && Array.isArray(p.project_members)) {
     for (const pm of p.project_members) {
       const profile = pm.profiles;
@@ -123,51 +125,59 @@ function mapDbProjectToAssigned(
       switch (profile.role) {
         case 'authority_engineer':
           roles.authorityEngineer = name;
+          memberIds.authorityEngineer = pm.user_id;
           break;
         case 'resident_engineer':
           roles.residentEngineer = name;
+          memberIds.residentEngineer = pm.user_id;
           break;
         case 'area_manager':
           roles.areaManager = name;
+          memberIds.areaManager = pm.user_id;
           break;
         case 'dc':
         case 'doc_controller':
           roles.docController = name;
+          memberIds.docController = pm.user_id;
           break;
         case 'engineer':
-          if (pm.discipline === 'mep' || lower.includes('mep')) {
+          if (pm.discipline === 'mep' || (!pm.discipline && lower.includes('mep'))) {
             roles.mepEngineer = name;
+            memberIds.mepEngineer = pm.user_id;
           } else if (
             pm.discipline === 'architect' ||
-            lower.includes('architect')
+            (!pm.discipline && lower.includes('architect'))
           ) {
             roles.architectEngineer = name;
+            memberIds.architectEngineer = pm.user_id;
           } else if (
             pm.discipline === 'structure' ||
-            lower.includes('structur')
+            (!pm.discipline && lower.includes('structur'))
           ) {
             roles.structureEngineer = name;
+            memberIds.structureEngineer = pm.user_id;
           } else if (
             pm.discipline === 'civil' ||
-            lower.includes('civil') ||
-            lower.includes('ismail')
+            (!pm.discipline && (lower.includes('civil') || lower.includes('ismail')))
           ) {
             roles.civilEngineer = name;
+            memberIds.civilEngineer = pm.user_id;
           } else if (roles.civilEngineer === 'Unassigned') {
             roles.civilEngineer = name;
+            memberIds.civilEngineer = pm.user_id;
           }
           break;
       }
     }
   }
 
-  const stageMap: Record<string, ProjectLifecycleStage> = {
+  const stageMap = {
     planning: 'Pre-Construction',
     design: 'Pre-Construction',
     construction: 'Construction',
     handover: 'Handover',
-    completed: 'Handover',
-  };
+    completed: 'Completed',
+  } satisfies Record<string, ProjectLifecycleStage>;
 
   return {
     id: p.id,
@@ -188,11 +198,12 @@ function mapDbProjectToAssigned(
       ? p.stage.charAt(0).toUpperCase() + p.stage.slice(1)
       : 'Pre-Construction',
     lifecycleStage: p.stage
-      ? stageMap[p.stage] || 'Pre-Construction'
+      ? stageMap[p.stage as keyof typeof stageMap] || 'Pre-Construction'
       : 'Pre-Construction',
     milestones:
       (p.milestones as StageMilestoneDates) || seed?.milestones || undefined,
     assignedRoles: roles,
+    assignedMemberIds: memberIds,
   };
 }
 

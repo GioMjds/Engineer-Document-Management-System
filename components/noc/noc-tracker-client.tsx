@@ -166,7 +166,7 @@ export function NocTrackerClient({
               design: 'Pre-Construction',
               construction: 'Construction',
               handover: 'Handover',
-              completed: 'Handover',
+              completed: 'Completed',
             };
             const rawStage = payload.new.stage as string;
             const nextLifecycle = stageMap[rawStage] || 'Pre-Construction';

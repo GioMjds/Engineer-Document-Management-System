@@ -74,6 +74,8 @@ function stageTone(stage: ProjectLifecycleStage) {
       return 'border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10';
     case 'Handover':
       return 'border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10';
+    case 'Completed':
+      return 'border-purple-500/30 text-purple-700 dark:text-purple-400 bg-purple-500/10';
     default:
       return 'border-muted text-muted-foreground bg-muted/40';
   }
@@ -495,6 +497,7 @@ export function ProjectsWorkspaceClient({
       {/* Admin Team Assignment Dialog */}
       {editingProject && (
         <ProjectTeamDialog
+          key={editingProject.id || editingProject.code}
           project={editingProject}
           teamProfiles={teamProfiles}
           open={!!editingProject}

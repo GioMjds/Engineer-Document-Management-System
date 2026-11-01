@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Users } from 'lucide-react';
+import { Users, ShieldCheck, HardHat, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -14,10 +14,14 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -31,11 +35,46 @@ export interface ProfileItem {
   email: string | null;
 }
 
+interface RoleOption {
+  id: string;
+  label: string;
+  roleBadge: string;
+  suggested: boolean;
+}
+
 interface ProjectTeamDialogProps {
   project: AssignedProject;
   teamProfiles: ProfileItem[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+// Formats user role into human-readable label.
+function formatRoleBadge(role: string): string {
+  switch (role) {
+    case 'resident_engineer':
+      return 'Resident Engineer';
+    case 'area_manager':
+      return 'Area Manager';
+    case 'authority_engineer':
+      return 'Authority Engineer';
+    case 'dc':
+    case 'doc_controller':
+      return 'Doc Controller';
+    case 'engineer':
+      return 'Discipline Engineer';
+    case 'admin':
+      return 'System Admin';
+    case 'ceo':
+      return 'Executive';
+    default:
+      return role.replace(/_/g, ' ');
+  }
+}
+
+// Formats clean profile name without appending redundant technical role enums.
+function getCleanProfileName(profile: ProfileItem): string {
+  return profile.full_name?.trim() || profile.email?.trim() || 'Unknown';
 }
 
 export function ProjectTeamDialog({
@@ -47,7 +86,7 @@ export function ProjectTeamDialog({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  // Find initial matches by profile name if available
+  // Match by true database member UUID first, fallback to profile full name
   const findProfileIdByName = (name?: string) => {
     if (!name || name === 'Unassigned') return 'unassigned';
     const match = teamProfiles.find(
@@ -58,29 +97,45 @@ export function ProjectTeamDialog({
     return match ? match.id : 'unassigned';
   };
 
-  const [reId, setReId] = useState<string>(() =>
-    findProfileIdByName(project.assignedRoles?.residentEngineer),
+  const [reId, setReId] = useState<string>(
+    () =>
+      project.assignedMemberIds?.residentEngineer ||
+      findProfileIdByName(project.assignedRoles?.residentEngineer),
   );
-  const [amId, setAmId] = useState<string>(() =>
-    findProfileIdByName(project.assignedRoles?.areaManager),
+  const [amId, setAmId] = useState<string>(
+    () =>
+      project.assignedMemberIds?.areaManager ||
+      findProfileIdByName(project.assignedRoles?.areaManager),
   );
-  const [aeId, setAeId] = useState<string>(() =>
-    findProfileIdByName(project.assignedRoles?.authorityEngineer),
+  const [aeId, setAeId] = useState<string>(
+    () =>
+      project.assignedMemberIds?.authorityEngineer ||
+      findProfileIdByName(project.assignedRoles?.authorityEngineer),
   );
-  const [dcId, setDcId] = useState<string>(() =>
-    findProfileIdByName(project.assignedRoles?.docController),
+  const [dcId, setDcId] = useState<string>(
+    () =>
+      project.assignedMemberIds?.docController ||
+      findProfileIdByName(project.assignedRoles?.docController),
   );
-  const [archId, setArchId] = useState<string>(() =>
-    findProfileIdByName(project.assignedRoles?.architectEngineer),
+  const [archId, setArchId] = useState<string>(
+    () =>
+      project.assignedMemberIds?.architectEngineer ||
+      findProfileIdByName(project.assignedRoles?.architectEngineer),
   );
-  const [structId, setStructId] = useState<string>(() =>
-    findProfileIdByName(project.assignedRoles?.structureEngineer),
+  const [structId, setStructId] = useState<string>(
+    () =>
+      project.assignedMemberIds?.structureEngineer ||
+      findProfileIdByName(project.assignedRoles?.structureEngineer),
   );
-  const [mepId, setMepId] = useState<string>(() =>
-    findProfileIdByName(project.assignedRoles?.mepEngineer),
+  const [mepId, setMepId] = useState<string>(
+    () =>
+      project.assignedMemberIds?.mepEngineer ||
+      findProfileIdByName(project.assignedRoles?.mepEngineer),
   );
-  const [civilId, setCivilId] = useState<string>(() =>
-    findProfileIdByName(project.assignedRoles?.civilEngineer),
+  const [civilId, setCivilId] = useState<string>(
+    () =>
+      project.assignedMemberIds?.civilEngineer ||
+      findProfileIdByName(project.assignedRoles?.civilEngineer),
   );
 
   const handleSave = () => {
@@ -115,39 +170,166 @@ export function ProjectTeamDialog({
         return;
       }
 
-      toast.success(
-        `Team assignments updated for project ${project.code}.`,
-      );
+      toast.success(`Team assignments updated for project ${project.code}.`);
       onOpenChange(false);
       router.refresh();
     });
   };
 
-  const getOptionsForRole = (primaryRole?: string) => {
-    // Show role matches first, then other team members
-    const matched = primaryRole
-      ? teamProfiles.filter((p) => p.role === primaryRole)
-      : [];
-    const others = primaryRole
-      ? teamProfiles.filter((p) => p.role !== primaryRole)
-      : teamProfiles;
+  const getRoleOptions = (
+    primaryRole: string,
+    disciplineKeyword?: 'architect' | 'structur' | 'mep' | 'civil',
+  ) => {
+    const isSuggested = (p: ProfileItem) => {
+      if (disciplineKeyword) {
+        if (p.role !== 'engineer') return false;
+        const nameLower = (p.full_name || '').toLowerCase();
+        return nameLower.includes(disciplineKeyword);
+      }
+      if (primaryRole === 'dc') {
+        return p.role === 'dc' || p.role === 'doc_controller';
+      }
+      return p.role === primaryRole;
+    };
 
-    return [
-      { id: 'unassigned', label: '— Unassigned —' },
-      ...matched.map((p) => ({
+    const suggested: RoleOption[] = [];
+    const others: RoleOption[] = [];
+
+    for (const p of teamProfiles) {
+      const item: RoleOption = {
         id: p.id,
-        label: `${p.full_name || p.email} (${p.role})`,
-      })),
-      ...others.map((p) => ({
-        id: p.id,
-        label: `${p.full_name || p.email} (${p.role})`,
-      })),
-    ];
+        label: getCleanProfileName(p),
+        roleBadge: formatRoleBadge(p.role),
+        suggested: isSuggested(p),
+      };
+      if (item.suggested) {
+        suggested.push(item);
+      } else {
+        others.push(item);
+      }
+    }
+
+    const unassignedOption: RoleOption = {
+      id: 'unassigned',
+      label: '— Unassigned —',
+      roleBadge: '',
+      suggested: false,
+    };
+
+    return {
+      suggested,
+      others,
+      all: [unassignedOption, ...suggested, ...others],
+    };
+  };
+
+  const reOptions = useMemo(
+    () => getRoleOptions('resident_engineer'),
+    [teamProfiles],
+  );
+  const amOptions = useMemo(
+    () => getRoleOptions('area_manager'),
+    [teamProfiles],
+  );
+  const aeOptions = useMemo(
+    () => getRoleOptions('authority_engineer'),
+    [teamProfiles],
+  );
+  const dcOptions = useMemo(
+    () => getRoleOptions('dc'),
+    [teamProfiles],
+  );
+  const archOptions = useMemo(
+    () => getRoleOptions('engineer', 'architect'),
+    [teamProfiles],
+  );
+  const structOptions = useMemo(
+    () => getRoleOptions('engineer', 'structur'),
+    [teamProfiles],
+  );
+  const mepOptions = useMemo(
+    () => getRoleOptions('engineer', 'mep'),
+    [teamProfiles],
+  );
+  const civilOptions = useMemo(
+    () => getRoleOptions('engineer', 'civil'),
+    [teamProfiles],
+  );
+
+  const renderRoleSelect = (
+    id: string,
+    label: string,
+    value: string,
+    onChange: (val: string) => void,
+    options: {
+      suggested: RoleOption[];
+      others: RoleOption[];
+      all: RoleOption[];
+    },
+  ) => {
+    return (
+      <div className="space-y-1.5 min-w-0">
+        <Label htmlFor={id} className="text-xs font-medium text-foreground">
+          {label}
+        </Label>
+        <Select
+          value={value}
+          items={options.all.map((opt) => ({
+            value: opt.id,
+            label: opt.label,
+          }))}
+          onValueChange={(val) => onChange(val ?? 'unassigned')}
+        >
+          <SelectTrigger id={id} className="h-9 w-full min-w-0 text-xs">
+            <SelectValue placeholder="— Unassigned —" />
+          </SelectTrigger>
+          <SelectContent className="max-h-60 overflow-y-auto">
+            <SelectItem
+              value="unassigned"
+              className="text-xs text-muted-foreground"
+            >
+              — Unassigned —
+            </SelectItem>
+            {options.suggested.length > 0 && (
+              <SelectGroup>
+                <SelectLabel className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Suggested for this role
+                </SelectLabel>
+                {options.suggested.map((opt) => (
+                  <SelectItem key={opt.id} value={opt.id} className="text-xs">
+                    <span className="truncate">{opt.label}</span>
+                    <span className="ml-auto pl-2 text-[10px] text-muted-foreground shrink-0">
+                      {opt.roleBadge}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            )}
+            {options.others.length > 0 && (
+              <SelectGroup>
+                <SelectSeparator />
+                <SelectLabel className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Other Staff
+                </SelectLabel>
+                {options.others.map((opt) => (
+                  <SelectItem key={opt.id} value={opt.id} className="text-xs">
+                    <span className="truncate">{opt.label}</span>
+                    <span className="ml-auto pl-2 text-[10px] text-muted-foreground shrink-0">
+                      {opt.roleBadge}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            )}
+          </SelectContent>
+        </Select>
+      </div>
+    );
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto overflow-x-hidden sm:max-w-2xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -162,222 +344,103 @@ export function ProjectTeamDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        {/* Project Context Pill Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/20 px-3 py-2 text-xs">
+          <div className="flex items-center gap-2 truncate">
+            <span className="font-semibold text-foreground">{project.code}</span>
+            <span className="text-muted-foreground">•</span>
+            <span className="truncate text-muted-foreground">{project.name}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {project.masterAuthority && (
+              <Badge variant="outline" className="text-[11px] font-normal">
+                {project.masterAuthority}
+              </Badge>
+            )}
+            {project.lifecycleStage && (
+              <Badge variant="secondary" className="text-[11px] font-normal">
+                {project.lifecycleStage}
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-4 py-1">
           {/* Executive & Oversight */}
-          <div className="rounded-md border border-border bg-muted/20 p-3 space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="rounded-md border border-border bg-muted/10 p-3.5 space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <ShieldCheck className="size-3.5 text-muted-foreground" />
               Management & Permitting Oversight
-            </h3>
+            </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="re-select" className="text-xs">
-                  Resident Engineer (RE)
-                </Label>
-                <Select
-                  value={reId}
-                  items={getOptionsForRole('resident_engineer').map((opt) => ({
-                    value: opt.id,
-                    label: opt.label,
-                  }))}
-                  onValueChange={(val) => setReId(val ?? 'unassigned')}
-                >
-                  <SelectTrigger id="re-select" className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getOptionsForRole('resident_engineer').map((opt) => (
-                      <SelectItem key={opt.id} value={opt.id} className="text-xs">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="am-select" className="text-xs">
-                  Area Manager (AM)
-                </Label>
-                <Select
-                  value={amId}
-                  items={getOptionsForRole('area_manager').map((opt) => ({
-                    value: opt.id,
-                    label: opt.label,
-                  }))}
-                  onValueChange={(val) => setAmId(val ?? 'unassigned')}
-                >
-                  <SelectTrigger id="am-select" className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getOptionsForRole('area_manager').map((opt) => (
-                      <SelectItem key={opt.id} value={opt.id} className="text-xs">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="ae-select" className="text-xs">
-                  Authority Engineer
-                </Label>
-                <Select
-                  value={aeId}
-                  items={getOptionsForRole('authority_engineer').map((opt) => ({
-                    value: opt.id,
-                    label: opt.label,
-                  }))}
-                  onValueChange={(val) => setAeId(val ?? 'unassigned')}
-                >
-                  <SelectTrigger id="ae-select" className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getOptionsForRole('authority_engineer').map((opt) => (
-                      <SelectItem key={opt.id} value={opt.id} className="text-xs">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="dc-select" className="text-xs">
-                  Document Controller (DC)
-                </Label>
-                <Select
-                  value={dcId}
-                  items={getOptionsForRole('dc').map((opt) => ({
-                    value: opt.id,
-                    label: opt.label,
-                  }))}
-                  onValueChange={(val) => setDcId(val ?? 'unassigned')}
-                >
-                  <SelectTrigger id="dc-select" className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getOptionsForRole('dc').map((opt) => (
-                      <SelectItem key={opt.id} value={opt.id} className="text-xs">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {renderRoleSelect(
+                're-select',
+                'Resident Engineer (RE)',
+                reId,
+                setReId,
+                reOptions,
+              )}
+              {renderRoleSelect(
+                'am-select',
+                'Area Manager (AM)',
+                amId,
+                setAmId,
+                amOptions,
+              )}
+              {renderRoleSelect(
+                'ae-select',
+                'Authority Engineer',
+                aeId,
+                setAeId,
+                aeOptions,
+              )}
+              {renderRoleSelect(
+                'dc-select',
+                'Document Controller (DC)',
+                dcId,
+                setDcId,
+                dcOptions,
+              )}
             </div>
           </div>
 
           {/* Discipline Engineers */}
-          <div className="rounded-md border border-border bg-muted/20 p-3 space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="rounded-md border border-border bg-muted/10 p-3.5 space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <HardHat className="size-3.5 text-muted-foreground" />
               Discipline Engineers
-            </h3>
+            </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="arch-select" className="text-xs">
-                  Architectural Engineer
-                </Label>
-                <Select
-                  value={archId}
-                  items={getOptionsForRole('engineer').map((opt) => ({
-                    value: opt.id,
-                    label: opt.label,
-                  }))}
-                  onValueChange={(val) => setArchId(val ?? 'unassigned')}
-                >
-                  <SelectTrigger id="arch-select" className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getOptionsForRole('engineer').map((opt) => (
-                      <SelectItem key={opt.id} value={opt.id} className="text-xs">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="struct-select" className="text-xs">
-                  Structural Engineer
-                </Label>
-                <Select
-                  value={structId}
-                  items={getOptionsForRole('engineer').map((opt) => ({
-                    value: opt.id,
-                    label: opt.label,
-                  }))}
-                  onValueChange={(val) => setStructId(val ?? 'unassigned')}
-                >
-                  <SelectTrigger id="struct-select" className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getOptionsForRole('engineer').map((opt) => (
-                      <SelectItem key={opt.id} value={opt.id} className="text-xs">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="mep-select" className="text-xs">
-                  MEP Engineer
-                </Label>
-                <Select
-                  value={mepId}
-                  items={getOptionsForRole('engineer').map((opt) => ({
-                    value: opt.id,
-                    label: opt.label,
-                  }))}
-                  onValueChange={(val) => setMepId(val ?? 'unassigned')}
-                >
-                  <SelectTrigger id="mep-select" className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getOptionsForRole('engineer').map((opt) => (
-                      <SelectItem key={opt.id} value={opt.id} className="text-xs">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="civil-select" className="text-xs">
-                  Civil Engineer
-                </Label>
-                <Select
-                  value={civilId}
-                  items={getOptionsForRole('engineer').map((opt) => ({
-                    value: opt.id,
-                    label: opt.label,
-                  }))}
-                  onValueChange={(val) => setCivilId(val ?? 'unassigned')}
-                >
-                  <SelectTrigger id="civil-select" className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getOptionsForRole('engineer').map((opt) => (
-                      <SelectItem key={opt.id} value={opt.id} className="text-xs">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {renderRoleSelect(
+                'arch-select',
+                'Architectural Engineer',
+                archId,
+                setArchId,
+                archOptions,
+              )}
+              {renderRoleSelect(
+                'struct-select',
+                'Structural Engineer',
+                structId,
+                setStructId,
+                structOptions,
+              )}
+              {renderRoleSelect(
+                'mep-select',
+                'MEP Engineer',
+                mepId,
+                setMepId,
+                mepOptions,
+              )}
+              {renderRoleSelect(
+                'civil-select',
+                'Civil Engineer',
+                civilId,
+                setCivilId,
+                civilOptions,
+              )}
             </div>
           </div>
         </div>
@@ -398,7 +461,14 @@ export function ProjectTeamDialog({
             onClick={handleSave}
             disabled={isPending}
           >
-            {isPending ? 'Saving...' : 'Save Assignments'}
+            {isPending ? (
+              <>
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Assignments'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

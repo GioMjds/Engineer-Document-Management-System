@@ -18,6 +18,8 @@ import {
   ChevronUp,
   Send,
   FileCheck,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SubmissionModal } from './submission-modal';
@@ -56,6 +58,8 @@ import {
   resubmitNocRevision,
   adminOverridePrerequisiteSequence,
   toggleProjectNocRequirement,
+  addProjectNocRequirement,
+  deleteProjectNocRequirement,
 } from '@/app/(app)/noc-tracker/actions';
 import { toast } from 'sonner';
 
@@ -108,6 +112,11 @@ export function NocInspectorDrawer({
 
   // Resubmission history accordion state
   const [showHistory, setShowHistory] = useState(true);
+
+  // Manual requirement creation state
+  const [newReqTitle, setNewReqTitle] = useState('');
+  const [isAddingReq, setIsAddingReq] = useState(false);
+  const [isSubmittingReq, setIsSubmittingReq] = useState(false);
 
   useEffect(() => {
     if (item) {
@@ -271,6 +280,74 @@ export function NocInspectorDrawer({
       onUpdateNoc({
         ...item,
         requirements: previousRequirements,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  async function handleAddRequirement(e: React.FormEvent) {
+    e.preventDefault();
+    if (!item) return;
+    const title = newReqTitle.trim();
+    if (!title) return;
+    setIsSubmittingReq(true);
+
+    try {
+      const res = await addProjectNocRequirement(item.id, title);
+      if (res.ok && res.data) {
+        const addedReq = {
+          id: res.data.id,
+          title: res.data.title,
+          isSatisfied: res.data.isSatisfied,
+        };
+        onUpdateNoc({
+          ...item,
+          requirements: [...item.requirements, addedReq],
+          updatedAt: new Date().toISOString(),
+        });
+        setNewReqTitle('');
+        setIsAddingReq(false);
+        toast.success('Requirement added.');
+      } else {
+        toast.error(res.error || 'Failed to add requirement');
+      }
+    } catch {
+      toast.error('Failed to add requirement');
+    } finally {
+      setIsSubmittingReq(false);
+    }
+  }
+
+  async function handleDeleteRequirement(reqId: string) {
+    if (!item) return;
+    const target = item.requirements.find((r) => r.id === reqId);
+    if (!target) return;
+
+    const previousReqs = item.requirements;
+    const updatedReqs = item.requirements.filter((r) => r.id !== reqId);
+    onUpdateNoc({
+      ...item,
+      requirements: updatedReqs,
+      updatedAt: new Date().toISOString(),
+    });
+
+    try {
+      const res = await deleteProjectNocRequirement(reqId);
+      if (!res.ok) {
+        toast.error(res.error || 'Failed to delete requirement');
+        onUpdateNoc({
+          ...item,
+          requirements: previousReqs,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        toast.success('Requirement removed.');
+      }
+    } catch {
+      toast.error('Failed to delete requirement');
+      onUpdateNoc({
+        ...item,
+        requirements: previousReqs,
         updatedAt: new Date().toISOString(),
       });
     }
@@ -961,11 +1038,46 @@ export function NocInspectorDrawer({
               <span className="text-xs text-muted-foreground uppercase font-semibold">
                 Interconnected requirements
               </span>
-              <span className="text-xs text-muted-foreground">
-                {item.requirements.filter((r) => r.isSatisfied).length}/
-                {item.requirements.length} satisfied
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {item.requirements.filter((r) => r.isSatisfied).length}/
+                  {item.requirements.length} satisfied
+                </span>
+                {can(currentUserRole, 'noc.tracker.update') &&
+                  (item.status !== 'Approved' || currentUserRole === 'admin') && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingReq(!isAddingReq)}
+                      className="text-xs text-primary hover:underline flex items-center gap-0.5 cursor-pointer ml-1"
+                    >
+                      <Plus className="h-3 w-3" />
+                      <span>{isAddingReq ? 'Cancel' : 'Add'}</span>
+                    </button>
+                  )}
+              </div>
             </div>
+
+            {isAddingReq && (
+              <form onSubmit={handleAddRequirement} className="pt-1 pb-1 space-y-1.5 border-b pb-2">
+                <div className="flex gap-1.5">
+                  <Input
+                    value={newReqTitle}
+                    onChange={(e) => setNewReqTitle(e.target.value)}
+                    placeholder="Add required document or condition..."
+                    className="text-xs h-7 font-mono flex-1"
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    type="submit"
+                    disabled={isSubmittingReq || !newReqTitle.trim()}
+                    className="h-7 text-xs px-2.5"
+                  >
+                    Add
+                  </Button>
+                </div>
+              </form>
+            )}
 
             <ul className="space-y-1.5 pt-1">
               {item.requirements.map((req) => {
@@ -976,7 +1088,7 @@ export function NocInspectorDrawer({
                 return (
                   <li
                     key={req.id}
-                    className="flex items-start gap-2 p-1.5 rounded hover:bg-muted/50 text-xs transition-colors"
+                    className="group flex items-start gap-2 p-1.5 rounded hover:bg-muted/50 text-xs transition-colors"
                   >
                     <button
                       type="button"
@@ -1002,7 +1114,7 @@ export function NocInspectorDrawer({
                         <Circle className="h-4 w-4 text-zinc-400" />
                       )}
                     </button>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <span
                         className={
                           req.isSatisfied
@@ -1018,6 +1130,16 @@ export function NocInspectorDrawer({
                         </span>
                       )}
                     </div>
+                    {canToggle && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRequirement(req.id)}
+                        className="opacity-0 group-hover:opacity-100 hover:text-rose-600 transition-opacity p-0.5 cursor-pointer"
+                        title="Remove requirement"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-zinc-400 hover:text-rose-600" />
+                      </button>
+                    )}
                   </li>
                 );
               })}

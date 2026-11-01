@@ -31,7 +31,10 @@ export function ProjectLifecycleStepper({
   onOpenGateDetails,
   className,
 }: ProjectLifecycleStepperProps) {
-  const currentIndex = Math.max(0, LIFECYCLE_STAGES.indexOf(currentStage));
+  const isAllCompleted = currentStage === 'Completed';
+  const currentIndex = isAllCompleted
+    ? LIFECYCLE_STAGES.length
+    : Math.max(0, LIFECYCLE_STAGES.indexOf(currentStage));
 
   return (
     <nav

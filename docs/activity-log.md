@@ -1,5 +1,100 @@
 # Activity Log
 
+## Session 2026-11-01
+
+- Redesigned Manage Team UI Layout and Synchronized True Database Member Values:
+  - Background & Objective: In the Projects Directory, the "Manage Team" dialog suffered from severe layout distortion where `SelectTrigger` elements lacked `w-full` / `min-w-0` and forced single-line overflow (`whitespace-nowrap`), causing Column 1 triggers (e.g. Authority Engineer) to overlap directly on top of Column 2 triggers (Document Controller) and generating an unsightly horizontal scrollbar across the dialog. Furthermore, option values displayed raw snake_case database enums (e.g. `(resident_engineer)`, `(engineer)`, `(dc)`) appended to user names, and role states failed to preserve true database `user_id`s from `project_members`.
+  - Implementation:
+    - Updated [types/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/types/noc.ts):
+      - Extended `AssignedProject` with `assignedMemberIds` mapping role names directly to their assigned `user_id` UUIDs.
+    - Updated [lib/server/noc-data.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/server/noc-data.ts):
+      - Captured true `pm.user_id`s from `project_members` query in `mapDbProjectToAssigned` for each discipline and oversight role.
+    - Updated [components/ui/select.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/ui/select.tsx):
+      - Fixed `SelectValue` with `truncate min-w-0 flex-1 text-left` to ensure single-line text properly truncates with ellipsis.
+      - Fixed `SelectTrigger` styles replacing broken `line-clamp-1` on flex with `truncate min-w-0`.
+      - Enhanced `SelectItem` with `min-w-0 items-center justify-between` to separate labels and right-aligned role badges.
+    - Refactored [components/projects/project-team-dialog.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-team-dialog.tsx):
+      - Initialized select state from `project.assignedMemberIds` true UUIDs, falling back cleanly to full name matching.
+      - Removed raw database role enums (`(resident_engineer)`, `(area_manager)`, `(engineer)`, `(dc)`) from option labels.
+      - Structured option lists into "Suggested for this role" (matching disciplines/roles first) and "Other Staff" with formatted role badges.
+      - Resolved layout collision by enforcing `w-full min-w-0` on triggers, `min-w-0` on grid items, and `overflow-x-hidden` on dialog content.
+      - Added compact project context summary pill bar with code, authority, and lifecycle stage.
+      - Added visual category icons (`ShieldCheck` for Oversight, `HardHat` for Discipline Engineers) and button loading spinner.
+    - Enhanced [app/actions/admin.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/admin.ts):
+      - Updated `updateProjectMembers` to revalidate `/projects`, `/noc-tracker`, `/noc`, and `/dashboard` upon team assignment updates.
+    - Updated [components/projects/projects-workspace-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/projects-workspace-client.tsx):
+      - Added dynamic keying (`key={editingProject.id || editingProject.code}`) to `ProjectTeamDialog` to ensure clean remounts per project.
+
+
+- Added Global Command Palette (Ctrl + K) and Header Quick Search:
+  - Background & Objective: Implement global command palette and header quick search trigger accessible via `Ctrl+K` (or `Cmd+K` on macOS) following UI/UX Pro Max standards, enabling rapid keyboard-driven navigation across all permitted workspaces, quick actions (project creation, sidebar toggling), and appearance switching.
+  - Implementation:
+    - Built [components/layout/command-menu.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/command-menu.tsx):
+      - Created responsive header trigger: desktop interactive search bar with shortcut badge and mobile icon button meeting 44px touch targets.
+      - Implemented global `Ctrl+K` and `Cmd+K` keyboard shortcut listener with platform auto-detection (macOS vs Windows/Linux).
+      - Added role-based navigation section dynamically filtered by `navFor(userRole)` with icon and descriptive metadata.
+      - Added quick actions section: "Register New Project" (guarded by `project.create` capability) and "Toggle Sidebar" with `Ctrl+B` shortcut hint.
+      - Added appearance section: Light, Dark, and System theme toggles via `next-themes`.
+      - Added session section with red destructive sign out command executing auth sign out.
+      - Added keyboard navigation helper footer showing arrow navigation, enter selection, and escape keys.
+    - Enhanced [components/ui/command.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/ui/command.tsx):
+      - Wrapped `CommandDialog` children with `<Command>` primitive for context compatibility.
+      - Enhanced `CommandInput` with dialog-aware styling (`in-data-[slot=dialog-content]`) for prominent search input.
+      - Configured shadow, border, and backdrop blur for high-end visual design.
+    - Integrated into [components/layout/app-shell.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/app-shell.tsx):
+      - Mounted `CommandMenu` in the sticky header right utility deck alongside notifications, theme toggle, and user profile menu.
+  - Verification:
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `pnpm build` passed compiling all 24 static and dynamic routes successfully with Turbopack.
+
+- Redesigned Entire Application UI Layout, Collapsible Sidebar, and Header Utility Deck:
+  - Background & Objective: Redesign layout shell to introduce a collapsible command-deck sidebar, notification center trigger in header, theme switch, and user profile popover with basic sign out in the top header, removing the bulky footer card from sidebar and optimizing engineering table workspace.
+  - Implementation:
+    - Built [components/layout/notifications-popover.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/notifications-popover.tsx):
+      - Integrated accessible notification bell with real-time ping indicator dot.
+      - Built popover previewing Phase 2 alerts (NOC expirations, submittal reviews, stage gate milestones) with planned delivery channels.
+    - Built [components/layout/user-profile-menu.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/user-profile-menu.tsx):
+      - Created high-density user avatar badge with computed initials and responsive name/role label.
+      - Integrated Base UI popover menu displaying user identity, email, system role, account profile route link, and server-action sign out button.
+    - Refactored [components/layout/app-shell.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/app-shell.tsx):
+      - Added desktop sidebar collapsible rail mode (`w-64` expanded to `w-18` collapsed) with smooth CSS transitions and localStorage preference persistence.
+      - Added keyboard shortcut `Ctrl+B` (and `Cmd+B`) to toggle sidebar state.
+      - Rendered compact centered icons with rich tooltips (`side="right"`) and badge indicators in collapsed state.
+      - Cleaned up sidebar footer, replacing old user profile box with dedicated collapse/expand trigger and shortcut badge.
+      - Redesigned sticky top header: mobile drawer trigger, desktop collapse toggle, breadcrumb path, notifications popover, theme toggle, and user profile popover.
+    - Fixed missing switch cases in [components/lifecycle/stage-gate-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/lifecycle/stage-gate-drawer.tsx) for `Completed` stage.
+  - Verification:
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `pnpm build` compiled all 24 static and dynamic routes successfully with Turbopack.
+
+- Enabled Manual Stage Gate Prerequisite & NOC Requirement Creation:
+  - Background & Objective: Users could not manually add or remove custom gate prerequisites in the Stage Gate Readiness checklist or add custom checklist requirements inside NOC records. In Handover stage (e.g. Project 26003), the gate engine also injected an unresolvable fallback `Civil Defence (DCD) Fire & Life Safety Clearance` even when DCD inspection dates were recorded in milestones, while the drawer footer prematurely locked projects with "Project Lifecycle Completed".
+  - Implementation:
+    - Updated [types/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/types/noc.ts):
+      - Expanded `ProjectLifecycleStage` to support `'Completed'` as a formal stage.
+      - Defined `CustomStagePrerequisite` interface with `id`, `title`, `category`, `stage`, `isSatisfied`, `mandatoryForNextStage`, and `actionHint`.
+      - Added `customPrerequisites?: CustomStagePrerequisite[]` to `StageMilestoneDates`.
+      - Added `isCustom?: boolean` to `StageGatePrerequisiteItem`.
+    - Updated [lib/project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts):
+      - Evaluated `civilDefenceInspectionDate` from Handover milestones to satisfy `gate-dcd` when 0 Handover NOC records exist in tracker table.
+      - Integrated custom prerequisites from `milestones.customPrerequisites` for the active stage into live gate calculation.
+      - Added completed stage terminal evaluation.
+    - Updated [components/lifecycle/stage-gate-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/lifecycle/stage-gate-drawer.tsx):
+      - Added inline "+ Add Gate" prerequisite creator for Admin, Area Manager, and Resident Engineer roles with Title, Category, Mandatory flag, and Action Hint inputs.
+      - Enabled interactive toggle and delete controls for custom gate prerequisites directly in drawer checklist.
+      - Fixed terminal stage detection so Handover projects can execute "Complete Project Lifecycle" (or Advisory Override) instead of being prematurely disabled.
+    - Updated [app/(app)/noc-tracker/actions.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/noc-tracker/actions.ts):
+      - Added `addProjectNocRequirement` server action inserting new deliverable rows into `public.project_noc_requirements` with audit logging.
+      - Added `deleteProjectNocRequirement` server action removing requirements with audit logging.
+    - Updated [components/noc/noc-inspector-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-inspector-drawer.tsx):
+      - Added inline requirement creation input under "Interconnected requirements".
+      - Added row-level delete button with optimistic UI updates.
+    - Updated [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts), [lib/server/noc-data.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/server/noc-data.ts), and [components/lifecycle/project-lifecycle-stepper.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/lifecycle/project-lifecycle-stepper.tsx) to support transition to completed lifecycle.
+  - Verification:
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `npx eslint components/lifecycle/stage-gate-drawer.tsx components/noc/noc-inspector-drawer.tsx "app/(app)/noc-tracker/actions.ts"` passed with 0 errors.
+    - `npm run build` compiled all 24 static and dynamic routes successfully.
+
 ## Session 2026-10-31
 
 - Added User Search, Status Filtering, and Soft-Delete Archive CRUD:

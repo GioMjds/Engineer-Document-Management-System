@@ -756,6 +756,10 @@ export async function updateProjectMembers(
     },
   });
 
+  revalidatePath('/projects');
+  revalidatePath('/noc-tracker');
+  revalidatePath('/noc');
+  revalidatePath('/dashboard');
   revalidatePath(`/projects/${projectId}`);
   return { ok: true };
 }

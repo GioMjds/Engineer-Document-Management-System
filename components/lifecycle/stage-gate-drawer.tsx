@@ -4,12 +4,15 @@ import { useState, useEffect } from 'react';
 import {
   X,
   CheckCircle2,
+  Circle,
   AlertCircle,
   AlertTriangle,
   Lock,
   Calendar,
   ArrowRight,
   ShieldCheck,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -24,6 +27,7 @@ import type {
   StageMilestoneDates,
   ProjectLifecycleStage,
   StageGatePrerequisiteItem,
+  CustomStagePrerequisite,
 } from '@/types/noc';
 
 export interface StageGateDrawerProps {
@@ -154,6 +158,9 @@ function getMilestoneFieldsForStage(
           value: milestones.handover?.bccIssuanceDate,
         },
       ];
+    case 'Completed':
+    default:
+      return [];
   }
 }
 
@@ -171,6 +178,14 @@ function StageGateDrawerContent({
     project.milestones || INITIAL_PROJECT_MILESTONES[project.code] || {},
   );
 
+  // Custom prerequisite creation state
+  const [isAddingPrerequisite, setIsAddingPrerequisite] = useState(false);
+  const [newPrereqTitle, setNewPrereqTitle] = useState('');
+  const [newPrereqCategory, setNewPrereqCategory] =
+    useState<StageGatePrerequisiteItem['category']>('regulatory_milestone');
+  const [newPrereqHint, setNewPrereqHint] = useState('');
+  const [newPrereqMandatory, setNewPrereqMandatory] = useState(true);
+
   // Handle Escape key to dismiss drawer.
   useEffect(() => {
     if (!isOpen) return;
@@ -186,22 +201,99 @@ function StageGateDrawerContent({
   if (!isOpen) return null;
 
   const isAuthorized = canUserAdvanceStage(currentUserRole);
-  const isTerminal = readiness.nextStage === 'Completed';
+  const isTerminal = (project.lifecycleStage as string) === 'Completed';
 
   // Advance stage with feedback.
   const handleAdvance = () => {
-    if (readiness.nextStage === 'Completed') {
-      toast.info('Project has reached the final lifecycle stage.');
+    if (isTerminal) {
+      toast.info('Project has already reached the final lifecycle stage.');
       return;
     }
-    const next = readiness.nextStage;
+    const next = readiness.nextStage as ProjectLifecycleStage;
     onAdvanceStage(next);
     if (readiness.isGateReady) {
-      toast.success(`Project ${project.code} advanced to ${next}.`);
+      if (next === 'Completed') {
+        toast.success(`Project ${project.code} lifecycle completed.`);
+      } else {
+        toast.success(`Project ${project.code} advanced to ${next}.`);
+      }
     } else {
-      toast.info(`Managerial override applied: Advanced to ${next}.`);
+      if (next === 'Completed') {
+        toast.warning(`Project ${project.code} completed under managerial override.`);
+      } else {
+        toast.info(`Managerial override applied: Advanced to ${next}.`);
+      }
     }
     onClose();
+  };
+
+  const handleAddCustomPrerequisite = (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = newPrereqTitle.trim();
+    if (!title) return;
+
+    const newItem: CustomStagePrerequisite = {
+      id: 'custom-' + Date.now(),
+      title,
+      category: newPrereqCategory,
+      stage: readiness.stage,
+      isSatisfied: false,
+      mandatoryForNextStage: newPrereqMandatory,
+      actionHint: newPrereqHint.trim() || undefined,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedMilestones: StageMilestoneDates = {
+      ...draftMilestones,
+      customPrerequisites: [
+        ...(draftMilestones.customPrerequisites || []),
+        newItem,
+      ],
+    };
+
+    setDraftMilestones(updatedMilestones);
+    if (onUpdateMilestones) {
+      onUpdateMilestones(updatedMilestones);
+    }
+    setIsAddingPrerequisite(false);
+    setNewPrereqTitle('');
+    setNewPrereqHint('');
+    toast.success('Custom gate prerequisite added.');
+  };
+
+  const handleToggleCustomPrerequisite = (id: string) => {
+    const customs = draftMilestones.customPrerequisites || [];
+    const updatedCustoms = customs.map((cp) =>
+      cp.id === id ? { ...cp, isSatisfied: !cp.isSatisfied } : cp,
+    );
+    const updated: StageMilestoneDates = {
+      ...draftMilestones,
+      customPrerequisites: updatedCustoms,
+    };
+    setDraftMilestones(updated);
+    if (onUpdateMilestones) {
+      onUpdateMilestones(updated);
+    }
+    const target = updatedCustoms.find((cp) => cp.id === id);
+    if (target?.isSatisfied) {
+      toast.success('Gate prerequisite marked Satisfied.');
+    } else {
+      toast.info('Gate prerequisite marked Pending Action.');
+    }
+  };
+
+  const handleDeleteCustomPrerequisite = (id: string) => {
+    const customs = draftMilestones.customPrerequisites || [];
+    const updatedCustoms = customs.filter((cp) => cp.id !== id);
+    const updated: StageMilestoneDates = {
+      ...draftMilestones,
+      customPrerequisites: updatedCustoms,
+    };
+    setDraftMilestones(updated);
+    if (onUpdateMilestones) {
+      onUpdateMilestones(updated);
+    }
+    toast.success('Custom gate prerequisite removed.');
   };
 
   // Update a single milestone date field in draft.
@@ -251,6 +343,9 @@ function StageGateDrawerContent({
       case 'Construction':
         return 'construction';
       case 'Handover':
+        return 'handover';
+      case 'Completed':
+      default:
         return 'handover';
     }
   };
@@ -357,11 +452,114 @@ function StageGateDrawerContent({
               >
                 Gate Prerequisites
               </h3>
-              <span className="text-[11px] font-mono text-muted-foreground">
-                {readiness.satisfiedPrerequisites}/
-                {readiness.totalPrerequisites} Satisfied
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-mono text-muted-foreground">
+                  {readiness.satisfiedPrerequisites}/
+                  {readiness.totalPrerequisites} Satisfied
+                </span>
+                {isAuthorized && onUpdateMilestones && !isTerminal && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingPrerequisite(!isAddingPrerequisite)}
+                    className="text-xs text-primary hover:underline flex items-center gap-0.5 cursor-pointer ml-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>{isAddingPrerequisite ? 'Cancel' : 'Add Gate'}</span>
+                  </button>
+                )}
+              </div>
             </div>
+
+            {isAddingPrerequisite && (
+              <form
+                onSubmit={handleAddCustomPrerequisite}
+                className="rounded border border-primary/40 bg-card p-3 space-y-2.5 text-xs shadow-xs"
+              >
+                <div className="flex items-center justify-between font-mono text-[11px] font-semibold text-foreground border-b pb-1">
+                  <span>Add Custom Gate Prerequisite ({readiness.stage})</span>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground block mb-1">
+                    Prerequisite Title *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newPrereqTitle}
+                    onChange={(e) => setNewPrereqTitle(e.target.value)}
+                    placeholder="e.g. Client Snagging List Sign-Off"
+                    className="w-full h-7 px-2 text-xs font-mono rounded border border-border bg-background text-foreground"
+                    autoFocus
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] text-muted-foreground block mb-1">
+                      Category
+                    </label>
+                    <select
+                      value={newPrereqCategory}
+                      onChange={(e) =>
+                        setNewPrereqCategory(
+                          e.target.value as StageGatePrerequisiteItem['category'],
+                        )
+                      }
+                      className="w-full h-7 px-1.5 text-xs font-mono rounded border border-border bg-background text-foreground"
+                    >
+                      <option value="regulatory_milestone">Regulatory Milestone</option>
+                      <option value="authority_noc">Authority NOC</option>
+                      <option value="specialist_study">Specialist Study</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end pb-1.5">
+                    <label className="flex items-center gap-1.5 text-[11px] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newPrereqMandatory}
+                        onChange={(e) => setNewPrereqMandatory(e.target.checked)}
+                        className="rounded border-border text-primary"
+                      />
+                      <span>Mandatory for next stage</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground block mb-1">
+                    Action Hint / Requirement to Finish
+                  </label>
+                  <input
+                    type="text"
+                    value={newPrereqHint}
+                    onChange={(e) => setNewPrereqHint(e.target.value)}
+                    placeholder="e.g. Complete snagging inspection with client representative"
+                    className="w-full h-7 px-2 text-xs font-mono rounded border border-border bg-background text-foreground"
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setIsAddingPrerequisite(false);
+                      setNewPrereqTitle('');
+                      setNewPrereqHint('');
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={!newPrereqTitle.trim()}
+                    className="h-7 text-xs font-semibold px-3 rounded bg-zinc-900 text-zinc-100 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900"
+                  >
+                    Save Gate Prerequisite
+                  </Button>
+                </div>
+              </form>
+            )}
 
             <div className="space-y-2">
               {readiness.prerequisites.length === 0 ? (
@@ -381,7 +579,26 @@ function StageGateDrawerContent({
                   >
                     <div className="flex items-start justify-between gap-2.5">
                       <div className="flex items-start gap-2.5 min-w-0">
-                        {p.isSatisfied ? (
+                        {p.isCustom && isAuthorized ? (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCustomPrerequisite(p.id)}
+                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                            title={p.isSatisfied ? 'Mark Pending Action' : 'Mark Satisfied'}
+                          >
+                            {p.isSatisfied ? (
+                              <CheckCircle2
+                                className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <Circle
+                                className="h-4 w-4 text-zinc-400 shrink-0 mt-0.5"
+                                aria-hidden="true"
+                              />
+                            )}
+                          </button>
+                        ) : p.isSatisfied ? (
                           <CheckCircle2
                             className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5"
                             aria-hidden="true"
@@ -400,6 +617,11 @@ function StageGateDrawerContent({
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-muted text-muted-foreground border border-border">
                               {formatCategoryLabel(p.category)}
                             </span>
+                            {p.isCustom && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800">
+                                Custom Gate
+                              </span>
+                            )}
                             {p.mandatoryForNextStage && (
                               <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400">
                                 Mandatory Gate
@@ -418,8 +640,21 @@ function StageGateDrawerContent({
                           )}
                         </div>
                       </div>
-                      <div className="shrink-0">
-                        {p.isSatisfied ? (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {p.isCustom && isAuthorized ? (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCustomPrerequisite(p.id)}
+                            className={cn(
+                              'inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-medium border cursor-pointer transition-colors',
+                              p.isSatisfied
+                                ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                                : 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40',
+                            )}
+                          >
+                            {p.isSatisfied ? 'Satisfied' : 'Pending Action'}
+                          </button>
+                        ) : p.isSatisfied ? (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-medium border border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                             Satisfied
                           </span>
@@ -427,6 +662,16 @@ function StageGateDrawerContent({
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-medium border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
                             Pending Action
                           </span>
+                        )}
+                        {p.isCustom && isAuthorized && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCustomPrerequisite(p.id)}
+                            className="p-1 text-muted-foreground hover:text-rose-600 transition-colors cursor-pointer"
+                            title="Delete custom prerequisite"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         )}
                       </div>
                     </div>
@@ -607,7 +852,11 @@ function StageGateDrawerContent({
                 onClick={handleAdvance}
                 className="w-full h-9 rounded text-xs font-semibold bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 transition-colors cursor-pointer justify-center"
               >
-                <span>Advance to {readiness.nextStage}</span>
+                <span>
+                  {readiness.nextStage === 'Completed'
+                    ? 'Complete Project Lifecycle'
+                    : `Advance to ${readiness.nextStage}`}
+                </span>
                 <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
               </Button>
               <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono text-center">
@@ -629,7 +878,9 @@ function StageGateDrawerContent({
                 className="w-full h-9 rounded text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 transition-colors cursor-pointer justify-center"
               >
                 <span>
-                  Advance to {readiness.nextStage} (Advisory Override)
+                  {readiness.nextStage === 'Completed'
+                    ? 'Complete Project Lifecycle (Advisory Override)'
+                    : `Advance to ${readiness.nextStage} (Advisory Override)`}
                 </span>
                 <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
               </Button>

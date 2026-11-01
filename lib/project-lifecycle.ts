@@ -74,6 +74,7 @@ export function getNextLifecycleStage(
     case 'Construction':
       return 'Handover';
     case 'Handover':
+    case 'Completed':
       return 'Completed';
   }
 }
@@ -161,7 +162,8 @@ export function getStoredProjectStage(
     if (
       raw === 'Pre-Construction' ||
       raw === 'Construction' ||
-      raw === 'Handover'
+      raw === 'Handover' ||
+      raw === 'Completed'
     ) {
       return raw;
     }
@@ -198,6 +200,19 @@ export function evaluateStageGateReadiness(
 ): StageGateReadiness {
   const currentStage = (project.lifecycleStage ||
     'Pre-Construction') as ProjectLifecycleStage;
+
+  if (currentStage === 'Completed') {
+    return {
+      stage: 'Completed',
+      nextStage: 'Completed',
+      totalPrerequisites: 0,
+      satisfiedPrerequisites: 0,
+      readinessPercentage: 100,
+      isGateReady: true,
+      prerequisites: [],
+    };
+  }
+
   const nextStage = getNextLifecycleStage(currentStage);
   const projectNocs = allNocs.filter((n) => n.projectCode === project.code);
   const milestones =
@@ -375,15 +390,16 @@ export function evaluateStageGateReadiness(
     }
 
     if (handoverNocs.length === 0) {
+      const dcdDate = milestones.handover?.civilDefenceInspectionDate;
       prerequisites.push({
         id: 'gate-dcd',
         title: 'Civil Defence (DCD) Fire & Life Safety Clearance',
         category: 'authority_noc',
-        isSatisfied: false,
-        sourceReference: 'Pending DCD Inspection',
+        isSatisfied: Boolean(dcdDate),
+        sourceReference: dcdDate || 'Pending DCD Inspection',
         mandatoryForNextStage: true,
         actionHint:
-          'Clear Civil Defence Fire & Life Safety inspection and obtain clearance NOC.',
+          'Record Civil Defence (DCD) Inspection date in Milestone Dates Reference below or assign Handover NOC.',
       });
     }
 
@@ -398,6 +414,25 @@ export function evaluateStageGateReadiness(
       actionHint:
         'Record Building Completion Certificate (BCC) issuance date in Milestone Dates Reference below.',
     });
+  }
+
+  // Merge custom stage prerequisites defined for this stage
+  if (milestones.customPrerequisites && Array.isArray(milestones.customPrerequisites)) {
+    const stageCustoms = milestones.customPrerequisites.filter(
+      (cp) => cp.stage === currentStage,
+    );
+    for (const cp of stageCustoms) {
+      prerequisites.push({
+        id: cp.id,
+        title: cp.title,
+        category: cp.category,
+        isSatisfied: cp.isSatisfied,
+        sourceReference: cp.sourceReference || 'Custom Gate Requirement',
+        mandatoryForNextStage: cp.mandatoryForNextStage ?? true,
+        actionHint: cp.actionHint || 'Mark satisfied when requirement is fulfilled.',
+        isCustom: true,
+      });
+    }
   }
 
   const satisfiedCount = prerequisites.filter((p) => p.isSatisfied).length;

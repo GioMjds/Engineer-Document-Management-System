@@ -255,3 +255,138 @@ export async function toggleProjectNocRequirement(
   }
 }
 
+export async function addProjectNocRequirement(
+  projectNocId: string,
+  title: string,
+): Promise<{ ok: boolean; data?: { id: string; title: string; isSatisfied: boolean }; error?: string }> {
+  const user = await requireCan('noc.tracker.update');
+
+  if (!UUID_REGEX.test(projectNocId)) {
+    return { ok: false, error: 'Invalid NOC ID' };
+  }
+  const cleanTitle = title.trim();
+  if (!cleanTitle) {
+    return { ok: false, error: 'Requirement description is required' };
+  }
+
+  try {
+    const supabase = await createClient();
+    const now = new Date().toISOString();
+
+    const { data: nocRow, error: nocErr } = await supabase
+      .from('project_nocs')
+      .select('id, status_code')
+      .eq('id', projectNocId)
+      .maybeSingle();
+
+    if (nocErr || !nocRow) {
+      return { ok: false, error: 'NOC not found' };
+    }
+
+    if (nocRow.status_code === 'approved' && user.role !== 'admin') {
+      return {
+        ok: false,
+        error: 'NOC is already Approved. Only Admins can add requirements to approved NOCs.',
+      };
+    }
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from('project_noc_requirements')
+      .insert({
+        project_noc_id: projectNocId,
+        title: cleanTitle,
+        is_satisfied: false,
+        updated_at: now,
+        updated_by: user.id,
+      })
+      .select('id, title, is_satisfied')
+      .single();
+
+    if (insertErr || !inserted) {
+      return { ok: false, error: insertErr?.message || 'Failed to insert requirement' };
+    }
+
+    await supabase.from('audit_log').insert({
+      action: 'NOC_REQUIREMENT_ADDED',
+      actor_id: user.id,
+      entity: 'project_noc_requirements',
+      entity_id: inserted.id,
+      metadata: {
+        title: cleanTitle,
+        project_noc_id: projectNocId,
+      },
+    });
+
+    revalidatePath('/noc-tracker');
+    return {
+      ok: true,
+      data: {
+        id: inserted.id,
+        title: inserted.title,
+        isSatisfied: inserted.is_satisfied,
+      },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to add requirement';
+    return { ok: false, error: message };
+  }
+}
+
+export async function deleteProjectNocRequirement(
+  requirementId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireCan('noc.tracker.update');
+
+  if (!UUID_REGEX.test(requirementId)) {
+    return { ok: false, error: 'Invalid requirement ID' };
+  }
+
+  try {
+    const supabase = await createClient();
+
+    const { data: reqRow, error: reqFetchErr } = await supabase
+      .from('project_noc_requirements')
+      .select('id, title, project_noc_id, project_nocs!inner(status_code)')
+      .eq('id', requirementId)
+      .maybeSingle();
+
+    if (reqFetchErr || !reqRow) {
+      return { ok: false, error: 'Requirement not found' };
+    }
+
+    const nocStatus = (reqRow.project_nocs as { status_code?: string })?.status_code;
+    if (nocStatus === 'approved' && user.role !== 'admin') {
+      return {
+        ok: false,
+        error: 'NOC is already Approved. Only Admins can delete requirements from approved NOCs.',
+      };
+    }
+
+    const { error } = await supabase
+      .from('project_noc_requirements')
+      .delete()
+      .eq('id', requirementId);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await supabase.from('audit_log').insert({
+      action: 'NOC_REQUIREMENT_DELETED',
+      actor_id: user.id,
+      entity: 'project_noc_requirements',
+      entity_id: requirementId,
+      metadata: {
+        title: reqRow.title,
+        project_noc_id: reqRow.project_noc_id,
+      },
+    });
+
+    revalidatePath('/noc-tracker');
+    return { ok: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to delete requirement';
+    return { ok: false, error: message };
+  }
+}
+

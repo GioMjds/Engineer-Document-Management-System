@@ -548,10 +548,11 @@ export async function advanceProjectStageAction(
       };
     }
 
-    const stageEnumMap: Record<ProjectLifecycleStage, 'design' | 'construction' | 'handover'> = {
+    const stageEnumMap: Record<ProjectLifecycleStage, 'design' | 'construction' | 'handover' | 'completed'> = {
       'Pre-Construction': 'design',
       'Construction': 'construction',
       'Handover': 'handover',
+      'Completed': 'completed',
     };
 
     const { error } = await supabase

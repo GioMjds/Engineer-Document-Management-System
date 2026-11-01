@@ -1,7 +1,20 @@
 export type ProjectLifecycleStage =
   | 'Pre-Construction'
   | 'Construction'
-  | 'Handover';
+  | 'Handover'
+  | 'Completed';
+
+export interface CustomStagePrerequisite {
+  id: string;
+  title: string;
+  category: 'authority_noc' | 'specialist_study' | 'regulatory_milestone';
+  stage: ProjectLifecycleStage;
+  isSatisfied: boolean;
+  mandatoryForNextStage?: boolean;
+  sourceReference?: string;
+  actionHint?: string;
+  createdAt?: string;
+}
 
 export interface StageMilestoneDates {
   preConstruction?: {
@@ -23,6 +36,7 @@ export interface StageMilestoneDates {
     bccIssuanceDate?: string;
     targetCompletionDate?: string;
   };
+  customPrerequisites?: CustomStagePrerequisite[];
 }
 
 export interface StageGatePrerequisiteItem {
@@ -33,6 +47,7 @@ export interface StageGatePrerequisiteItem {
   sourceReference?: string;
   mandatoryForNextStage: boolean;
   actionHint?: string;
+  isCustom?: boolean;
 }
 
 export interface StageGateReadiness {
@@ -196,6 +211,16 @@ export interface AssignedProject {
     residentEngineer: string;
     areaManager: string;
     docController: string;
+  };
+  assignedMemberIds?: {
+    authorityEngineer?: string;
+    architectEngineer?: string;
+    mepEngineer?: string;
+    structureEngineer?: string;
+    civilEngineer?: string;
+    residentEngineer?: string;
+    areaManager?: string;
+    docController?: string;
   };
 }
 

@@ -55,12 +55,14 @@ function CommandDialog({
       </DialogHeader>
       <DialogContent
         className={cn(
-          "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0",
+          "top-1/4 sm:top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0 sm:max-w-xl border border-border/80 shadow-2xl",
           className
         )}
         showCloseButton={showCloseButton}
       >
-        {children}
+        <Command className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]]:px-2 [&_[cmdk-item]]:px-3 [&_[cmdk-item]]:py-2.5 [&_[cmdk-item]]:rounded-lg [&_[cmdk-item]]:gap-2.5">
+          {children}
+        </Command>
       </DialogContent>
     </Dialog>
   )
@@ -71,18 +73,21 @@ function CommandInput({
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
-    <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-2!">
+    <div
+      data-slot="command-input-wrapper"
+      className="p-1 pb-0 in-data-[slot=dialog-content]:p-0 in-data-[slot=dialog-content]:border-b in-data-[slot=dialog-content]:border-border/60"
+    >
+      <InputGroup className="h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-2! in-data-[slot=dialog-content]:h-12! in-data-[slot=dialog-content]:rounded-none! in-data-[slot=dialog-content]:border-0! in-data-[slot=dialog-content]:bg-transparent! in-data-[slot=dialog-content]:px-3.5! *:data-[slot=input-group-addon]:in-data-[slot=dialog-content]:pl-1!">
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
-            "w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
+            "w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50 in-data-[slot=dialog-content]:text-base in-data-[slot=dialog-content]:sm:text-sm in-data-[slot=dialog-content]:py-3",
             className
           )}
           {...props}
         />
         <InputGroupAddon>
-          <SearchIcon className="size-4 shrink-0 opacity-50" />
+          <SearchIcon className="size-4 shrink-0 opacity-50 in-data-[slot=dialog-content]:size-4.5 in-data-[slot=dialog-content]:opacity-70" />
         </InputGroupAddon>
       </InputGroup>
     </div>
