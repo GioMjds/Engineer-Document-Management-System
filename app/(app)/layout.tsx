@@ -39,6 +39,7 @@ export default async function AppLayout({ children, modal }: LayoutProps<'/'>) {
         email: user.email,
         full_name: user.full_name,
         role: user.role,
+        specialty: user.specialty,
       }}
       roleLabel={roleLabelMap[user.role] ?? user.role.replace('_', ' ')}
       onSignOut={signOut}

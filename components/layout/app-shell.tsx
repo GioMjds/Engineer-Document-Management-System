@@ -60,7 +60,13 @@ const GROUP_ORDER = [
 ] as const;
 
 interface AppShellProps {
-  user: { email?: string | null; full_name?: string | null; role: string };
+  user: {
+    email?: string | null;
+    full_name?: string | null;
+    role: string;
+    specialty?: string | null;
+    engineering_specialty?: string | null;
+  };
   roleLabel: string;
   onSignOut: () => Promise<void>;
   badges?: Record<string, number>;
@@ -84,7 +90,7 @@ export function AppShell({
     try {
       const stored = localStorage.getItem('cvtec_edms_sidebar_collapsed');
       if (stored !== null) {
-        setCollapsed(stored === 'true');
+        window.setTimeout(() => setCollapsed(stored === 'true'), 0);
       }
     } catch {
       // Handle private browsing or blocked storage

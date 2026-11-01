@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, LogOut, Shield, User as UserIcon } from 'lucide-react';
+import { ChevronDown, HardHat, LogOut, Shield, User as UserIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Popover,
@@ -15,6 +15,8 @@ interface UserProfileMenuProps {
     email?: string | null;
     full_name?: string | null;
     role: string;
+    specialty?: string | null;
+    engineering_specialty?: string | null;
   };
   roleLabel: string;
   onSignOut: () => Promise<void>;
@@ -42,8 +44,29 @@ export function UserProfileMenu({
   onSignOut,
 }: UserProfileMenuProps) {
   const [open, setOpen] = useState(false);
-  const initials = getInitials(user.full_name, user.email);
-  const displayName = user.full_name || user.email || 'User';
+
+  // Check if system role is Engineer.
+  const isEngineer =
+    user.role?.toLowerCase() === 'engineer' ||
+    roleLabel?.toLowerCase() === 'engineer';
+
+  // Extract base name and parenthetical specialty from full_name if present.
+  const match = user.full_name?.match(/^(.*?)\s*\((.*?)\)$/);
+  const parsedName = match ? match[1].trim() : (user.full_name || '').trim();
+  const parsedSpecialty = match ? match[2].trim() : null;
+
+  // Resolve engineering specialty only if user role is Engineer.
+  const engineeringSpecialty = isEngineer
+    ? (user.engineering_specialty || user.specialty || parsedSpecialty)
+    : null;
+
+  const displayName = parsedName || user.email || 'User';
+  const initials = getInitials(parsedName || user.full_name, user.email);
+
+  const triggerSubtitle =
+    isEngineer && engineeringSpecialty
+      ? `${roleLabel} • ${engineeringSpecialty}`
+      : roleLabel;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -61,12 +84,18 @@ export function UserProfileMenu({
             </span>
 
             {/* User Name & Role (hidden on mobile) */}
-            <span className="hidden sm:flex flex-col text-left leading-none max-w-27.5 md:max-w-35">
-              <span className="truncate text-xs font-semibold text-foreground">
+            <span className="hidden sm:flex flex-col text-left leading-none max-w-36 md:max-w-48">
+              <span
+                className="truncate text-xs font-semibold text-foreground"
+                title={displayName}
+              >
                 {displayName}
               </span>
-              <span className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                {roleLabel}
+              <span
+                className="mt-0.5 truncate text-[10px] text-muted-foreground"
+                title={triggerSubtitle}
+              >
+                {triggerSubtitle}
               </span>
             </span>
 
@@ -79,7 +108,7 @@ export function UserProfileMenu({
         align="end"
         side="bottom"
         sideOffset={6}
-        className="w-64 p-0 border border-border shadow-lg rounded-lg overflow-hidden bg-popover"
+        className="w-72 p-0 border border-border shadow-lg rounded-lg overflow-hidden bg-popover"
       >
         {/* User Identity Header */}
         <div className="border-b border-border bg-muted/30 p-3">
@@ -88,7 +117,10 @@ export function UserProfileMenu({
               {initials}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-foreground">
+              <p
+                className="truncate text-sm font-semibold text-foreground"
+                title={displayName}
+              >
                 {displayName}
               </p>
               <p
@@ -100,14 +132,17 @@ export function UserProfileMenu({
             </div>
           </div>
 
-          <div className="mt-2.5 flex items-center justify-between">
+          <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
             <span className="inline-flex items-center gap-1 rounded border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground">
               <Shield className="size-3 text-brand-cyan" />
               {roleLabel}
             </span>
-            <span className="font-mono text-[10px] text-muted-foreground uppercase">
-              {user.role}
-            </span>
+            {isEngineer && engineeringSpecialty && (
+              <span className="inline-flex items-center gap-1 rounded border border-border bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                <HardHat className="size-3 text-brand-cyan shrink-0" />
+                {engineeringSpecialty}
+              </span>
+            )}
           </div>
         </div>
 

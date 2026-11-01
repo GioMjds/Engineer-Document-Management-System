@@ -70,6 +70,12 @@ export function DisciplineStatusBadge({
     }
   };
 
+  const handleOpen = () => {
+    setSelectedStatus(detail.status);
+    setRemarks(detail.remarks || '');
+    setIsOpen(true);
+  };
+
   const handleSave = () => {
     onUpdate(selectedStatus, remarks);
     setIsOpen(false);
@@ -79,7 +85,7 @@ export function DisciplineStatusBadge({
     <>
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={handleOpen}
         className="group flex flex-col items-start gap-1 rounded-md border border-slate-200 bg-white p-2.5 text-left transition hover:border-slate-300 hover:shadow-xs dark:border-slate-800 dark:bg-slate-900"
         aria-label={`View or update ${label} status`}
       >

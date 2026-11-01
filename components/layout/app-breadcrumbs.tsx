@@ -25,10 +25,10 @@ interface Crumb {
  * e.g. /noc-tracker/23015 -> "Project 23015".
  * Add a line here when a new [param] route appears.
  */
-const DYNAMIC_SEGMENT_LABEL: Record<string, (value: string) => string> = {
+const DYNAMIC_SEGMENT_LABEL = {
   'noc-tracker': (v: string) => `Project ${v}`,
   projects: (v: string) => `Project ${v}`,
-};
+} satisfies Record<string, (value: string) => string>;
 
 /** Static child routes that must not be treated as a dynamic value. */
 const STATIC_CHILDREN = new Set(['new']);

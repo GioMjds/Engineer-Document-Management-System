@@ -255,3 +255,59 @@ export function canUserEditDiscipline(
       return false;
   }
 }
+
+function getStorage(): Storage | null {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  }
+  if (
+    typeof window === 'undefined' &&
+    typeof globalThis !== 'undefined' &&
+    (globalThis as unknown as { localStorage?: Storage }).localStorage
+  ) {
+    return (globalThis as unknown as { localStorage: Storage }).localStorage;
+  }
+  return null;
+}
+
+export function getStoredDisciplineStatus(
+  code: string,
+  fallback?: ProjectDisciplineStatus,
+): ProjectDisciplineStatus | undefined {
+  const defaultStatus = fallback || INITIAL_PROJECT_DISCIPLINE_STATUS[code];
+  const storage = getStorage();
+  if (!storage) return defaultStatus;
+  try {
+    const raw = storage.getItem(`cvtec_discipline_status_${code}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return defaultStatus;
+}
+
+export function saveStoredDisciplineStatus(
+  code: string,
+  status: ProjectDisciplineStatus,
+): void {
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(
+      `cvtec_discipline_status_${code}`,
+      JSON.stringify(status),
+    );
+  } catch {
+    // ignore
+  }
+}
+

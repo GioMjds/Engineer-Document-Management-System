@@ -1,8 +1,13 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Building2, FolderPlus, UserCheck } from 'lucide-react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  advanceProjectStageAction,
+  updateProjectMilestonesAction,
+} from '@/app/actions/noc';
+import type { ExecutiveKpiSummary } from '@/app/loaders/ceo';
+import { StageGateDrawer } from '@/components/lifecycle/stage-gate-drawer';
 import { buttonVariants } from '@/components/ui/button';
 import {
   Select,
@@ -11,8 +16,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { StageGateDrawer } from '@/components/lifecycle/stage-gate-drawer';
-import { updateProjectMilestonesAction, advanceProjectStageAction } from '@/app/actions/noc';
+import { can } from '@/lib/permissions';
+import {
+  INITIAL_PROJECT_MILESTONES,
+  evaluateStageGateReadiness,
+  getStoredProjectMilestones,
+  getStoredProjectStage,
+  saveStoredProjectMilestones,
+  saveStoredProjectStage,
+} from '@/lib/project-lifecycle';
+import {
+  INITIAL_PROJECT_DISCIPLINE_STATUS,
+  getStoredDisciplineStatus,
+  saveStoredDisciplineStatus,
+} from '@/lib/project-status';
 import { cn } from '@/lib/utils';
 import type {
   AssignedProject,
@@ -23,26 +40,16 @@ import type {
   StageMilestoneDates,
   ThirdPartySpecialistType,
 } from '@/types/noc';
-import {
-  evaluateStageGateReadiness,
-  INITIAL_PROJECT_MILESTONES,
-  getStoredProjectMilestones,
-  saveStoredProjectMilestones,
-  getStoredProjectStage,
-  saveStoredProjectStage,
-} from '@/lib/project-lifecycle';
-import { INITIAL_PROJECT_DISCIPLINE_STATUS } from '@/lib/project-status';
+import { Building2, FolderPlus, UserCheck } from 'lucide-react';
 import { ActionQueue } from './action-queue';
+import { AreaManagerSummaryCards } from './area-manager-summary-cards';
 import { AttentionTiles, type QueueFilter } from './attention-tiles';
-import { PortfolioTable } from './portfolio-table';
-import { ProjectDisciplineCard } from './project-discipline-card';
-import { useDashboardData } from './use-dashboard-data';
 import { EngineerSummaryCards } from './engineer-summary-cards';
 import { ExecutiveSummaryCards } from './executive-summary-cards';
 import { FinancialPortfolioWidget } from './financial-portfolio-widget';
-import { AreaManagerSummaryCards } from './area-manager-summary-cards';
-import type { ExecutiveKpiSummary } from '@/app/loaders/ceo';
-import { can } from '@/lib/permissions';
+import { PortfolioTable } from './portfolio-table';
+import { ProjectDisciplineCard } from './project-discipline-card';
+import { useDashboardData } from './use-dashboard-data';
 
 interface ExecutiveDashboardClientProps {
   projects: AssignedProject[];
@@ -63,7 +70,7 @@ interface ExecutiveDashboardClientProps {
 const ROLE_PREVIEW_ENABLED =
   process.env.NEXT_PUBLIC_ENABLE_ROLE_PREVIEW === 'true';
 
-// Remove this when we have a proper role-based auth system in place. 
+// Remove this when we have a proper role-based auth system in place.
 // For now, this is just a dev convenience to preview the dashboard as different roles.
 const AVAILABLE_ROLES = [
   { value: 'admin', label: 'Admin (Full Access)' },
@@ -84,6 +91,14 @@ const AVAILABLE_ROLES = [
 
 const now = () => new Date().toISOString();
 
+const ALL_SPECIALIST_TYPES = [
+  'Vertical Transportation',
+  'Traffic Impact Study',
+  'Green Building',
+  'Topographical',
+  'Geotechnical',
+] satisfies ThirdPartySpecialistType[];
+
 function emptyStatus(projectCode: string): ProjectDisciplineStatus {
   const base = {
     status: 'Not Started' as const,
@@ -102,8 +117,22 @@ function emptyStatus(projectCode: string): ProjectDisciplineStatus {
       updatedBy: 'Unassigned',
       updatedAt: now(),
     },
-    specialists: [],
+    specialists: ALL_SPECIALIST_TYPES.map((type, idx) => ({
+      id: `spec-${projectCode}-${idx + 1}`,
+      type,
+      status: 'Pending' as const,
+    })),
   };
+}
+
+const noopSubscribe = () => () => {};
+
+function useHydrated() {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
 }
 
 export function ExecutiveDashboardClient({
@@ -120,13 +149,58 @@ export function ExecutiveDashboardClient({
   >(() => {
     const initialMap = { ...INITIAL_PROJECT_MILESTONES };
     for (const p of projects) {
-      if (p.milestones) initialMap[p.code] = p.milestones;
+      if (p.milestones && Object.keys(p.milestones).length > 0) {
+        initialMap[p.code] = p.milestones;
+      }
     }
     return initialMap;
   });
   const [disciplineStatuses, setDisciplineStatuses] = useState<
     Record<string, ProjectDisciplineStatus>
   >(INITIAL_PROJECT_DISCIPLINE_STATUS);
+  const [syncedProjects, setSyncedProjects] = useState<
+    AssignedProject[] | null
+  >(null);
+  const hydrated = useHydrated();
+
+  // Synchronize stored milestones, lifecycle stages, and discipline statuses on client mount.
+  if (hydrated && syncedProjects !== projects) {
+    setSyncedProjects(projects);
+
+    setProjectList((prev) =>
+      prev.map((p) => {
+        const storedStage = getStoredProjectStage(
+          p.code,
+          p.lifecycleStage || 'Pre-Construction',
+        );
+        return {
+          ...p,
+          milestones: getStoredProjectMilestones(p.code, p.milestones),
+          lifecycleStage: storedStage,
+          currentStage: `${storedStage} Stage`,
+        };
+      }),
+    );
+
+    setMilestonesMap((prev) => {
+      const next = { ...prev };
+      for (const p of projects) {
+        const stored = getStoredProjectMilestones(p.code, p.milestones);
+        if (stored && Object.keys(stored).length > 0) next[p.code] = stored;
+      }
+      return next;
+    });
+
+    setDisciplineStatuses((prev) => {
+      const next = { ...prev };
+      for (const p of projects) {
+        const stored = getStoredDisciplineStatus(p.code);
+        if (stored) next[p.code] = stored;
+      }
+      return next;
+    });
+  }
+
   const [gateDrawerProjectCode, setGateDrawerProjectCode] = useState<
     string | null
   >(null);
@@ -136,28 +210,6 @@ export function ExecutiveDashboardClient({
   const [scope, setScope] = useState<string>('all');
   const [queueFilter, setQueueFilter] = useState<QueueFilter>('all');
   const [nocItems] = useState<ProjectNocItem[]>(initialNocs);
-
-  // Sync stored milestones and lifecycle stages on mount.
-  useEffect(() => {
-    setProjectList((prev) =>
-      prev.map((p) => {
-        const storedMilestones = getStoredProjectMilestones(p.code, p.milestones);
-        const storedStage = getStoredProjectStage(
-          p.code,
-          p.lifecycleStage || 'Pre-Construction',
-        );
-        if (storedMilestones && Object.keys(storedMilestones).length > 0) {
-          setMilestonesMap((m) => ({ ...m, [p.code]: storedMilestones }));
-        }
-        return {
-          ...p,
-          milestones: storedMilestones,
-          lifecycleStage: storedStage,
-          currentStage: `${storedStage} Stage`,
-        };
-      }),
-    );
-  }, []);
 
   const data = useDashboardData(projectList, nocItems, scope);
   const isEngineer =
@@ -170,44 +222,66 @@ export function ExecutiveDashboardClient({
   const canViewFinancials = can(currentRole, 'amount.consultant.view');
 
   const activeExecutiveSummary = useMemo<ExecutiveKpiSummary>(() => {
-    if (executiveSummary && currentRole === currentUserRole) {
+    if (
+      executiveSummary &&
+      currentRole === currentUserRole &&
+      scope === 'all'
+    ) {
       return executiveSummary;
     }
-    const totalProjects = projectList.length;
-    const totalNocs = nocItems.length;
-    const approvedNocs = nocItems.filter((n) => n.status === 'Approved').length;
-    const completionPct = totalNocs > 0 ? Math.round((approvedNocs / totalNocs) * 100) : 0;
+
+    const totalProjects = data.scopedProjects.length;
+    const totalNocs = data.scopedNocs.length;
+    const approvedNocs = data.scopedNocs.filter(
+      (n) => n.status === 'Approved',
+    ).length;
+    const completionPct =
+      totalNocs > 0 ? Math.round((approvedNocs / totalNocs) * 100) : 0;
     const criticalDelays = data.delayItems.length;
     const expiring = data.expiringNocs.length;
-    const financials = projectList.map((p) => ({
+
+    const financials = data.scopedProjects.map((p) => ({
       projectId: p.code,
       projectName: p.name,
       stage: p.lifecycleStage || 'Pre-Construction',
       contractorAmount: p.clientContractorAmount || 0,
-      consultantAmount: p.code === '23015' ? 3200000 : p.code === '23016' ? 8500000 : 0,
+      consultantAmount:
+        p.code === '23015' ? 3200000 : p.code === '23016' ? 8500000 : 0,
     }));
+
     return {
       activeProjectsCount: totalProjects,
       nocCompletionPercentage: completionPct,
       criticalDelaysCount: criticalDelays,
       expiringNocsCount: expiring,
       reviewBacklogCount: 1,
-      totalContractorAmount: financials.reduce((s, f) => s + f.contractorAmount, 0),
-      totalConsultantAmount: financials.reduce((s, f) => s + f.consultantAmount, 0),
+      totalContractorAmount: financials.reduce(
+        (s, f) => s + f.contractorAmount,
+        0,
+      ),
+      totalConsultantAmount: financials.reduce(
+        (s, f) => s + f.consultantAmount,
+        0,
+      ),
       projectFinancials: financials,
     };
   }, [
     executiveSummary,
     currentRole,
     currentUserRole,
-    projectList,
-    nocItems,
+    scope, // ← added
+    data.scopedProjects, // ← was projectList
+    data.scopedNocs, // ← was nocItems
     data.delayItems.length,
     data.expiringNocs.length,
   ]);
 
   const engineerStats = useMemo(() => {
-    if (initialEngineerStats && currentRole === currentUserRole) {
+    if (
+      initialEngineerStats &&
+      currentRole === currentUserRole &&
+      scope === 'all'
+    ) {
       return initialEngineerStats;
     }
 
@@ -233,7 +307,10 @@ export function ExecutiveDashboardClient({
         if (item.status !== 'Not Started') {
           totalUploaded += 1;
         }
-        if (item.status === 'Under Review' || item.status === 'Client Approval') {
+        if (
+          item.status === 'Under Review' ||
+          item.status === 'Client Approval'
+        ) {
           underReview += 1;
         }
         if (item.status === 'On Hold') {
@@ -247,77 +324,128 @@ export function ExecutiveDashboardClient({
     initialEngineerStats,
     currentRole,
     currentUserRole,
+    scope,
     data.scopedProjects,
     disciplineStatuses,
   ]);
 
-  /* ---------- mutations (still local state; persist to Supabase next) ---------- */
+  /* ---------- mutations (local state + local storage persistence) ---------- */
   const patch = (
     code: string,
     fn: (c: ProjectDisciplineStatus) => ProjectDisciplineStatus,
   ) =>
-    setDisciplineStatuses((prev) =>
-      prev[code] ? { ...prev, [code]: fn(prev[code]) } : prev,
-    );
+    setDisciplineStatuses((prev) => {
+      const current =
+        prev[code] ??
+        getStoredDisciplineStatus(code, emptyStatus(code)) ??
+        emptyStatus(code);
+      const nextStatus = fn(current);
+      saveStoredDisciplineStatus(code, nextStatus);
+      return { ...prev, [code]: nextStatus };
+    });
 
   const handleUpdateDiscipline = (
     code: string,
     discipline: 'architecture' | 'structure' | 'mep',
     status: DisciplineStageStatus,
     remarks?: string,
-  ) =>
+  ) => {
+    const actor =
+      currentRole === 'admin'
+        ? 'System Administrator'
+        : currentRole.replace(/_/g, ' ');
     patch(code, (c) => ({
       ...c,
       [discipline]: {
         ...c[discipline],
         status,
         remarks: remarks !== undefined ? remarks : c[discipline].remarks,
+        updatedBy: actor,
         updatedAt: now(),
       },
     }));
+  };
 
   const handleUpdateAuthorityStage = (
     code: string,
     stageKey: 'designStage' | 'constructionStage' | 'revisionStage',
     status: DisciplineStageStatus,
-  ) =>
+  ) => {
+    const actor =
+      currentRole === 'admin'
+        ? 'System Administrator'
+        : currentRole.replace(/_/g, ' ');
     patch(code, (c) => ({
       ...c,
-      authorities: { ...c.authorities, [stageKey]: status, updatedAt: now() },
+      authorities: {
+        ...c.authorities,
+        [stageKey]: status,
+        updatedBy: actor,
+        updatedAt: now(),
+      },
     }));
+  };
 
   const handleUploadSpecialistFile = (
     code: string,
     type: ThirdPartySpecialistType,
     fileName: string,
     fileSize: string,
-  ) =>
-    patch(code, (c) => ({
-      ...c,
-      specialists: c.specialists.map((s) =>
-        s.type === type
-          ? {
-              ...s,
-              fileName,
-              fileSize,
-              uploadedBy: 'You',
-              uploadedAt: now(),
-              status: 'Uploaded' as const,
-            }
-          : s,
-      ),
-    }));
+  ) => {
+    const actor =
+      currentRole === 'admin'
+        ? 'System Administrator'
+        : currentRole.replace(/_/g, ' ');
+    patch(code, (c) => {
+      const list = c.specialists || [];
+      const exists = list.some((s) => s.type === type);
+      const updatedItem = {
+        id: `spec-${code}-${type.toLowerCase().replace(/\s+/g, '-')}`,
+        type,
+        fileName,
+        fileSize,
+        uploadedBy: actor,
+        uploadedAt: now(),
+        status: 'Uploaded' as const,
+      };
+
+      const updatedSpecialists = exists
+        ? list.map((s) => (s.type === type ? { ...s, ...updatedItem } : s))
+        : [...list, updatedItem];
+
+      return {
+        ...c,
+        specialists: updatedSpecialists,
+      };
+    });
+  };
 
   const handleApproveSpecialistFile = (
     code: string,
     type: ThirdPartySpecialistType,
   ) =>
-    patch(code, (c) => ({
-      ...c,
-      specialists: c.specialists.map((s) =>
-        s.type === type ? { ...s, status: 'Approved' as const } : s,
-      ),
-    }));
+    patch(code, (c) => {
+      const list = c.specialists || [];
+      const exists = list.some((s) => s.type === type);
+      const updatedSpecialists = exists
+        ? list.map((s) =>
+            s.type === type ? { ...s, status: 'Approved' as const } : s,
+          )
+        : [
+            ...list,
+            {
+              id: `spec-${code}-${type.toLowerCase().replace(/\s+/g, '-')}`,
+              type,
+              status: 'Approved' as const,
+              uploadedAt: now(),
+            },
+          ];
+
+      return {
+        ...c,
+        specialists: updatedSpecialists,
+      };
+    });
 
   const handleAdvanceProjectStage = async (
     code: string,
@@ -365,6 +493,33 @@ export function ExecutiveDashboardClient({
       : null;
   }, [projectList, gateDrawerProjectCode, milestonesMap]);
 
+  const scopeOptions = useMemo(
+    () => [
+      {
+        value: 'all',
+        label:
+          projectList.length > 0
+            ? `All Projects (${projectList.length})`
+            : 'All Projects',
+      },
+      ...projectList.map((p) => ({
+        value: p.code,
+        label: `#${p.code} · ${p.name}`,
+      })),
+    ],
+    [projectList],
+  );
+
+  const selectedScopeLabel = useMemo(() => {
+    if (scope === 'all') {
+      return projectList.length > 0
+        ? `All Projects (${projectList.length})`
+        : 'All Projects';
+    }
+    const found = projectList.find((p) => p.code === scope);
+    return found ? `#${found.code} · ${found.name}` : 'All Projects';
+  }, [scope, projectList]);
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -381,20 +536,23 @@ export function ExecutiveDashboardClient({
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <Building2 className="size-4 text-muted-foreground" aria-hidden />
-            <Select value={scope} onValueChange={(v) => v && setScope(v)}>
+            <Select
+              value={scope}
+              items={scopeOptions}
+              onValueChange={(v) => v && setScope(v)}
+            >
               <SelectTrigger
                 className="h-10 w-64 text-sm"
                 aria-label="Project scope"
               >
-                <SelectValue placeholder="All projects" />
+                <SelectValue placeholder="All Projects">
+                  {selectedScopeLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem>
-                  All projects ({projectList.length})
-                </SelectItem>
-                {projectList.map((p) => (
-                  <SelectItem key={p.code} value={p.code}>
-                    #{p.code} · {p.name}
+                {scopeOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -422,13 +580,16 @@ export function ExecutiveDashboardClient({
           <span className="text-xs font-semibold">Dev role preview</span>
           <Select
             value={currentRole}
+            items={AVAILABLE_ROLES}
             onValueChange={(v) => v && setCurrentRole(v)}
           >
             <SelectTrigger
               className="h-8 w-56 border-0 bg-transparent text-xs font-semibold"
               aria-label="Preview role"
             >
-              <SelectValue />
+              <SelectValue>
+                {AVAILABLE_ROLES.find((r) => r.value === currentRole)?.label}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {AVAILABLE_ROLES.map((r) => (
@@ -452,7 +613,9 @@ export function ExecutiveDashboardClient({
       {isCeo && (
         <ExecutiveSummaryCards
           activeProjectsCount={activeExecutiveSummary.activeProjectsCount}
-          nocCompletionPercentage={activeExecutiveSummary.nocCompletionPercentage}
+          nocCompletionPercentage={
+            activeExecutiveSummary.nocCompletionPercentage
+          }
           criticalDelaysCount={activeExecutiveSummary.criticalDelaysCount}
           expiringNocsCount={activeExecutiveSummary.expiringNocsCount}
           reviewBacklogCount={activeExecutiveSummary.reviewBacklogCount}
@@ -468,7 +631,8 @@ export function ExecutiveDashboardClient({
           }
           pendingAuthorityApprovals={
             data.scopedNocs.filter(
-              (n) => n.status === 'Submitted' || n.status === 'Pending for Payment',
+              (n) =>
+                n.status === 'Submitted' || n.status === 'Pending for Payment',
             ).length
           }
           totalContractorAmount={activeExecutiveSummary.totalContractorAmount}

@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { SubmittalDelayItem, ProjectNocItem } from '@/types/noc';
 import { calculateDaysRemaining } from '@/lib/noc-tracker';
-import { AlertCircle, Clock, ArrowUpRight, CheckCircle2 } from 'lucide-react';
+import { Clock, ArrowUpRight, CheckCircle2 } from 'lucide-react';
 
 interface SubmittalDelayTableProps {
   delayItems: SubmittalDelayItem[];
@@ -26,10 +26,14 @@ export function SubmittalDelayTable({
                 Pending Submittals & Authority Delays
               </h4>
               <p className="text-xs text-slate-500">
-                Sorted by highest days of delay past planned submission or authority turnaround.
+                Sorted by highest days of delay past planned submission or
+                authority turnaround.
               </p>
             </div>
-            <Badge variant="outline" className="text-xs text-rose-600 bg-rose-50 dark:bg-rose-950/40">
+            <Badge
+              variant="outline"
+              className="text-xs text-rose-600 bg-rose-50 dark:bg-rose-950/40"
+            >
               {delayItems.length} Delayed Submittals
             </Badge>
           </div>
@@ -39,20 +43,36 @@ export function SubmittalDelayTable({
           <div className="p-8 text-center text-xs text-slate-500">
             <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
             <p className="mt-2 font-medium">All submittals are on schedule.</p>
-            <p className="text-[11px] text-slate-400">Zero submittals currently exceed their planned delivery dates.</p>
+            <p className="text-[11px] text-slate-400">
+              Zero submittals currently exceed their planned delivery dates.
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800">
                 <tr>
-                  <th scope="col" className="px-4 py-2.5">Delay Urgency</th>
-                  <th scope="col" className="px-4 py-2.5">Project</th>
-                  <th scope="col" className="px-4 py-2.5">Authority</th>
-                  <th scope="col" className="px-4 py-2.5">NOC Description</th>
-                  <th scope="col" className="px-4 py-2.5">Target Plan</th>
-                  <th scope="col" className="px-4 py-2.5">Submitted</th>
-                  <th scope="col" className="px-4 py-2.5 text-right">Action</th>
+                  <th scope="col" className="px-4 py-2.5">
+                    Delay Urgency
+                  </th>
+                  <th scope="col" className="px-4 py-2.5">
+                    Project
+                  </th>
+                  <th scope="col" className="px-4 py-2.5">
+                    Authority
+                  </th>
+                  <th scope="col" className="px-4 py-2.5">
+                    NOC Description
+                  </th>
+                  <th scope="col" className="px-4 py-2.5">
+                    Target Plan
+                  </th>
+                  <th scope="col" className="px-4 py-2.5">
+                    Submitted
+                  </th>
+                  <th scope="col" className="px-4 py-2.5 text-right">
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -71,11 +91,12 @@ export function SubmittalDelayTable({
                           <Badge className="bg-purple-100 text-purple-800 border-purple-300 font-mono text-xs dark:bg-purple-950/60 dark:text-purple-300">
                             {item.daysDelayed}d with authority
                           </Badge>
-                          {typeof item.planDelayDays === 'number' && item.planDelayDays > 0 && (
-                            <span className="text-[10px] text-muted-foreground font-mono">
-                              +{item.planDelayDays}d past target plan
-                            </span>
-                          )}
+                          {typeof item.planDelayDays === 'number' &&
+                            item.planDelayDays > 0 && (
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                +{item.planDelayDays}d past target plan
+                              </span>
+                            )}
                         </div>
                       )}
                     </td>
@@ -95,12 +116,18 @@ export function SubmittalDelayTable({
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap font-mono text-slate-600 dark:text-slate-400">
                       {item.applyDate || (
-                        <span className="text-rose-500 font-sans italic">Not yet applied</span>
+                        <span className="text-rose-500 font-sans italic">
+                          Not yet applied
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right">
-                      <Link href={`/noc-tracker?project=${item.projectCode}`}>
-                        <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-blue-600">
+                      <Link href={`/noc-tracker/${item.projectCode}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-xs text-blue-600"
+                        >
                           Resolve
                           <ArrowUpRight className="h-3 w-3" />
                         </Button>
@@ -124,7 +151,10 @@ export function SubmittalDelayTable({
                 14-Day Authority Permit Expiration Watchlist
               </h4>
             </div>
-            <Badge variant="outline" className="text-xs text-amber-800 border-amber-300 bg-amber-100">
+            <Badge
+              variant="outline"
+              className="text-xs text-amber-800 border-amber-300 bg-amber-100"
+            >
               {expiringNocs.length} Critical Permits
             </Badge>
           </div>
@@ -139,12 +169,24 @@ export function SubmittalDelayTable({
             <table className="w-full text-left text-xs">
               <thead className="border-b border-amber-200/50 bg-amber-50/50 text-[11px] font-semibold uppercase tracking-wider text-amber-900/70 dark:bg-amber-950/50 dark:text-amber-300">
                 <tr>
-                  <th scope="col" className="px-4 py-2.5">Time to Expiry</th>
-                  <th scope="col" className="px-4 py-2.5">Project</th>
-                  <th scope="col" className="px-4 py-2.5">Authority</th>
-                  <th scope="col" className="px-4 py-2.5">Reference No</th>
-                  <th scope="col" className="px-4 py-2.5">Expiration Date</th>
-                  <th scope="col" className="px-4 py-2.5 text-right">Action</th>
+                  <th scope="col" className="px-4 py-2.5">
+                    Time to Expiry
+                  </th>
+                  <th scope="col" className="px-4 py-2.5">
+                    Project
+                  </th>
+                  <th scope="col" className="px-4 py-2.5">
+                    Authority
+                  </th>
+                  <th scope="col" className="px-4 py-2.5">
+                    Reference No
+                  </th>
+                  <th scope="col" className="px-4 py-2.5">
+                    Expiration Date
+                  </th>
+                  <th scope="col" className="px-4 py-2.5 text-right">
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-amber-200/40 dark:divide-amber-900/30">
@@ -153,7 +195,10 @@ export function SubmittalDelayTable({
                   const isLapsed = daysLeft !== null && daysLeft < 0;
 
                   return (
-                    <tr key={noc.id} className="hover:bg-amber-100/30 transition">
+                    <tr
+                      key={noc.id}
+                      className="hover:bg-amber-100/30 transition"
+                    >
                       <td className="px-4 py-3 whitespace-nowrap">
                         {isLapsed ? (
                           <Badge className="bg-rose-600 text-white font-mono text-xs">
@@ -178,8 +223,12 @@ export function SubmittalDelayTable({
                         {noc.expiryDate}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-right">
-                        <Link href={`/noc-tracker?project=${noc.projectCode}`}>
-                          <Button variant="outline" size="sm" className="h-7 text-xs border-amber-300 hover:bg-amber-100">
+                        <Link href={`/noc-tracker/${noc.projectCode}`}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs border-amber-300 hover:bg-amber-100"
+                          >
                             Renew NOC
                           </Button>
                         </Link>

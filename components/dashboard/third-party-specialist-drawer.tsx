@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { ThirdPartySpecialistRecord, ThirdPartySpecialistType } from '@/types/noc';
-import { FileText, Upload, CheckCircle2, Clock, Paperclip } from 'lucide-react';
+import { FileText, Upload, CheckCircle2, Clock, Paperclip, FolderOpen } from 'lucide-react';
 
 interface ThirdPartySpecialistDrawerProps {
   isOpen: boolean;
@@ -43,8 +44,9 @@ export function ThirdPartySpecialistDrawer({
   onUploadSpecialistFile,
   onApproveSpecialistFile,
 }: ThirdPartySpecialistDrawerProps) {
-  const [selectedType, setSelectedType] = useState<ThirdPartySpecialistType | null>(null);
   const isReadOnly = userRole === 'ceo';
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeUploadType, setActiveUploadType] = useState<ThirdPartySpecialistType | null>(null);
 
   const getRecord = (type: ThirdPartySpecialistType) => {
     return specialists.find((s) => s.type === type) || {
@@ -62,12 +64,45 @@ export function ThirdPartySpecialistDrawer({
       'Topographical': 'TOPO-SURVEY-BOUNDARY-COORDINATES.dwg',
       'Geotechnical': 'GEOTECH-SOIL-BEARING-CAPACITY.pdf',
     };
-    onUploadSpecialistFile(type, defaultFileNames[type], '6.4 MB');
+    const fileName = defaultFileNames[type];
+    onUploadSpecialistFile(type, fileName, '6.4 MB');
+    toast.success(`Attached ${fileName} for ${type}.`);
+  };
+
+  const handleTriggerCustomUpload = (type: ThirdPartySpecialistType) => {
+    setActiveUploadType(type);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (activeUploadType && file) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      const sizeStr = `${sizeMb} MB`;
+      onUploadSpecialistFile(activeUploadType, file.name, sizeStr);
+      toast.success(`Attached ${file.name} (${sizeStr}) for ${activeUploadType}.`);
+    }
+    setActiveUploadType(null);
+  };
+
+  const handleApprove = (type: ThirdPartySpecialistType) => {
+    onApproveSpecialistFile(type);
+    toast.success(`Approved ${type} technical study.`);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-2xl">
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          accept=".pdf,.dwg,.doc,.docx,.xls,.xlsx"
+          onChange={handleFileChange}
+        />
         <DialogHeader>
           <div className="flex items-center gap-2">
             <Paperclip className="h-5 w-5 text-slate-500" />
@@ -129,17 +164,29 @@ export function ThirdPartySpecialistDrawer({
                 </div>
 
                 {!isReadOnly && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     {isPending && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 text-xs"
-                        onClick={() => handleSimulateUpload(type)}
-                      >
-                        <Upload className="h-3.5 w-3.5" />
-                        Attach Report
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-xs"
+                          onClick={() => handleSimulateUpload(type)}
+                        >
+                          <Upload className="h-3.5 w-3.5" />
+                          Attach Report
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                          title="Choose custom file from disk"
+                          onClick={() => handleTriggerCustomUpload(type)}
+                        >
+                          <FolderOpen className="h-3.5 w-3.5 mr-1" />
+                          Browse
+                        </Button>
+                      </>
                     )}
                     {isUploaded && (
                       <>
@@ -155,7 +202,7 @@ export function ThirdPartySpecialistDrawer({
                         <Button
                           size="sm"
                           className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700"
-                          onClick={() => onApproveSpecialistFile(type)}
+                          onClick={() => handleApprove(type)}
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           Approve

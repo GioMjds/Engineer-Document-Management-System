@@ -15,6 +15,7 @@ export interface AuthenticatedUser {
   email: string;
   full_name: string;
   role: AppRole;
+  specialty?: string;
 }
 
 export const getCurrentUser = cache(
@@ -41,11 +42,15 @@ export const getCurrentUser = cache(
       return null;
     }
 
+    const match = profile.full_name?.match(/^(.*?)\s*\((.*?)\)$/);
+    const specialty = normalized === 'engineer' && match ? match[2].trim() : undefined;
+
     return {
       id: profile.id,
       email: user.email ?? '',
       full_name: profile.full_name || user.email?.split('@')[0] || 'User',
       role: normalized,
+      specialty,
     };
   },
 );

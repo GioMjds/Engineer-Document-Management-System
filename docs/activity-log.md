@@ -1051,3 +1051,45 @@
   - Cleared stale `.next/types/validator.ts` cache that caused missing module errors (`TS2307`).
   - Updated [projects-workspace-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/projects-workspace-client.tsx) card code, card title, Documents button, table row code, table row title, and Docs button to link to `/projects/${project.code}`.
   - Verified with `npx tsc --noEmit`: 0 errors.
+
+
+## Session 2026-11-01
+
+- Added Engineering Specialty to User Profile Menu for Engineers:
+  - Background & Objective: Enhance [components/layout/user-profile-menu.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/user-profile-menu.tsx) to display the engineering discipline specialty when the user's system role is Engineer.
+  - Implementation:
+    - Updated [components/layout/user-profile-menu.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/user-profile-menu.tsx):
+      - Added system role detection (`user.role === 'engineer' || roleLabel === 'Engineer'`).
+      - Added specialty resolution from `user.engineering_specialty`, `user.specialty`, or parsed parenthetical tag in `user.full_name`.
+      - Stripped parenthetical tag from `displayName` and initials calculation to prevent distorted names or duplicate badges.
+      - Added high-density secondary badge with `HardHat` icon (`lucide-react`) beside the `Shield` role badge in the dropdown header.
+      - Updated trigger button subtitle to show `${roleLabel} • ${engineeringSpecialty}` with tooltip and expanded max-width (`max-w-36 md:max-w-48`) for responsive readability.
+    - Updated [components/layout/app-shell.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/app-shell.tsx) to pass optional `specialty` and `engineering_specialty`.
+    - Updated [lib/auth.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/auth.ts) and [app/(app)/layout.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/layout.tsx) to extract and forward `specialty` in session context.
+    - Added reference screenshot in [docs/screenshots/user-profile-menu-engineer-specialty.png](file:///D:/giomj/Projects/engineer-docs-collab/docs/screenshots/user-profile-menu-engineer-specialty.png).
+  - Verification:
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `pnpm build` passed with all 24 static and dynamic routes compiled successfully.
+
+- Fixed Project Scope Select Label in Executive Dashboard:
+  - Background & Objective: Resolve project scope dropdown displaying raw value `'all'` in trigger button instead of human-readable label `"All Projects"`.
+  - Root Cause: Base UI `<Select>` in [executive-dashboard-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/executive-dashboard-client.tsx) lacked `items` dictionary and `<SelectValue>` lacked child label resolution, defaulting to raw value display.
+  - Implementation:
+    - Added `scopeOptions` memo defining `{ value, label }` for `'all'` (`All Projects (${projectList.length})`) and every active project (`#${p.code} · ${p.name}`).
+    - Added `selectedScopeLabel` memo resolving active scope selection text.
+    - Passed `items={scopeOptions}` to `<Select>` and rendered `{selectedScopeLabel}` within `<SelectValue>`.
+    - Added reference screenshots in [docs/screenshots/dashboard-project-scope-select.png](file:///D:/giomj/Projects/engineer-docs-collab/docs/screenshots/dashboard-project-scope-select.png) and [docs/screenshots/dashboard-project-scope-open.png](file:///D:/giomj/Projects/engineer-docs-collab/docs/screenshots/dashboard-project-scope-open.png).
+  - Verification:
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `pnpm build` passed compiling 24/24 static and dynamic routes successfully.
+
+- Fixed React Hydration Error in Executive Dashboard:
+  - Background & Objective: Resolve React hydration mismatch at `app/(app)/dashboard/page.tsx:57` where `<StatusChip>` differed between Server (`Circle`, `tone="neutral"`) and Client (`CheckCircle2`, `tone="success"`).
+  - Root Cause: [executive-dashboard-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/executive-dashboard-client.tsx) initialized `useState` with `localStorage` lookups (`getStoredDisciplineStatus`, `getStoredProjectStage`, `getStoredProjectMilestones`). During SSR, `localStorage` is inaccessible, producing default unassigned/not-started state; on client mount, browser `localStorage` produced stored/approved state, violating React initial hydration equivalence.
+  - Implementation:
+    - Reverted initial `useState` declarations in [executive-dashboard-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/executive-dashboard-client.tsx) to strictly use server props (`projects`, `INITIAL_PROJECT_MILESTONES`, `INITIAL_PROJECT_DISCIPLINE_STATUS`).
+    - Added `useEffect` hook to synchronize `localStorage` values (`getStoredDisciplineStatus`, `getStoredProjectMilestones`, `getStoredProjectStage`) only after client mount.
+    - Added reference error screenshot in [docs/screenshots/dashboard-hydration-error.jpg](file:///D:/giomj/Projects/engineer-docs-collab/docs/screenshots/dashboard-hydration-error.jpg).
+  - Verification:
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `pnpm build` passed compiling all 24 static and dynamic routes cleanly.
