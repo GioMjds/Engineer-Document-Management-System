@@ -5,6 +5,10 @@ import {
   updateProjectMilestonesAction,
   updateProjectDisciplineStatusAction,
 } from '@/app/actions/noc';
+import {
+  uploadSpecialistFileAction,
+  removeSpecialistFileAction,
+} from '@/app/actions/specialists';
 import { ProjectLifecycleStepper } from '@/components/lifecycle/project-lifecycle-stepper';
 import { StageGateDrawer } from '@/components/lifecycle/stage-gate-drawer';
 import { ProjectDisciplineCard } from '@/components/dashboard/project-discipline-card';
@@ -18,9 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { matchesUrgentFilter } from '@/lib/noc-summary';
-import {
-  evaluateStageGateReadiness,
-} from '@/lib/project-lifecycle';
+import { evaluateStageGateReadiness } from '@/lib/project-lifecycle';
 import { createClient } from '@/lib/supabase/client';
 import type {
   AssignedProject,
@@ -89,9 +91,12 @@ export function NocTrackerClient({
   const [milestones, setMilestones] = useState<StageMilestoneDates>(
     project.milestones || {},
   );
-  const [disciplineStatus, setDisciplineStatus] = useState<ProjectDisciplineStatus>(
-    () => project.milestones?.disciplineStatus || emptyDisciplineStatus(project.code),
-  );
+  const [disciplineStatus, setDisciplineStatus] =
+    useState<ProjectDisciplineStatus>(
+      () =>
+        project.milestones?.disciplineStatus ||
+        emptyDisciplineStatus(project.code),
+    );
   const [isGateDrawerOpen, setIsGateDrawerOpen] = useState(false);
   const [nocItems, setNocItems] = useState<ProjectNocItem[]>(initialNocs);
   const [activeStage, setActiveStage] = useState<string>('all');
@@ -190,11 +195,7 @@ export function NocTrackerClient({
 
   const currentGateReadiness = useMemo(
     () =>
-      evaluateStageGateReadiness(
-        currentProject,
-        nocItems,
-        projectDocuments,
-      ),
+      evaluateStageGateReadiness(currentProject, nocItems, projectDocuments),
     [currentProject, nocItems, projectDocuments],
   );
 
@@ -357,17 +358,34 @@ export function NocTrackerClient({
     }));
   };
 
-  const handleUploadSpecialistFile = (
+  const handleUploadSpecialistFile = async (
     _code: string,
     type: ThirdPartySpecialistType,
     fileName: string,
     fileSize: string,
     revision?: string,
+    file?: File,
   ) => {
     const actor =
       currentUserRole === 'admin'
         ? 'System Administrator'
         : currentUserRole.replace(/_/g, ' ');
+
+    let uploadedPath: string | undefined;
+    if (file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await uploadSpecialistFileAction(
+        project.code,
+        type,
+        formData,
+        revision,
+      );
+      if (res.success && res.filePath) {
+        uploadedPath = res.filePath;
+      }
+    }
+
     void patchDisciplineStatus((c) => {
       const list = c.specialists || [];
       const exists = list.some((s) => s.type === type);
@@ -379,10 +397,13 @@ export function NocTrackerClient({
           : 'R00');
 
       const updatedItem = {
-        id: prev?.id || `spec-${project.code}-${type.toLowerCase().replace(/\s+/g, '-')}`,
+        id:
+          prev?.id ||
+          `spec-${project.code}-${type.toLowerCase().replace(/\s+/g, '-')}`,
         type,
         fileName,
         fileSize,
+        filePath: uploadedPath || prev?.filePath,
         revision: computedRevision,
         uploadedBy: actor,
         uploadedAt: new Date().toISOString(),
@@ -480,6 +501,7 @@ export function NocTrackerClient({
     _code: string,
     type: ThirdPartySpecialistType,
   ) => {
+    void removeSpecialistFileAction(project.code, type);
     void patchDisciplineStatus((c) => {
       const list = c.specialists || [];
       const updatedSpecialists = list.map((s) =>

@@ -36,7 +36,7 @@ const updateDocSchema = z.object({
 /**
  * Checks if user has permission to access a project.
  */
-async function canAccessProject(
+export async function canAccessProject(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   role: string | null | undefined,

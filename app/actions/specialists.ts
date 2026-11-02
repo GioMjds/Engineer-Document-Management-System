@@ -3,13 +3,20 @@
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { emptyDisciplineStatus } from '@/lib/project-status';
+import type { Json } from '@/types/database';
 import type {
   ThirdPartySpecialistType,
   ThirdPartySpecialistRecord,
-  StageMilestones,
+  ProjectDisciplineStatus,
 } from '@/types/noc';
 
-const MAX_SPECIALIST_FILE_SIZE = 50 * 1024 * 1024; // 50 MB limit
+const MAX_SPECIALIST_FILE_SIZE = 50 * 1024 * 1024; // 50 MB limit, and file size might be larger than 50 MB, so we need to handle that case.
+
+interface StoredMilestones {
+  disciplineStatus?: ProjectDisciplineStatus;
+  [key: string]: unknown;
+}
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) {
@@ -86,16 +93,15 @@ export async function uploadSpecialistFileAction(
     }
 
     const currentMilestones =
-      (projectData.milestones as unknown as StageMilestones) || {};
-    const disciplineStatus = currentMilestones.disciplineStatus || {
-      projectCode,
-      disciplines: {},
-      authoritiesStages: {},
-      specialists: [],
-    };
+      (projectData.milestones as unknown as StoredMilestones) || {};
+    const disciplineStatus: ProjectDisciplineStatus =
+      currentMilestones.disciplineStatus || emptyDisciplineStatus(projectCode);
 
-    const specialistsList = disciplineStatus.specialists || [];
-    const prev = specialistsList.find((s) => s.type === type);
+    const specialistsList: ThirdPartySpecialistRecord[] =
+      disciplineStatus.specialists || [];
+    const prev = specialistsList.find(
+      (s: ThirdPartySpecialistRecord) => s.type === type,
+    );
     const computedRevision =
       revision ||
       (prev?.revision
@@ -110,7 +116,8 @@ export async function uploadSpecialistFileAction(
 
     const updatedRecord: ThirdPartySpecialistRecord = {
       id:
-        prev?.id || `spec-${projectCode}-${type.toLowerCase().replace(/\s+/g, '-')}`,
+        prev?.id ||
+        `spec-${projectCode}-${type.toLowerCase().replace(/\s+/g, '-')}`,
       type,
       fileName: file.name,
       fileSize: formattedSize,
@@ -124,12 +131,16 @@ export async function uploadSpecialistFileAction(
       reviewedAt: undefined,
     };
 
-    const exists = specialistsList.some((s) => s.type === type);
+    const exists = specialistsList.some(
+      (s: ThirdPartySpecialistRecord) => s.type === type,
+    );
     const updatedSpecialists = exists
-      ? specialistsList.map((s) => (s.type === type ? updatedRecord : s))
+      ? specialistsList.map((s: ThirdPartySpecialistRecord) =>
+          s.type === type ? updatedRecord : s,
+        )
       : [...specialistsList, updatedRecord];
 
-    const updatedMilestones: StageMilestones = {
+    const updatedMilestones: StoredMilestones = {
       ...currentMilestones,
       disciplineStatus: {
         ...disciplineStatus,
@@ -139,7 +150,7 @@ export async function uploadSpecialistFileAction(
 
     const { error: updateError } = await admin
       .from('projects')
-      .update({ milestones: updatedMilestones as any })
+      .update({ milestones: updatedMilestones as unknown as Json })
       .eq('code', projectCode);
 
     if (updateError) {
@@ -193,18 +204,24 @@ export async function getSpecialistDownloadUrlAction(
     }
 
     const currentMilestones =
-      (projectData.milestones as unknown as StageMilestones) || {};
+      (projectData.milestones as unknown as StoredMilestones) || {};
     const specialists = currentMilestones.disciplineStatus?.specialists || [];
-    const specialist = specialists.find((s) => s.type === type);
+    const specialist = specialists.find(
+      (s: ThirdPartySpecialistRecord) => s.type === type,
+    );
 
     if (!specialist || !specialist.fileName) {
-      return { success: false, error: 'No report attached for this specialist.' };
+      return {
+        success: false,
+        error: 'No report attached for this specialist.',
+      };
     }
 
     if (!specialist.filePath) {
       return {
         success: false,
-        error: 'Legacy report without storage path; download fallback transmittal.',
+        error:
+          'Legacy report without storage path; download fallback transmittal.',
         fileName: specialist.fileName,
       };
     }
@@ -257,32 +274,32 @@ export async function removeSpecialistFileAction(
     }
 
     const currentMilestones =
-      (projectData.milestones as unknown as StageMilestones) || {};
-    const disciplineStatus = currentMilestones.disciplineStatus || {
-      projectCode,
-      disciplines: {},
-      authoritiesStages: {},
-      specialists: [],
-    };
+      (projectData.milestones as unknown as StoredMilestones) || {};
+    const disciplineStatus: ProjectDisciplineStatus =
+      currentMilestones.disciplineStatus || emptyDisciplineStatus(projectCode);
 
-    const specialistsList = disciplineStatus.specialists || [];
-    const specialist = specialistsList.find((s) => s.type === type);
+    const specialistsList: ThirdPartySpecialistRecord[] =
+      disciplineStatus.specialists || [];
+    const specialist = specialistsList.find(
+      (s: ThirdPartySpecialistRecord) => s.type === type,
+    );
 
     if (specialist?.filePath) {
       await admin.storage.from('documents').remove([specialist.filePath]);
     }
 
-    const updatedSpecialists = specialistsList.map((s) =>
-      s.type === type
-        ? {
-            id: s.id,
-            type: s.type,
-            status: 'Pending' as const,
-          }
-        : s,
+    const updatedSpecialists = specialistsList.map(
+      (s: ThirdPartySpecialistRecord) =>
+        s.type === type
+          ? {
+              id: s.id,
+              type: s.type,
+              status: 'Pending' as const,
+            }
+          : s,
     );
 
-    const updatedMilestones: StageMilestones = {
+    const updatedMilestones: StoredMilestones = {
       ...currentMilestones,
       disciplineStatus: {
         ...disciplineStatus,
@@ -292,7 +309,7 @@ export async function removeSpecialistFileAction(
 
     const { error: updateError } = await admin
       .from('projects')
-      .update({ milestones: updatedMilestones as any })
+      .update({ milestones: updatedMilestones as unknown as Json })
       .eq('code', projectCode);
 
     if (updateError) {

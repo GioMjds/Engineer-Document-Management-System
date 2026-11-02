@@ -2,6 +2,23 @@
 
 ## Session 2026-11-02
 
+- Resolved System-Wide File Download and Specialist Storage Failures:
+  - Background & Objective: Resolves bug where file downloads failed across both Third-Party Specialists and technical drawings in Document Library, Review Queue, Project Documents, and Archive.
+  - Root Cause Analysis:
+    1. Third-Party Specialist Studies: Uploading an actual file from the file picker only saved the filename string and formatted size into JSON without saving the file bytes to Supabase storage. Clicking download invoked an instant URL.revokeObjectURL on the same tick, which cancelled the browser download stream, and downloaded ASCII text disguised as a PDF.
+    2. Document Management & Review: Client components called programmatic anchor clicks on cross-origin Supabase signed URLs. Browsers strip the HTML5 download attribute on cross-origin URLs and block synthetic navigation, preventing files from downloading.
+  - Implementation:
+    - Created [lib/download.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/download.ts): Centralized download utility converting remote streams into same-origin Blob URLs with a 60-second delayed revocation, ensuring native browser downloads work reliably across all browsers.
+    - Created [app/actions/specialists.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/specialists.ts): Server actions uploadSpecialistFileAction, getSpecialistDownloadUrlAction, and removeSpecialistFileAction for uploading actual files to Supabase storage bucket documents under specialists/ and issuing signed download URLs.
+    - Created [app/api/documents/[id]/download/route.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/api/documents/[id]/download/route.ts): Authenticated same-origin HTTP streaming route with Content-Disposition headers for direct drawing downloads.
+    - Updated [components/dashboard/third-party-specialist-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/third-party-specialist-drawer.tsx): Wired real storage file upload, added uploading and downloading button spinners, and integrated signed download fetching with transmittal fallback.
+    - Updated [components/dashboard/project-discipline-card.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/project-discipline-card.tsx) and [components/noc/noc-tracker-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-tracker-client.tsx): Forwarded file object to upload action and updated local state.
+    - Updated [app/(app)/documents/document-row-actions.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/documents/document-row-actions.tsx), [components/projects/project-documents-view.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-documents-view.tsx), [components/review/drawing-review-modal.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/review/drawing-review-modal.tsx), [components/review/review-queue-table.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/review/review-queue-table.tsx), and [app/(app)/documents/download-button.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/documents/download-button.tsx): Converted to downloadFileFromUrl.
+  - Verification:
+    - `pnpm exec tsc --noEmit`: Passed with 0 errors.
+    - `pnpm exec eslint`: Passed with 0 errors and 0 warnings.
+    - `pnpm run build`: Compiled all 24 routes cleanly.
+
 - Restructured Dashboard to Pure Read-Only Analytics and Dedicated Operational Submittals to NOC Tracker:
   - Background & Objective: Resolves operational ambiguity where discipline progress, authority review stages, and third-party specialist files could be edited and submitted from the Executive Dashboard. Dashboard is reserved exclusively for high-level portfolio KPIs and analytics, while operational submittals and stage gate progression belong strictly on the dedicated NOC Tracker page (/noc-tracker/[projectID]). Also updated the NOC Tracker loading skeleton to eliminate cumulative layout shift (CLS).
   - Implementation:

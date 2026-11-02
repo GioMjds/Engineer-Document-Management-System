@@ -14,8 +14,8 @@ export function DownloadButton({ documentId }: { documentId: string }) {
     setLoading(true);
     try {
       const result = await getDownloadUrl(documentId);
-      if (!result.ok || !result.url) {
-        toast.error(result.error || 'Failed to download document.');
+      if (!result.ok) {
+        toast.error(result.error);
         return;
       }
       await downloadFileFromUrl(

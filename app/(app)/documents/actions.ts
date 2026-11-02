@@ -1,7 +1,5 @@
 'use server';
 
-import { requireUser } from '@/lib/auth';
-import { createClient } from '@/lib/supabase/server';
 import {
   archiveDocument as appArchiveDocument,
   restoreDocument as appRestoreDocument,
@@ -21,7 +19,10 @@ export async function getDownloadUrl(documentId: string): Promise<
 > {
   const res = await appGetDownloadUrl(documentId);
   if (!res.ok || !res.url) {
-    return { ok: false, error: res.error || 'Failed to generate download URL.' };
+    return {
+      ok: false,
+      error: res.error || 'Failed to generate download URL.',
+    };
   }
   return { ok: true, url: res.url, fileName: res.fileName };
 }

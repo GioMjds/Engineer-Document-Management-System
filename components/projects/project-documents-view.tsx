@@ -163,7 +163,12 @@ export function ProjectDocumentsView({
         const matchesTitle = doc.title.toLowerCase().includes(q);
         const matchesDesc = (doc.description || '').toLowerCase().includes(q);
         const matchesFile = (doc.file_name || '').toLowerCase().includes(q);
-        if (!matchesDocNumber && !matchesTitle && !matchesDesc && !matchesFile) {
+        if (
+          !matchesDocNumber &&
+          !matchesTitle &&
+          !matchesDesc &&
+          !matchesFile
+        ) {
           return false;
         }
       }
@@ -176,7 +181,7 @@ export function ProjectDocumentsView({
     setDownloadingId(doc.id);
     try {
       const res = await getDownloadUrl(doc.id);
-      if (!res.ok || !res.url) {
+      if (!res.ok) {
         toast.error(res.error || 'Failed to download document');
         return;
       }
@@ -486,9 +491,7 @@ export function ProjectDocumentsView({
       <div className="border-t border-border bg-card px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <Link
-            href={
-              (`/documents?project=${project.id || project.code}`) as Route
-            }
+            href={`/documents?project=${project.id || project.code}` as Route}
             className="flex items-center gap-1.5 text-primary hover:underline font-medium"
           >
             <span>Open full Document Library</span>
