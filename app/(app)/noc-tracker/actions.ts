@@ -120,13 +120,14 @@ export async function resubmitNocRevision(
         return { ok: false, error: histError.message };
       }
 
-      // Update project_nocs status to Not Started
+      // Update project_nocs status to applied (Submitted)
       const isFileUrl = Boolean(resubmitFileName && /^https?:\/\//i.test(resubmitFileName));
       const { error: updateError } = await supabase
         .from('project_nocs')
         .update({
           current_revision: newRevision,
-          status_code: 'not_started',
+          status_code: 'applied',
+          apply_date: now.split('T')[0],
           file_url: isFileUrl ? resubmitFileName : null,
           remarks: null,
           updated_at: now,

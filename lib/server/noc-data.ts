@@ -297,13 +297,18 @@ function mapDbNocToItem(
   };
 }
 
+// TODO: Must remove any seeded datas here.
 // Fetches live project and NOC data with automatic fallback to seed items.
 export async function getNocTrackerData(): Promise<NocTrackerData> {
   const fallbackData: NocTrackerData = {
     projects: SEED_PROJECTS,
-    nocs: [
-      ...INITIAL_NOCS_PROJECT_26001,
-    ],
+    nocs: INITIAL_NOCS_PROJECT_26001.map((item) => ({
+      ...item,
+      status:
+        item.status === 'Approved' && item.expiryDate && isLapsed(item.expiryDate)
+          ? 'Expired'
+          : item.status,
+    })),
     isLive: false,
   };
 
@@ -455,11 +460,21 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
       .order('sequence_no', { ascending: true });
 
     const seedNocsMap: Record<string, ProjectNocItem[]> = {
-      '26001': INITIAL_NOCS_PROJECT_26001,
+      '26001': INITIAL_NOCS_PROJECT_26001.map((item) => ({
+        ...item,
+        status:
+          item.status === 'Approved' && item.expiryDate && isLapsed(item.expiryDate)
+            ? 'Expired'
+            : item.status,
+      })),
       '26002': INITIAL_NOCS_PROJECT_26001.map((item) => ({
         ...item,
         id: item.id.replace('26001', '26002'),
         projectCode: '26002',
+        status:
+          item.status === 'Approved' && item.expiryDate && isLapsed(item.expiryDate)
+            ? 'Expired'
+            : item.status,
       })),
     };
 

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
 import {
+  AlertOctagon,
   ArrowRight,
   Banknote,
   Building2,
@@ -92,6 +93,12 @@ function AttentionChips({ summary }: { summary: NocSummary }) {
   return (
     <>
       <Chip
+        icon={AlertOctagon}
+        count={summary.expired}
+        label="expired"
+        tone="expired"
+      />
+      <Chip
         icon={XCircle}
         count={summary.rejected}
         label="rejected"
@@ -129,6 +136,7 @@ export function NocProjectPicker({ cards, canCreate }: NocProjectPickerProps) {
         (acc, { summary }) => ({
           required: acc.required + summary.required,
           approved: acc.approved + summary.approved,
+          expired: acc.expired + summary.expired,
           expiring: acc.expiring + summary.expiring,
           rejected: acc.rejected + summary.rejected,
           feeDue: acc.feeDue + summary.feeDue,
@@ -137,6 +145,7 @@ export function NocProjectPicker({ cards, canCreate }: NocProjectPickerProps) {
         {
           required: 0,
           approved: 0,
+          expired: 0,
           expiring: 0,
           rejected: 0,
           feeDue: 0,

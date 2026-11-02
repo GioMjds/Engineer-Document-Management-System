@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Ban,
   ChevronRight,
   Clock,
   AlertTriangle,
@@ -21,6 +22,7 @@ import {
   checkBlockingPrerequisite,
   calculateDaysRemaining,
   isExpiringSoon,
+  isLapsed,
 } from '@/lib/noc-tracker';
 
 interface NocDataTableProps {
@@ -93,8 +95,8 @@ export function NocDataTable({
             );
             const isOverridden = Boolean(item.overrideReason);
             const daysRemaining = calculateDaysRemaining(item.expiryDate);
-            const expiring =
-              isExpiringSoon(item.expiryDate) && item.status !== 'Expired';
+            const isExpired = item.status === 'Expired' || (item.status === 'Approved' && isLapsed(item.expiryDate));
+            const expiring = isExpiringSoon(item.expiryDate) && !isExpired;
             const isSelected = selectedNocId === item.id;
 
             return (
@@ -148,7 +150,7 @@ export function NocDataTable({
                 <TableCell>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <NocStatusBadge
-                      status={item.status}
+                      status={isExpired ? 'Expired' : item.status}
                       isBlocked={isBlocked}
                       blockerTitle={blockerTitle}
                     />
@@ -169,9 +171,28 @@ export function NocDataTable({
                 <TableCell>
                   {item.expiryDate ? (
                     <div className="flex items-center gap-1">
-                      <span className="font-mono text-xs">
+                      <span
+                        className={`font-mono text-xs ${
+                          isExpired
+                            ? 'text-rose-600 dark:text-rose-400 font-semibold'
+                            : expiring
+                              ? 'text-amber-700 dark:text-amber-400 font-semibold'
+                              : ''
+                        }`}
+                      >
                         {item.expiryDate}
                       </span>
+                      {isExpired && (
+                        <span
+                          title={
+                            daysRemaining !== null
+                              ? `Expired ${Math.abs(daysRemaining)} days ago`
+                              : 'Permit Expired'
+                          }
+                        >
+                          <Ban className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                        </span>
+                      )}
                       {expiring && (
                         <span title={`Expires in ${daysRemaining} days`}>
                           <Clock className="h-3.5 w-3.5 text-amber-600 shrink-0" />

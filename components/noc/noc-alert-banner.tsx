@@ -1,8 +1,8 @@
 'use client';
 
-import { AlertTriangle, Clock, Ban, Check } from 'lucide-react';
+import { AlertTriangle, Clock, Ban, Check, AlertOctagon } from 'lucide-react';
 import type { ProjectNocItem } from '@/types/noc';
-import { isExpiringSoon, isPlanDueOrAtRisk } from '@/lib/noc-tracker';
+import { isExpiringSoon, isLapsed, isPlanDueOrAtRisk } from '@/lib/noc-tracker';
 
 interface NocAlertBannerProps {
   items: ProjectNocItem[];
@@ -15,8 +15,16 @@ export function NocAlertBanner({
   activeFilter,
   onSelectFilter,
 }: NocAlertBannerProps) {
+  const expiredCount = items.filter(
+    (i) =>
+      i.status === 'Expired' ||
+      (i.status === 'Approved' && isLapsed(i.expiryDate)),
+  ).length;
   const expiringCount = items.filter(
-    (i) => isExpiringSoon(i.expiryDate) && i.status !== 'Expired',
+    (i) =>
+      isExpiringSoon(i.expiryDate) &&
+      i.status !== 'Expired' &&
+      !isLapsed(i.expiryDate),
   ).length;
   const rejectedCount = items.filter((i) => i.status === 'Rejected').length;
   const pendingPaymentCount = items.filter(
@@ -35,6 +43,7 @@ export function NocAlertBanner({
   }
 
   if (
+    expiredCount === 0 &&
     expiringCount === 0 &&
     rejectedCount === 0 &&
     pendingPaymentCount === 0 &&
@@ -59,6 +68,23 @@ export function NocAlertBanner({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        {expiredCount > 0 && (
+          <button
+            type="button"
+            onClick={() =>
+              onSelectFilter(activeFilter === 'expired' ? null : 'expired')
+            }
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+              activeFilter === 'expired'
+                ? 'bg-rose-700 text-white border-rose-700'
+                : 'bg-rose-50 text-rose-900 border-rose-300 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800'
+            }`}
+          >
+            <AlertOctagon className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+            <span>{expiredCount} Permit Expired</span>
+          </button>
+        )}
+
         {dueOrAtRiskCount > 0 && (
           <button
             type="button"

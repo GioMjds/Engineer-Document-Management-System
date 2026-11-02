@@ -138,29 +138,35 @@ All dates align with `CVTEC_EDMS.md` (Oct 14–22, 2026 baseline):
 
 ---
 
-### Step 5: Authority Engineer Permitting & 14-Day Expiry Radar
+### Step 5: Authority Engineer Permitting, Submissions & Expiry Lifecycle
 
 - **Login as**: `ae3@test.com` (Zayed Al-Hashimi)
 - **URL**: [localhost:3000/noc-tracker](http://localhost:3000/noc-tracker)
 
 1. Select Project **26003**.
 2. Click on the first NOC row: `DEWA Substation & Electrical Load NOC`.
-3. In `NocInspectorDrawer`:
+3. **Statutory Checklist & Application Submission**:
+   - Under **Statutory Checklist Requirements**, verify items are satisfied (or show that unverified items require an Admin Statutory Waiver justification of $\ge 15$ characters).
    - Click button **Submit Application**.
-   - Input Ref: `DEWA-2026-003`, Date: `2026-10-22`.
+   - Input Authority Tracking Ref: `DEWA-2026-003`, Date: `2026-10-22`.
    - Click **Confirm Submission**. Status changes to **Submitted** (`applied`).
-4. In Drawer, scroll to **Record Fee Payment**:
-   - Payer: Select `Contractor`.
+4. **Authority Fee Settlement**:
+   - In Drawer, scroll to **Record Fee Payment**:
+   - Payer: Select `Contractor` (or `Consultant Advance` / `Client`).
    - Amount: `12000`.
    - Receipt Number: `RCP-DEWA-003`.
-   - Click **Record Payment**. Green `Paid` badge displays.
-5. Scroll to **Record Authority Decision**:
-   - Select: `Approved / Obtained`.
-   - Certificate Ref: `CERT-DEWA-003`.
-   - **Expiry Date**: Set to **`2026-11-04`** (13 days from today).
-   - Click **Save Decision**.
-6. _Outcome_: NOC status updates to **Approved**.
-7. _Key Presenter Talking Point_: Because the expiry is set to 04 Nov 2026 (13 days away), the system immediately triggers the **14-day statutory expiry alert badge** in the CEO and Document Controller dashboards.
+   - Click **Record Payment**. Green `Paid` badge displays with payer classification.
+5. **Authority Decision Recording & Expiry Tracking**:
+   - Click **Record Decision**:
+     - **Option A (Approved / Obtained)**: Select `Approved / Obtained`, Certificate Ref: `CERT-DEWA-003`, and Expiry Date: **`2026-11-04`** (13 days from today). Click **Confirm Obtained**. NOC status updates to **Approved**.
+     - **Option B (Rejected / Revision Cycle)**: If authority returns objections, select `Rejected / Comments`, enter rejection notes $\rightarrow$ status updates to **Rejected**, revision increments to `R01`, and rejection history is logged.
+6. **Resubmission & Revalidation Flow**:
+   - When a NOC is **Rejected** or **Expired**, the drawer unlocks **Resubmit Rejected Drawings** / **Resubmit for Revalidation**.
+   - Enter revised file name (e.g. `DWG-26003-DCD-R01.pdf`) and click **Confirm & Dispatch**.
+   - The submittal directly updates to **Submitted** with today's dispatch date as revision `R01`.
+7. **Two-Tier Expiry Radar (Upcoming vs Lapsed)**:
+   - **14-Day Amber Warning**: Setting expiry to `2026-11-04` (13 days away) immediately displays the amber `Expiring in 14 Days` badge in the top alert banner and CEO dashboard.
+   - **Permit Expired Red Alert**: If a permit validity date lapses past today, the system raises a prominent red `Permit Expired` alert button and tags the table row with a red expired badge to prevent illegal site operations.
 
 ---
 

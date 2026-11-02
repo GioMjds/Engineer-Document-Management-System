@@ -20,7 +20,7 @@ This guide provides a rapid, high-impact **5-to-7 minute end-to-end presentation
 
 ## 2. Test Accounts & Quick Login Roster
 
-All accounts share password `Password123!` (or the test password configured in `scripts/set-test-passwords.ts`).
+All accounts share password `cvtec123`.
 
 | Role                         | Canonical Email      | User Name                     | Focus in Demo                                                                |
 | :--------------------------- | :------------------- | :---------------------------- | :--------------------------------------------------------------------------- |
@@ -115,18 +115,24 @@ flowchart LR
 
 ---
 
-### Act 5: Authority Engineer – Statutory Permitting & 14-Day Expiry Radar (60 Seconds)
+### Act 5: Authority Engineer – Statutory Permitting, Submissions & Expiry Lifecycle (60 Seconds)
 
 1. **Login**: `ae3@test.com` (Zayed Al-Hashimi – Authority Engineer).
 2. **Navigate**: `/noc-tracker` $\rightarrow$ Project `26002`.
-3. **Inspect Approved Submittals Bundle**:
+3. **Statutory Submission & Checklist Gate**:
    - Open Sequence 1 (`DEWA Substation & Electrical Load NOC`).
-   - Notice approved drawing `26002-MEP-102` is automatically bundled as a verified technical deliverable.
-4. **Show 14-Day Expiry Warning**:
-   - Look at Sequence 2 (`RTA Traffic Impact & Right-of-Way Permit`).
-   - Expiry Date is set to **04 Nov 2026** (13 days from today).
-   - Show the **Amber Expiry Warning Badge** (`Expiring in 13 days`).
-   - Explain how this triggers the automated email notification to Authority Engineer, Document Controller, and CEO.
+   - Verify checklist items are satisfied (or show Admin waiver requirement if incomplete).
+   - Click **Submit Application** $\rightarrow$ Enter authority tracking Ref: `DEWA-2026-002`, Date: `2026-10-22`.
+   - Status updates cleanly to **Submitted** (`applied` on authority portal).
+4. **Authority Determination & Resubmission Cycle**:
+   - Demonstrate **Record Decision**:
+     - **Approved / Obtained**: Requires future expiry date $\rightarrow$ sets status to **Approved** with certificate reference.
+     - **Rejected / Comments**: Enter authority comments $\rightarrow$ transitions status to **Rejected**, archives rejection in audit trail, and increments revision (`R00` $\rightarrow$ `R01`).
+     - **Resubmit Rejected Drawings**: In drawer, attach revised drawing package `DWG-26002-DCD-R01.pdf` $\rightarrow$ click **Confirm & Dispatch**. Submittal directly updates to **Submitted** under revision `R01`.
+5. **Two-Tier Expiry Radar (Upcoming vs Lapsed)**:
+   - **14-Day Amber Warning**: Look at Sequence 2 (`RTA Traffic Impact & Right-of-Way Permit`). Expiry is set to **04 Nov 2026** (13 days from today). Top ribbon highlights `Expiring in 14 Days`.
+   - **Permit Expired Red Alert**: If an approved permit's expiry lapses past today, the system immediately flags a red `Permit Expired` alert button and unlocks **Resubmit for Revalidation (Expired Permit)**.
+   - Explain how statutory alerts notify Authority Engineer, Document Controller, and CEO to prevent illegal work stoppages.
 
 ---
 

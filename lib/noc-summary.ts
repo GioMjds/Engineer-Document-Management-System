@@ -1,7 +1,8 @@
-import { isExpiringSoon, isPlanDueOrAtRisk } from '@/lib/noc-tracker';
+import { isExpiringSoon, isLapsed, isPlanDueOrAtRisk } from '@/lib/noc-tracker';
 import type { ProjectNocItem } from '@/types/noc';
 
 export type UrgentFilter =
+  | 'expired'
   | 'expiring'
   | 'rejected'
   | 'pending-payment'
@@ -11,18 +12,16 @@ export type UrgentFilter =
  * Single source of truth for the "Action required" predicates.
  * Used by the project page (alert ribbon filter) AND the project picker
  * (per-project counts), so the two can never disagree.
- *
- * NOTE: 'expiring' deliberately mirrors the previous behaviour
- * (`isExpiringSoon && status !== 'Approved'`). Review it: an Approved NOC is
- * exactly the kind that expires, so this probably needs to change.
  */
 export function matchesUrgentFilter(
   item: ProjectNocItem,
   filter: string,
 ): boolean {
   switch (filter) {
+    case 'expired':
+      return item.status === 'Expired' || (item.status === 'Approved' && isLapsed(item.expiryDate));
     case 'expiring':
-      return isExpiringSoon(item.expiryDate) && item.status !== 'Expired';
+      return isExpiringSoon(item.expiryDate) && item.status !== 'Expired' && !isLapsed(item.expiryDate);
     case 'rejected':
       return item.status === 'Rejected';
     case 'pending-payment':
@@ -43,6 +42,7 @@ export interface NocSummary {
   /** NOCs that are actually required (excludes 'Not Needed'). */
   required: number;
   approved: number;
+  expired: number;
   expiring: number;
   rejected: number;
   feeDue: number;
@@ -53,6 +53,7 @@ export function summarizeNocs(items: ProjectNocItem[]): NocSummary {
   const summary: NocSummary = {
     required: 0,
     approved: 0,
+    expired: 0,
     expiring: 0,
     rejected: 0,
     feeDue: 0,
@@ -62,7 +63,8 @@ export function summarizeNocs(items: ProjectNocItem[]): NocSummary {
   for (const item of items) {
     if (item.status === 'Not Needed') continue;
     summary.required += 1;
-    if (item.status === 'Approved') summary.approved += 1;
+    if (item.status === 'Approved' && !isLapsed(item.expiryDate)) summary.approved += 1;
+    if (matchesUrgentFilter(item, 'expired')) summary.expired += 1;
     if (matchesUrgentFilter(item, 'expiring')) summary.expiring += 1;
     if (matchesUrgentFilter(item, 'rejected')) summary.rejected += 1;
     if (matchesUrgentFilter(item, 'pending-payment')) summary.feeDue += 1;
@@ -73,5 +75,11 @@ export function summarizeNocs(items: ProjectNocItem[]): NocSummary {
 }
 
 export function attentionCount(summary: NocSummary): number {
-  return summary.expiring + summary.rejected + summary.feeDue + summary.atRisk;
+  return (
+    summary.expired +
+    summary.expiring +
+    summary.rejected +
+    summary.feeDue +
+    summary.atRisk
+  );
 }

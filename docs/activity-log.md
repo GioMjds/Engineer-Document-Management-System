@@ -1,5 +1,64 @@
 # Activity Log
 
+## Session 2026-11-02
+
+- Enhanced NOC Tracker Statutory Submissions, Resubmission Flow, and Two-Tier Expiration Lifecycle:
+  - Background & Objective: Resolves critical blockers in authority NOC application submissions, dispatched drawing resubmissions, and expired permit alerts identified in the NOC Tracker (/noc-tracker/[projectID]).
+  - Implementation:
+    - Updated [lib/noc-summary.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/noc-summary.ts):
+      - Extended `UrgentFilter` union to include `'expired'`.
+      - Updated `matchesUrgentFilter` to detect expired permits via `status === 'Expired' || (status === 'Approved' && isLapsed(expiryDate))`.
+      - Updated `NocSummary` and `summarizeNocs` to compute `summary.expired` and include in attention counts.
+    - Updated [components/noc/noc-alert-banner.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-alert-banner.tsx):
+      - Added high-priority `Permit Expired` red button banner alert with `AlertOctagon` icon.
+      - Isolated upcoming 14-day expiries to non-lapsed permits (`!isLapsed(expiryDate)`).
+    - Updated [components/noc/noc-project-picker.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-project-picker.tsx):
+      - Added `expired` attention chip and included `summary.expired` in project cards and totals calculation.
+    - Updated [components/noc/noc-data-table.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-data-table.tsx):
+      - Derived `isExpired` dynamically to render the `Expired` badge and red strike date with relative lapsed days.
+    - Updated [components/noc/noc-inspector-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-inspector-drawer.tsx):
+      - Derived `isItemExpired` for real-time status badge rendering and drawer section toggling.
+      - Enabled "Resubmit for Revalidation (Expired Permit)" when permit validity lapses.
+      - Fixed dispatched resubmission flow in `handleResubmit`: sets `status: 'Submitted'` so revised drawings directly enter authority review queue without dropping to `Not Started`.
+      - Disabled "Record Decision" button for unsubmitted, rejected, or pending payment NOCs.
+    - Updated [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts):
+      - Added graceful fallback in `submitNocApplication` and `recordAuthorityDecision` for demo/seed projects (`noc-26001-01`, etc.) so live demonstrations update state without blocking UUID errors.
+    - Updated [app/(app)/noc-tracker/actions.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/noc-tracker/actions.ts):
+      - In `resubmitNocRevision`, updated `status_code` to `'applied'` with today's dispatch date.
+    - Updated [lib/server/noc-data.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/server/noc-data.ts):
+      - Mapped seed and fallback NOC items through `isLapsed` so expired dates initialize as `Expired`.
+    - Updated [docs/mvp-presentation-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/mvp-presentation-workflow.md) & [docs/manual-mvp-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/manual-mvp-workflow.md):
+      - Documented complete submission checklist gating, authority determination, revised package dispatch, and two-tier expiry alert radar.
+  - Verification:
+    - `npx tsc --noEmit`: 0 type errors.
+    - `pnpm lint`: 0 ESLint warnings/errors.
+    - `pnpm build`: 24 static and dynamic routes compiled cleanly with Turbopack.
+
+- Implemented Production-Grade User Management Skeleton Loading Fallback:
+  - Background & Objective: The /users route lacked an authentic skeleton UI, instead rendering an unstyled placeholder <Skeleton /> that triggered a jarring Cumulative Layout Shift (CLS) collapse upon data loading.
+  - Implementation:
+    - Updated app/(app)/users/loading.tsx:
+      - Created deterministic skeleton mirroring app/(app)/users/page.tsx and app/(app)/users/user-table-client.tsx.
+      - Replicated page header with title, description, and Invite User button placeholder (h-8, cyan accent styling).
+      - Replicated toolbar layout with search input skeleton (h-9), segmented status pills (All, Active, Pending, Archived), and role filter dropdown trigger (w-40).
+      - Replicated 6-column tabular layout (User, Email, System Role, Status, Joined, Actions).
+      - Configured realistic row variations with discipline specialty badges, You self-badge, w-52 RoleSelect triggers with chevrons, status badges (r=4 per DESIGN.md), and action buttons (Resend, Edit, Archive/Restore).
+      - Integrated WCAG 2.1 AA accessible container with role="status", aria-live="polite", aria-busy="true", screen reader text, and aria-hidden="true" decoration suppression.
+      - Applied theme tokens --skeleton-base and --skeleton-highlight for high daylight contrast.
+  - Verification:
+    - pnpm build verified cleanly with Turbopack and TypeScript compiling all 24 static and dynamic routes with 0 errors.
+  - Heuristic Critique & Remediation:
+    - Executed /impeccable critique with dual-agent orchestration (Assessment A: Design Review Director, Assessment B: Detector & Evidence Engineer). Initial heuristic score: 24/40 (Acceptable).
+    - Remediated all identified P1 and P2 findings:
+      - Stripped hyper-simulated business state mocks (removed hardcoded isSelf, hasResend, and irregular width overrides).
+      - Added select-none pointer-events-none across the visual tree to eliminate dead-click affordances during data fetch.
+      - Preserved static status tab typography ("All", "Active", "Pending", "Archived"), scoping skeleton bones solely to dynamic numeric count badges.
+      - Aligned Invite User trigger placeholder with solid cyan token styling matching InviteUserDialog.
+      - Simplified codebase by 40% (down to 184 LOC) into a uniform, robust 6-row skeleton matrix.
+    - Post-remediation score surged from 24/40 to 38/40 (Excellent).
+    - Verified with pnpm build (exit code 0; all 24 routes compiled).
+
+
 ## Session 2026-11-01
 
 - Redesigned Manage Team UI Layout and Synchronized True Database Member Values:

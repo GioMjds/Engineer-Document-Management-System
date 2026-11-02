@@ -51,7 +51,7 @@ import type {
   NocResubmissionEntry,
   ProjectDocumentItem,
 } from '@/types/noc';
-import { calculateDaysRemaining } from '@/lib/noc-tracker';
+import { calculateDaysRemaining, isLapsed } from '@/lib/noc-tracker';
 import { can } from '@/lib/permissions';
 import {
   recordNocFeePayment,
@@ -148,6 +148,9 @@ export function NocInspectorDrawer({
 
   const isPrerequisiteMet = !prerequisite || prerequisite.status === 'Approved';
   const isBlocked = !isPrerequisiteMet && !item.overrideReason;
+  const isItemExpired =
+    item.status === 'Expired' ||
+    (item.status === 'Approved' && isLapsed(item.expiryDate));
 
   function copyRef() {
     if (!item) return;
@@ -388,7 +391,7 @@ export function NocInspectorDrawer({
 
     onUpdateNoc({
       ...item,
-      status: 'Not Started',
+      status: 'Submitted',
       applyDate: new Date().toISOString().split('T')[0],
       revision: nextRev,
       rejectionReason: undefined,
@@ -480,7 +483,7 @@ export function NocInspectorDrawer({
                 Current status
               </span>
               <NocStatusBadge
-                status={item.status}
+                status={isItemExpired ? 'Expired' : item.status}
                 isBlocked={isBlocked}
                 blockerTitle={
                   prerequisite
@@ -507,7 +510,7 @@ export function NocInspectorDrawer({
                     <Button
                       size="sm"
                       className="w-full h-8 text-xs font-semibold flex items-center justify-center gap-1.5 bg-primary text-primary-foreground"
-                      disabled={isBlocked || item.status === 'Approved'}
+                      disabled={isBlocked || (item.status === 'Approved' && !isItemExpired)}
                       onClick={() => setIsSubmissionModalOpen(true)}
                     >
                       <Send className="h-3.5 w-3.5" />
@@ -519,7 +522,11 @@ export function NocInspectorDrawer({
                     size="sm"
                     variant="outline"
                     className="w-full h-8 text-xs font-semibold flex items-center justify-center gap-1.5 border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
-                    disabled={item.status === 'Not Started'}
+                    disabled={
+                      item.status === 'Not Started' ||
+                      item.status === 'Rejected' ||
+                      item.status === 'Pending for Payment'
+                    }
                     onClick={() => setIsDecisionModalOpen(true)}
                   >
                     <FileCheck className="h-3.5 w-3.5 text-emerald-600" />
@@ -1058,7 +1065,7 @@ export function NocInspectorDrawer({
             </div>
 
             {isAddingReq && (
-              <form onSubmit={handleAddRequirement} className="pt-1 pb-1 space-y-1.5 border-b pb-2">
+              <form onSubmit={handleAddRequirement} className="pt-1 pb-1 space-y-1.5 border-b">
                 <div className="flex gap-1.5">
                   <Input
                     value={newReqTitle}
@@ -1203,7 +1210,7 @@ export function NocInspectorDrawer({
           </section>
 
           {/* Resubmission Section (Active if Rejected or Expired) */}
-          {(item.status === 'Rejected' || item.status === 'Expired') && (
+          {(item.status === 'Rejected' || isItemExpired) && (
             <section className="p-3 border rounded bg-zinc-900 text-white space-y-3 dark:bg-zinc-950 dark:border-zinc-800">
               <div>
                 <h3 className="text-sm font-semibold flex items-center gap-1.5">
@@ -1211,7 +1218,7 @@ export function NocInspectorDrawer({
                   <span>
                     {item.status === 'Rejected'
                       ? 'Resubmit Rejected Drawings'
-                      : 'Resubmit for Revalidation'}
+                      : 'Resubmit for Revalidation (Expired Permit)'}
                   </span>
                 </h3>
                 <p className="text-xs text-zinc-300 mt-1">
