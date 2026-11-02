@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   FolderKanban,
   X,
+  Trash2,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { formatSize } from '@/utils/formatters';
 import { getDownloadUrl } from '@/app/(app)/documents/actions';
 import { downloadFileFromUrl } from '@/lib/download';
+import { DeleteProjectDialog } from './delete-project-dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Route } from 'next';
@@ -56,6 +58,7 @@ interface ProjectDocumentsViewProps {
   project: ProjectInfo;
   documents: ProjectDocumentSummary[];
   isModal?: boolean;
+  canDeleteProject?: boolean;
   onClose?: () => void;
 }
 
@@ -96,6 +99,7 @@ export function ProjectDocumentsView({
   project,
   documents,
   isModal = false,
+  canDeleteProject = false,
   onClose,
 }: ProjectDocumentsViewProps) {
   const router = useRouter();
@@ -103,6 +107,7 @@ export function ProjectDocumentsView({
   const [disciplineFilter, setDisciplineFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const stats = useMemo(() => {
     const underReview = documents.filter(
@@ -249,6 +254,20 @@ export function ProjectDocumentsView({
               <FolderKanban className="mr-1 size-3.5" />
               {documents.length} {documents.length === 1 ? 'Doc' : 'Docs'}
             </Badge>
+
+            {canDeleteProject && project.id && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsDeleteDialogOpen(true)}
+                className="h-7 gap-1 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+                title="Safely Delete or Archive Project"
+              >
+                <Trash2 className="size-3.5" />
+                <span className="hidden sm:inline">Delete Project</span>
+              </Button>
+            )}
           </div>
         </div>
 
@@ -519,6 +538,19 @@ export function ProjectDocumentsView({
           </Button>
         )}
       </div>
+
+      {isDeleteDialogOpen && project.id && (
+        <DeleteProjectDialog
+          open={isDeleteDialogOpen}
+          onOpenChange={setIsDeleteDialogOpen}
+          project={{
+            id: project.id,
+            code: project.code,
+            name: project.name || project.description || project.code,
+          }}
+          redirectToProjectsOnDelete={true}
+        />
+      )}
     </div>
   );
 }

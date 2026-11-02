@@ -36,6 +36,7 @@ export default async function ProjectsPage() {
   }
 
   const canCreateProject = can(user.role, 'project.create');
+  const canDeleteProject = can(user.role, 'project.delete');
   const canManageMembers = can(user.role, 'users.manage');
   const canViewConsultantAmount = can(user.role, 'amount.consultant.view');
 
@@ -50,6 +51,7 @@ export default async function ProjectsPage() {
         }}
         teamProfiles={teamProfiles}
         canCreateProject={canCreateProject}
+        canDeleteProject={canDeleteProject}
         canManageMembers={canManageMembers}
         canViewConsultantAmount={canViewConsultantAmount}
       />

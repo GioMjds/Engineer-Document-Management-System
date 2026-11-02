@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { getNocTrackerData } from '@/lib/server/noc-data';
 import {
@@ -27,7 +28,8 @@ export default async function StandaloneProjectPage({
   params,
 }: PageProps<'/projects/[code]'>) {
   const { code } = await params;
-  await requireUser();
+  const user = await requireUser();
+  const canDeleteProject = can(user.role, 'project.delete');
 
   const { projects } = await getNocTrackerData();
   const project = projects.find((p) => p.code === code);
@@ -118,6 +120,7 @@ export default async function StandaloneProjectPage({
           }}
           documents={documents}
           isModal={false}
+          canDeleteProject={canDeleteProject}
         />
       </div>
     </div>

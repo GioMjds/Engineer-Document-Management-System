@@ -957,3 +957,244 @@ export async function checkProjectCodeAvailability(
     return { ok: false, available: false, error: message };
   }
 }
+
+// Safely inspects related records count before deleting a project.
+export async function getProjectDeletionImpact(projectId: string): Promise<{
+  ok: boolean;
+  code?: string;
+  name?: string;
+  documentsCount?: number;
+  nocsCount?: number;
+  membersCount?: number;
+  error?: string;
+}> {
+  await requireCan('project.delete');
+  const adminClient = createAdminClient();
+
+  const { data: project, error: projErr } = await adminClient
+    .from('projects')
+    .select('id, code, description')
+    .eq('id', projectId)
+    .single();
+
+  if (projErr || !project) {
+    return { ok: false, error: 'Project not found.' };
+  }
+
+  const [docsRes, nocsRes, membersRes] = await Promise.all([
+    adminClient
+      .from('documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId),
+    adminClient
+      .from('project_nocs')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId),
+    adminClient
+      .from('project_members')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('project_id', projectId),
+  ]);
+
+  return {
+    ok: true,
+    code: project.code,
+    name: project.description,
+    documentsCount: docsRes.count ?? 0,
+    nocsCount: nocsRes.count ?? 0,
+    membersCount: membersRes.count ?? 0,
+  };
+}
+
+export interface DeleteProjectParams {
+  projectId: string;
+  confirmCode: string;
+  mode?: 'archive' | 'purge';
+}
+
+// Safely deletes or archives a project with mandatory project code confirmation.
+export async function deleteProjectAction(
+  params: DeleteProjectParams,
+): Promise<ActionPromise> {
+  const caller = await requireCan('project.delete');
+  const adminClient = createAdminClient();
+  const { projectId, confirmCode, mode = 'archive' } = params;
+
+  const { data: project, error: projErr } = await adminClient
+    .from('projects')
+    .select('id, code, description')
+    .eq('id', projectId)
+    .single();
+
+  if (projErr || !project) {
+    return { ok: false, error: 'Project not found.' };
+  }
+
+  if (confirmCode.trim().toUpperCase() !== project.code.trim().toUpperCase()) {
+    return {
+      ok: false,
+      error: `Confirmation code does not match project code '${project.code}'.`,
+    };
+  }
+
+  if (mode === 'archive') {
+    const { error: updateErr } = await adminClient
+      .from('projects')
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    if (updateErr) {
+      return { ok: false, error: updateErr.message };
+    }
+
+    try {
+      await adminClient.from('audit_log').insert({
+        actor_id: caller.id,
+        action: 'PROJECT_ARCHIVE',
+        entity: 'projects',
+        entity_id: projectId,
+        metadata: {
+          code: project.code,
+          name: project.description,
+        },
+      });
+    } catch {
+      // Audit log error is ignored.
+    }
+  } else {
+    // Delete document storage blobs from bucket.
+    const { data: docs } = await adminClient
+      .from('documents')
+      .select('id, file_path')
+      .eq('project_id', projectId);
+
+    if (docs && docs.length > 0) {
+      const filePaths = docs
+        .map((d) => d.file_path)
+        .filter((fp): fp is string => Boolean(fp));
+
+      if (filePaths.length > 0) {
+        try {
+          await adminClient.storage.from('documents').remove(filePaths);
+        } catch (storageErr) {
+          console.error('Failed to remove project document storage files:', storageErr);
+        }
+      }
+
+      const docIds = docs.map((d) => d.id);
+      await adminClient
+        .from('document_reviews')
+        .delete()
+        .in('document_id', docIds);
+      await adminClient.from('documents').delete().eq('project_id', projectId);
+    }
+
+    // Delete project NOC requirements, resubmissions and NOC rows.
+    const { data: nocs } = await adminClient
+      .from('project_nocs')
+      .select('id')
+      .eq('project_id', projectId);
+
+    if (nocs && nocs.length > 0) {
+      const nocIds = nocs.map((n) => n.id);
+      await adminClient
+        .from('project_noc_requirements')
+        .delete()
+        .in('project_noc_id', nocIds);
+      await adminClient
+        .from('noc_resubmission_history')
+        .delete()
+        .in('project_noc_id', nocIds);
+      await adminClient.from('project_nocs').delete().eq('project_id', projectId);
+    }
+
+    // Delete members and confidential amounts.
+    await adminClient.from('project_members').delete().eq('project_id', projectId);
+    await adminClient.from('project_confidential').delete().eq('project_id', projectId);
+
+    // Finally delete project row.
+    const { error: delErr } = await adminClient
+      .from('projects')
+      .delete()
+      .eq('id', projectId);
+
+    if (delErr) {
+      return { ok: false, error: delErr.message };
+    }
+
+    try {
+      await adminClient.from('audit_log').insert({
+        actor_id: caller.id,
+        action: 'PROJECT_PURGE',
+        entity: 'projects',
+        entity_id: projectId,
+        metadata: {
+          code: project.code,
+          name: project.description,
+        },
+      });
+    } catch {
+      // Audit log error is ignored.
+    }
+  }
+
+  revalidatePath('/projects');
+  revalidatePath('/noc-tracker');
+  revalidatePath('/noc');
+  revalidatePath('/dashboard');
+  revalidatePath('/documents');
+  revalidatePath('/archive');
+  revalidatePath('/');
+  return { ok: true };
+}
+
+// Restores a soft-deleted archived project back to active status.
+export async function restoreProjectAction(
+  projectId: string,
+): Promise<ActionPromise> {
+  const caller = await requireCan('project.delete');
+  const adminClient = createAdminClient();
+
+  const { data: project, error: projErr } = await adminClient
+    .from('projects')
+    .select('id, code, description')
+    .eq('id', projectId)
+    .single();
+
+  if (projErr || !project) {
+    return { ok: false, error: 'Project not found.' };
+  }
+
+  const { error: updateErr } = await adminClient
+    .from('projects')
+    .update({ archived_at: null })
+    .eq('id', projectId);
+
+  if (updateErr) {
+    return { ok: false, error: updateErr.message };
+  }
+
+  try {
+    await adminClient.from('audit_log').insert({
+      actor_id: caller.id,
+      action: 'PROJECT_RESTORE',
+      entity: 'projects',
+      entity_id: projectId,
+      metadata: {
+        code: project.code,
+        name: project.description,
+      },
+    });
+  } catch {
+    // Audit log error is ignored.
+  }
+
+  revalidatePath('/projects');
+  revalidatePath('/noc-tracker');
+  revalidatePath('/noc');
+  revalidatePath('/dashboard');
+  revalidatePath('/documents');
+  revalidatePath('/archive');
+  revalidatePath('/');
+  return { ok: true };
+}

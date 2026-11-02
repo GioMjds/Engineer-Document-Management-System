@@ -16,6 +16,7 @@ import {
   Users,
   Layers,
   FileText,
+  Trash2,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { formatCurrencyAED } from '@/utils/formatters';
 import type { AssignedProject, ProjectLifecycleStage } from '@/types/noc';
 import { ProjectTeamDialog, type ProfileItem } from './project-team-dialog';
+import { DeleteProjectDialog } from './delete-project-dialog';
 
 interface ProjectsWorkspaceClientProps {
   projects: AssignedProject[];
@@ -41,6 +43,7 @@ interface ProjectsWorkspaceClientProps {
   };
   teamProfiles: ProfileItem[];
   canCreateProject: boolean;
+  canDeleteProject?: boolean;
   canManageMembers: boolean;
   canViewConsultantAmount: boolean;
 }
@@ -86,6 +89,7 @@ export function ProjectsWorkspaceClient({
   currentUser,
   teamProfiles,
   canCreateProject,
+  canDeleteProject = false,
   canManageMembers,
   canViewConsultantAmount,
 }: ProjectsWorkspaceClientProps) {
@@ -96,6 +100,11 @@ export function ProjectsWorkspaceClient({
   const [editingProject, setEditingProject] = useState<AssignedProject | null>(
     null,
   );
+  const [deletingProject, setDeletingProject] = useState<{
+    id: string;
+    code: string;
+    name: string;
+  } | null>(null);
 
   const currentUserName = currentUser.name?.toLowerCase() || '';
   const isAdmin = currentUser.role === 'admin';
@@ -472,9 +481,17 @@ export function ProjectsWorkspaceClient({
                 project={p}
                 userAssignment={userAssignment}
                 canManageMembers={canManageMembers}
+                canDeleteProject={canDeleteProject}
                 canViewConsultantAmount={canViewConsultantAmount}
                 highlightedRole={roleFilter}
                 onManageMembers={() => setEditingProject(p)}
+                onDeleteProject={() =>
+                  setDeletingProject({
+                    id: p.id || '',
+                    code: p.code,
+                    name: p.name,
+                  })
+                }
               />
             );
           })}
@@ -483,8 +500,16 @@ export function ProjectsWorkspaceClient({
         <ProjectsTableView
           projects={filteredProjects}
           canManageMembers={canManageMembers}
+          canDeleteProject={canDeleteProject}
           canViewConsultantAmount={canViewConsultantAmount}
           onManageMembers={(p) => setEditingProject(p)}
+          onDeleteProject={(p) =>
+            setDeletingProject({
+              id: p.id || '',
+              code: p.code,
+              name: p.name,
+            })
+          }
         />
       )}
 
@@ -496,6 +521,16 @@ export function ProjectsWorkspaceClient({
           teamProfiles={teamProfiles}
           open={!!editingProject}
           onOpenChange={(open) => !open && setEditingProject(null)}
+        />
+      )}
+
+      {/* Admin Safe Delete Project Dialog */}
+      {deletingProject && (
+        <DeleteProjectDialog
+          key={deletingProject.id || deletingProject.code}
+          open={!!deletingProject}
+          onOpenChange={(open) => !open && setDeletingProject(null)}
+          project={deletingProject}
         />
       )}
     </div>
@@ -510,16 +545,20 @@ function ProjectGridCard({
   project,
   userAssignment,
   canManageMembers,
+  canDeleteProject = false,
   canViewConsultantAmount,
   highlightedRole,
   onManageMembers,
+  onDeleteProject,
 }: {
   project: AssignedProject;
   userAssignment: string | null;
   canManageMembers: boolean;
+  canDeleteProject?: boolean;
   canViewConsultantAmount: boolean;
   highlightedRole: string;
   onManageMembers: () => void;
+  onDeleteProject?: () => void;
 }) {
   const roles = project.assignedRoles || {
     residentEngineer: 'Unassigned',
@@ -700,18 +739,33 @@ function ProjectGridCard({
           </Link>
         </div>
 
-        {canManageMembers && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onManageMembers}
-            className="h-8 gap-1.5 text-xs text-primary hover:bg-primary/10 hover:text-primary"
-          >
-            <Users className="size-3.5" />
-            Manage Team
-          </Button>
-        )}
+        <div className="flex items-center gap-1.5">
+          {canManageMembers && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onManageMembers}
+              className="h-8 gap-1.5 text-xs text-primary hover:bg-primary/10 hover:text-primary"
+            >
+              <Users className="size-3.5" />
+              Manage Team
+            </Button>
+          )}
+
+          {canDeleteProject && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onDeleteProject}
+              className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+              title="Safely Delete or Archive Project"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
     </li>
   );
@@ -762,13 +816,17 @@ function RoleItemTile({
 function ProjectsTableView({
   projects,
   canManageMembers,
+  canDeleteProject = false,
   canViewConsultantAmount,
   onManageMembers,
+  onDeleteProject,
 }: {
   projects: AssignedProject[];
   canManageMembers: boolean;
+  canDeleteProject?: boolean;
   canViewConsultantAmount: boolean;
   onManageMembers: (p: AssignedProject) => void;
+  onDeleteProject?: (p: AssignedProject) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-xs">
@@ -909,6 +967,18 @@ function ProjectsTableView({
                         className="h-7 px-2 text-[11px] text-primary"
                       >
                         Team
+                      </Button>
+                    )}
+                    {canDeleteProject && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDeleteProject?.(p)}
+                        className="h-7 px-2 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        title="Safely Delete or Archive Project"
+                      >
+                        Delete
                       </Button>
                     )}
                   </td>

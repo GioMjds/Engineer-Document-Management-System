@@ -30,6 +30,7 @@ const ALL = ROLES;
 export const PERMISSIONS = {
   'project.viewAll': ['admin', 'ceo', 'area_manager'],
   'project.create': ['admin'],
+  'project.delete': ['admin'],
   // Sets the client and contractor contact emails on a project (proposed: Admin only).
   'project.contacts.manage': ['admin'],
 

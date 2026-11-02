@@ -61,6 +61,7 @@ export default async function AccountPage() {
     const { data: firmProjects } = await supabase
       .from('projects')
       .select('id, code, description, stage')
+      .is('archived_at', null)
       .order('created_at', { ascending: false })
       .limit(6);
 

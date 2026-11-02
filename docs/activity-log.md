@@ -2,6 +2,25 @@
 
 ## Session 2026-11-02
 
+- Implemented Safe Project Deletion and Archiving with Safety Code Guards for Admin:
+  - Background & Objective: Resolves requirement to allow Administrators to safely delete or archive specific projects with strict code confirmation, dependency impact verification, and dual-mode execution (Soft Delete / Archive vs Permanent Purge).
+  - Implementation:
+    - Updated [lib/permissions.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/permissions.ts): Registered `'project.delete': ['admin']` capability.
+    - Updated [app/actions/admin.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/admin.ts):
+      - `getProjectDeletionImpact(projectId)`: Pre-flight check retrieving counts for linked documents, NOC checklist requirements, and assigned team members.
+      - `deleteProjectAction(params)`: Validates `project.delete` capability, ensures confirmation code matches project code, and executes either soft-delete (`archived_at` timestamp with audit log) or permanent purge (removes storage files from `documents` bucket, cascades `project_members`, `project_confidential`, `project_nocs`, `project_noc_requirements`, `noc_resubmission_history`, `document_reviews`, `documents`, and project record).
+      - `restoreProjectAction(projectId)`: Unarchives project by clearing `archived_at` with audit logging.
+    - Created [components/projects/delete-project-dialog.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/delete-project-dialog.tsx): Safe deletion dialog showing linked record counts, dual strategy selection (Archive recommended default vs Permanent Purge), project code typing confirmation guard, and transition loading states.
+    - Updated [components/projects/projects-workspace-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/projects-workspace-client.tsx): Exposed delete affordance in Grid card view and Table row actions for Admin.
+    - Updated [app/(app)/projects/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/page.tsx), [app/(app)/projects/[code]/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/[code]/page.tsx), and [app/(app)/@modal/(.)projects/[code]/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/@modal/(.)projects/[code]/page.tsx): Injected `canDeleteProject` capability into Project Documents view and Directory workspace.
+    - Updated [components/projects/project-documents-view.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-documents-view.tsx): Added Delete Project action in header for Admins, navigating back to `/projects` upon deletion.
+    - Created [app/(app)/archive/archived-project-actions.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/archive/archived-project-actions.tsx) and updated [app/(app)/archive/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/archive/page.tsx): Added dedicated Archived Projects section displaying soft-deleted projects with one-click Restore and Purge actions.
+    - Updated [app/(app)/documents/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/documents/page.tsx) and [app/(app)/account/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/account/page.tsx): Filtered `.is('archived_at', null)` to ensure archived projects do not appear in document filters or active portfolio summaries.
+  - Verification:
+    - `pnpm exec tsc --noEmit`: 0 type errors.
+    - `pnpm exec eslint`: 0 errors, 0 warnings across all modified components.
+    - `pnpm run build`: Production build succeeded compiling all 24 routes cleanly.
+
 - Resolved System-Wide File Download and Specialist Storage Failures:
   - Background & Objective: Resolves bug where file downloads failed across both Third-Party Specialists and technical drawings in Document Library, Review Queue, Project Documents, and Archive.
   - Root Cause Analysis:

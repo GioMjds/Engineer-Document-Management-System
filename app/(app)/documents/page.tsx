@@ -28,6 +28,7 @@ export default async function DocumentsPage() {
     const { data: allProjects } = await supabase
       .from('projects')
       .select('id, description, code')
+      .is('archived_at', null)
       .order('code', { ascending: true });
 
     projects = (allProjects || []).map((p) => ({

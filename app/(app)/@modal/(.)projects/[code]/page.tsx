@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { getNocTrackerData } from '@/lib/server/noc-data';
 import { ProjectDocumentsModalDialog } from '@/components/projects/project-documents-modal-dialog';
@@ -12,7 +13,8 @@ export default async function InterceptedProjectPage({
   params,
 }: PageProps<'/projects/[code]'>) {
   const { code } = await params;
-  await requireUser();
+  const user = await requireUser();
+  const canDeleteProject = can(user.role, 'project.delete');
 
   const { projects } = await getNocTrackerData();
   const project = projects.find((p) => p.code === code);
@@ -89,6 +91,7 @@ export default async function InterceptedProjectPage({
         }}
         documents={documents}
         isModal={true}
+        canDeleteProject={canDeleteProject}
       />
     </ProjectDocumentsModalDialog>
   );
