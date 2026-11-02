@@ -22,6 +22,7 @@ import {
   FileCheck,
   XCircle,
 } from 'lucide-react';
+import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -29,6 +30,7 @@ import { z } from 'zod';
 const authorityResultSchema = z
   .object({
     decision: z.enum(['obtained', 'rejected']),
+    isPermanent: z.boolean(),
     expiryDate: z.string(),
     documentUrl: z.string(),
     rejectionReason: z.string(),
@@ -36,18 +38,20 @@ const authorityResultSchema = z
   .superRefine((data, ctx) => {
     const today = new Date().toISOString().split('T')[0];
     if (data.decision === 'obtained') {
-      if (!data.expiryDate) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['expiryDate'],
-          message: 'Expiry date is mandatory for obtained NOCs.',
-        });
-      } else if (data.expiryDate <= today) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['expiryDate'],
-          message: 'Expiry date must be in the future.',
-        });
+      if (!data.isPermanent) {
+        if (!data.expiryDate) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['expiryDate'],
+            message: 'Expiry date is mandatory for temporary NOCs.',
+          });
+        } else if (data.expiryDate <= today) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['expiryDate'],
+            message: 'Expiry date must be in the future.',
+          });
+        }
       }
     } else if (data.decision === 'rejected') {
       if (
@@ -91,6 +95,7 @@ export function AuthorityResultModal({
     resolver: zodResolver(authorityResultSchema),
     defaultValues: {
       decision: 'obtained',
+      isPermanent: false,
       expiryDate: '',
       documentUrl: '',
       rejectionReason: '',
@@ -98,13 +103,29 @@ export function AuthorityResultModal({
   });
 
   const decision = useWatch({ control, name: 'decision' });
+  const isPermanent = useWatch({ control, name: 'isPermanent' });
   const rejectionReason = useWatch({ control, name: 'rejectionReason' });
 
+  useEffect(() => {
+    if (open && noc) {
+      const isPerm = noc.status === 'Approved' && !noc.expiryDate;
+      reset({
+        decision: noc.status === 'Rejected' ? 'rejected' : 'obtained',
+        isPermanent: isPerm,
+        expiryDate: noc.expiryDate || '',
+        documentUrl: noc.receiptFileUrl || '',
+        rejectionReason: noc.rejectionReason || '',
+      });
+    }
+  }, [open, noc, reset]);
+
   async function onSubmit(values: AuthorityResultValues) {
+    const isPerm = values.decision === 'obtained' && Boolean(values.isPermanent);
     const res = await recordAuthorityDecision(noc.id, {
       decision: values.decision,
+      isPermanent: isPerm,
       expiryDate:
-        values.decision === 'obtained' ? values.expiryDate : undefined,
+        values.decision === 'obtained' && !isPerm ? values.expiryDate : undefined,
       officialDocumentUrl:
         values.decision === 'obtained'
           ? values.documentUrl.trim() || undefined
@@ -123,12 +144,14 @@ export function AuthorityResultModal({
     const now = new Date().toISOString();
     if (values.decision === 'obtained') {
       toast.success(
-        'NOC obtained status recorded with automated 14-day expiry tracking.',
+        isPerm
+          ? 'NOC recorded as Permanent Clearance (no expiration).'
+          : 'NOC obtained status recorded with automated 14-day expiry tracking.',
       );
       onDecisionRecorded({
         ...noc,
         status: 'Approved',
-        expiryDate: values.expiryDate,
+        expiryDate: isPerm ? null : values.expiryDate,
         issuanceDate: now.split('T')[0],
         updatedAt: now,
       });
@@ -219,33 +242,61 @@ export function AuthorityResultModal({
 
           {decision === 'obtained' ? (
             <div className="space-y-3 pt-1">
-              <div>
-                <Label
-                  htmlFor="decision-expiry"
-                  className="text-xs font-medium"
-                >
-                  Mandatory Expiry Date * (Future date)
-                </Label>
-                <div className="relative mt-1">
-                  <Calendar className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    id="decision-expiry"
-                    type="date"
-                    min={today}
-                    {...register('expiryDate')}
-                    className="pl-8 text-xs font-mono h-8"
-                  />
-                </div>
-                {errors.expiryDate && (
-                  <p className="text-xs text-destructive mt-1">
-                    {errors.expiryDate.message}
+              {/* Permanent Clearance Toggle */}
+              <div className="flex items-start gap-2.5 rounded-md border border-border bg-muted/40 p-2.5">
+                <input
+                  id="decision-permanent"
+                  type="checkbox"
+                  {...register('isPermanent')}
+                  className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="space-y-0.5 text-xs">
+                  <Label
+                    htmlFor="decision-permanent"
+                    className="font-medium cursor-pointer"
+                  >
+                    Permanent Clearance / Milestone NOC
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Check for statutory clearances that do not expire (e.g. BCC, Handover, Information NOCs).
                   </p>
-                )}
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Triggers automated internal and external alerts 14 days prior
-                  to expiration.
-                </p>
+                </div>
               </div>
+
+              {!isPermanent ? (
+                <div>
+                  <Label
+                    htmlFor="decision-expiry"
+                    className="text-xs font-medium"
+                  >
+                    Permit Expiry Date * (Future date)
+                  </Label>
+                  <div className="relative mt-1">
+                    <Calendar className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      id="decision-expiry"
+                      type="date"
+                      min={today}
+                      {...register('expiryDate')}
+                      className="pl-8 text-xs font-mono h-8"
+                    />
+                  </div>
+                  {errors.expiryDate && (
+                    <p className="text-xs text-destructive mt-1">
+                      {errors.expiryDate.message}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Triggers automated internal and external alerts 14 days prior
+                    to expiration.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded border border-emerald-200 bg-emerald-50/60 p-2 text-[11px] text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  <span className="font-semibold block">Permanent validity active:</span>
+                  This approval remains permanently valid. No expiry countdowns or renewal alerts will be generated.
+                </div>
+              )}
 
               <div>
                 <Label htmlFor="decision-doc" className="text-xs font-medium">

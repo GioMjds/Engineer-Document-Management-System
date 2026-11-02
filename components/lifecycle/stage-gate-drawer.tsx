@@ -19,7 +19,6 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   canUserAdvanceStage,
-  INITIAL_PROJECT_MILESTONES,
 } from '@/lib/project-lifecycle';
 import type {
   AssignedProject,
@@ -175,7 +174,7 @@ function StageGateDrawerContent({
 }: StageGateDrawerProps) {
   const [isEditingMilestones, setIsEditingMilestones] = useState(false);
   const [draftMilestones, setDraftMilestones] = useState<StageMilestoneDates>(
-    project.milestones || INITIAL_PROJECT_MILESTONES[project.code] || {},
+    project.milestones || {},
   );
 
   // Custom prerequisite creation state
@@ -322,7 +321,7 @@ function StageGateDrawerContent({
 
   const activeMilestones = isEditingMilestones
     ? draftMilestones
-    : project.milestones || INITIAL_PROJECT_MILESTONES[project.code] || {};
+    : project.milestones || {};
 
   const currentStageMilestones = getMilestoneFieldsForStage(
     readiness.stage,
@@ -895,7 +894,7 @@ function StageGateDrawerContent({
 export function StageGateDrawer(props: StageGateDrawerProps) {
   const { project, isOpen } = props;
   const milestonesKey = JSON.stringify(
-    project.milestones || INITIAL_PROJECT_MILESTONES[project.code] || {},
+    project.milestones || {},
   );
 
   return (

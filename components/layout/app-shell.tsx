@@ -100,11 +100,7 @@ export function AppShell({
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
       const next = !prev;
-      try {
-        localStorage.setItem('cvtec_edms_sidebar_collapsed', String(next));
-      } catch {
-        // Storage access might be disabled
-      }
+      localStorage.setItem('cvtec_edms_sidebar_collapsed', String(next));
       return next;
     });
   };

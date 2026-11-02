@@ -1,52 +1,11 @@
 import type {
   AssignedProject,
   ProjectNocItem,
-  ProjectDisciplineStatus,
   ProjectLifecycleStage,
   StageGateReadiness,
   StageGatePrerequisiteItem,
-  StageMilestoneDates,
   ProjectDocumentItem,
 } from '@/types/noc';
-
-export const INITIAL_PROJECT_MILESTONES: Record<string, StageMilestoneDates> = {
-  '26001': {
-    preConstruction: {
-      kickoffDate: '2026-10-01',
-      surveyCompletionDate: '2026-10-15',
-      conceptApprovalDate: '2026-10-25',
-      commencementDate: '2026-11-01',
-      plannedCompletionDate: '2027-02-15',
-    },
-    construction: {
-      commencementDate: '2027-03-01',
-      targetCompletionDate: '2028-06-30',
-    },
-    handover: {
-      targetCompletionDate: '2028-12-15',
-    },
-  },
-  '26002': {
-    preConstruction: {
-      kickoffDate: '2026-10-14',
-      surveyCompletionDate: '2026-10-16',
-      conceptApprovalDate: '2026-10-18',
-      commencementDate: '2026-10-19',
-      plannedCompletionDate: '2026-10-21',
-      buildingPermitDate: '2026-10-22',
-    },
-    construction: {
-      commencementDate: '2026-10-22',
-      targetCompletionDate: '2026-11-15',
-    },
-    handover: {
-      commissioningDate: '2026-11-20',
-      civilDefenceInspectionDate: '2026-11-25',
-      bccIssuanceDate: '2026-11-30',
-      targetCompletionDate: '2026-12-15',
-    },
-  },
-};
 
 export function getNextLifecycleStage(
   current: ProjectLifecycleStage,
@@ -71,104 +30,9 @@ export function canUserAdvanceStage(role: string): boolean {
   );
 }
 
-function getStorage(): Storage | null {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      return window.localStorage;
-    } catch {
-      return null;
-    }
-  }
-  if (
-    typeof window === 'undefined' &&
-    typeof globalThis !== 'undefined' &&
-    (globalThis as unknown as { localStorage?: Storage }).localStorage
-  ) {
-    return (globalThis as unknown as { localStorage: Storage }).localStorage;
-  }
-  return null;
-}
-
 export function canUserModifyMilestones(role: string): boolean {
   return canUserAdvanceStage(role);
 }
-
-export function getStoredProjectMilestones(
-  code: string,
-  fallback?: StageMilestoneDates,
-): StageMilestoneDates {
-  if (fallback && Object.keys(fallback).length > 0) {
-    saveStoredProjectMilestones(code, fallback);
-    return fallback;
-  }
-  const defaultMilestones = INITIAL_PROJECT_MILESTONES[code] || {};
-  const storage = getStorage();
-  if (!storage) return defaultMilestones;
-  try {
-    const raw = storage.getItem(`cvtec_project_milestones_${code}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        return parsed;
-      }
-    }
-  } catch {
-    // fallback
-  }
-  return defaultMilestones;
-}
-
-export function saveStoredProjectMilestones(
-  code: string,
-  milestones: StageMilestoneDates,
-): void {
-  const storage = getStorage();
-  if (!storage) return;
-  try {
-    storage.setItem(
-      `cvtec_project_milestones_${code}`,
-      JSON.stringify(milestones),
-    );
-  } catch {
-    // ignore
-  }
-}
-
-export function getStoredProjectStage(
-  code: string,
-  fallback: ProjectLifecycleStage,
-): ProjectLifecycleStage {
-  const storage = getStorage();
-  if (!storage) return fallback;
-  try {
-    const raw = storage.getItem(`cvtec_project_stage_${code}`);
-    if (
-      raw === 'Pre-Construction' ||
-      raw === 'Construction' ||
-      raw === 'Handover' ||
-      raw === 'Completed'
-    ) {
-      return raw;
-    }
-  } catch {
-    // fallback
-  }
-  return fallback;
-}
-
-export function saveStoredProjectStage(
-  code: string,
-  stage: ProjectLifecycleStage,
-): void {
-  const storage = getStorage();
-  if (!storage) return;
-  try {
-    storage.setItem(`cvtec_project_stage_${code}`, stage);
-  } catch {
-    // ignore
-  }
-}
-
 
 function isNocSatisfied(noc?: ProjectNocItem): boolean {
   if (!noc) return false;
@@ -178,7 +42,6 @@ function isNocSatisfied(noc?: ProjectNocItem): boolean {
 export function evaluateStageGateReadiness(
   project: AssignedProject,
   allNocs: ProjectNocItem[],
-  disciplineStatus?: ProjectDisciplineStatus,
   projectDocuments?: ProjectDocumentItem[],
 ): StageGateReadiness {
   const currentStage = (project.lifecycleStage ||
@@ -198,60 +61,49 @@ export function evaluateStageGateReadiness(
 
   const nextStage = getNextLifecycleStage(currentStage);
   const projectNocs = allNocs.filter((n) => n.projectCode === project.code);
-  const milestones =
-    project.milestones || INITIAL_PROJECT_MILESTONES[project.code] || {};
+  const milestones = project.milestones || {};
 
   const prerequisites: StageGatePrerequisiteItem[] = [];
 
   if (currentStage === 'Pre-Construction') {
     const topoDoc = projectDocuments?.find(
       (d) =>
-        d.docNumber.toLowerCase().includes('cad-e-001') ||
-        d.docNumber.toLowerCase().includes('topo') ||
         d.title.toLowerCase().includes('topographical') ||
-        d.title.toLowerCase().includes('survey'),
-    );
-    const topo = disciplineStatus?.specialists.find(
-      (s) => s.type === 'Topographical',
+        d.title.toLowerCase().includes('survey') ||
+        d.docNumber.toLowerCase().includes('topo'),
     );
     const isTopoSatisfied =
       Boolean(topoDoc) ||
-      topo?.status === 'Approved' ||
-      topo?.status === 'Uploaded';
+      Boolean(milestones.preConstruction?.surveyCompletionDate);
 
     prerequisites.push({
       id: 'gate-topo',
       title: 'Topographical Affection Survey Completed',
       category: 'specialist_study',
       isSatisfied: isTopoSatisfied,
-      sourceReference: topoDoc?.docNumber || topo?.fileName,
+      sourceReference: topoDoc?.docNumber || milestones.preConstruction?.surveyCompletionDate,
       mandatoryForNextStage: true,
       actionHint:
-        'Upload topographical survey document (CAD-E-001) in Technical Submittals or approve specialist study.',
+        'Upload topographical survey drawing in Technical Submittals or set survey date in milestones.',
     });
 
     const geotechDoc = projectDocuments?.find(
       (d) =>
-        d.docNumber.toLowerCase().includes('cad-e-002') ||
-        d.docNumber.toLowerCase().includes('geo') ||
         d.title.toLowerCase().includes('geotechnical') ||
-        d.title.toLowerCase().includes('soil'),
+        d.title.toLowerCase().includes('soil') ||
+        d.docNumber.toLowerCase().includes('geo'),
     );
-    const geotech = disciplineStatus?.specialists.find(
-      (s) => s.type === 'Geotechnical',
-    );
-    const isGeotechSatisfied =
-      Boolean(geotechDoc) || geotech?.status === 'Approved';
+    const isGeotechSatisfied = Boolean(geotechDoc);
 
     prerequisites.push({
       id: 'gate-geotech',
       title: 'Geotechnical Soil Investigation Approved',
       category: 'specialist_study',
       isSatisfied: isGeotechSatisfied,
-      sourceReference: geotechDoc?.docNumber || geotech?.fileName,
+      sourceReference: geotechDoc?.docNumber,
       mandatoryForNextStage: true,
       actionHint:
-        'Upload geotechnical soil investigation (CAD-E-002) in Technical Submittals or approve specialist study.',
+        'Upload geotechnical soil investigation report in Technical Submittals.',
     });
 
     prerequisites.push({
@@ -323,30 +175,36 @@ export function evaluateStageGateReadiness(
       });
     }
 
-    const structStatus = disciplineStatus?.structure.status;
+    const structDoc = projectDocuments?.find(
+      (d) =>
+        d.discipline === 'structure' &&
+        (d.status === 'approved' || d.status === 'ready_for_authority'),
+    );
     prerequisites.push({
       id: 'gate-superstructure',
       title: 'Core & Structural Superstructure Inspection',
       category: 'regulatory_milestone',
-      isSatisfied:
-        structStatus === 'Approved' || structStatus === 'Client Approval',
-      sourceReference: disciplineStatus?.structure.updatedBy,
+      isSatisfied: Boolean(structDoc),
+      sourceReference: structDoc?.docNumber,
       mandatoryForNextStage: true,
       actionHint:
-        'Ensure Structure discipline status is marked Approved or Client Approval.',
+        'Ensure an approved Structure technical drawing exists in Documents.',
     });
 
+    const mepDoc = projectDocuments?.find(
+      (d) =>
+        d.discipline === 'mep' &&
+        (d.status === 'approved' || d.status === 'ready_for_authority'),
+    );
     prerequisites.push({
       id: 'gate-mep-submittal',
       title: 'MEP Riser & Chilled Water Commissioning Sign-off',
       category: 'regulatory_milestone',
-      isSatisfied:
-        disciplineStatus?.mep.status === 'Approved' ||
-        disciplineStatus?.mep.status === 'Client Approval',
-      sourceReference: disciplineStatus?.mep.updatedBy,
+      isSatisfied: Boolean(mepDoc),
+      sourceReference: mepDoc?.docNumber,
       mandatoryForNextStage: false,
       actionHint:
-        'Ensure MEP discipline status is marked Approved or Client Approval.',
+        'Ensure an approved MEP technical drawing exists in Documents.',
     });
   } else {
     // Handover Stage: Dynamic statutory authority NOCs assigned to this project
@@ -436,5 +294,3 @@ export function evaluateStageGateReadiness(
     prerequisites,
   };
 }
-
-

@@ -1,6 +1,10 @@
 import { useMemo } from 'react';
 import { calculateSubmittalDelays } from '@/lib/project-status';
-import { calculateDaysRemaining, isExpiringSoon } from '@/lib/noc-tracker';
+import {
+  calculateDaysRemaining,
+  isExpiringSoon,
+  isLapsed,
+} from '@/lib/noc-tracker';
 import type { AssignedProject, ProjectNocItem } from '@/types/noc';
 
 export interface ProjectNocStats {
@@ -26,8 +30,22 @@ export function useDashboardData(
     const scopedNocs = nocs.filter((n) => codes.has(n.projectCode));
 
     const delayItems = calculateSubmittalDelays(scopedNocs, projects);
+    const completedProjectCodes = new Set(
+      projects
+        .filter(
+          (p) =>
+            p.lifecycleStage === 'Completed' ||
+            p.currentStage?.toLowerCase().includes('completed'),
+        )
+        .map((p) => p.code),
+    );
+
     const expiringNocs = scopedNocs.filter(
-      (n) => n.status === 'Approved' && isExpiringSoon(n.expiryDate),
+      (n) =>
+        !completedProjectCodes.has(n.projectCode) &&
+        (n.status === 'Approved' || n.status === 'Expired') &&
+        Boolean(n.expiryDate) &&
+        (isExpiringSoon(n.expiryDate) || isLapsed(n.expiryDate)),
     );
 
     const avg = (xs: number[]) =>
@@ -38,7 +56,8 @@ export function useDashboardData(
     );
 
     const approvedCount = scopedNocs.filter(
-      (n) => n.status === 'Approved',
+      (n) =>
+        n.status === 'Approved',
     ).length;
     const clearanceRate = scopedNocs.length
       ? Math.round((approvedCount / scopedNocs.length) * 100)
@@ -60,7 +79,9 @@ export function useDashboardData(
       s.total += 1;
       if (n.status === 'Approved') {
         s.approved += 1;
-        const d = calculateDaysRemaining(n.expiryDate);
+        const d = !completedProjectCodes.has(n.projectCode)
+          ? calculateDaysRemaining(n.expiryDate)
+          : null;
         if (d != null && (s.nextExpiryDays === null || d < s.nextExpiryDays)) {
           s.nextExpiryDays = d;
         }

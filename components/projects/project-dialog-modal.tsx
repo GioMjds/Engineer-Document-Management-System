@@ -45,7 +45,7 @@ export function ProjectDialogModal({
     setIsDirty(false);
     setShowExitConfirm(false);
     setIsOpen(false);
-    router.replace('/noc-tracker');
+    router.back();
     router.refresh();
   }, [router]);
 
@@ -96,6 +96,9 @@ export function ProjectDialogModal({
         >
           <DialogHeader>
             <DialogTitle>Register New Project</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Admin exclusive: Initialize project scope, stakeholder contacts, and contract values.
+            </DialogDescription>
           </DialogHeader>
           {children}
         </DialogContent>

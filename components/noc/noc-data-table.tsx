@@ -199,6 +199,10 @@ export function NocDataTable({
                         </span>
                       )}
                     </div>
+                  ) : item.status === 'Approved' ? (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
+                      Permanent
+                    </span>
                   ) : (
                     <span className="text-muted-foreground">-</span>
                   )}

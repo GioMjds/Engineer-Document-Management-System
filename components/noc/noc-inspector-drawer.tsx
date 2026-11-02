@@ -530,7 +530,7 @@ export function NocInspectorDrawer({
                     onClick={() => setIsDecisionModalOpen(true)}
                   >
                     <FileCheck className="h-3.5 w-3.5 text-emerald-600" />
-                    <span>Record Decision</span>
+                    <span>{item.status === 'Approved' ? 'Update Validity' : 'Record Decision'}</span>
                   </Button>
                 </div>
               </div>
@@ -1182,7 +1182,15 @@ export function NocInspectorDrawer({
                   Expiry Date:
                 </span>
                 <span className="font-mono font-medium">
-                  {item.expiryDate || 'N/A'}
+                  {item.expiryDate ? (
+                    item.expiryDate
+                  ) : item.status === 'Approved' ? (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
+                      Permanent (No Expiry)
+                    </span>
+                  ) : (
+                    'N/A'
+                  )}
                 </span>
               </div>
             </div>

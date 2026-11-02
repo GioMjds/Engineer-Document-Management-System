@@ -16,9 +16,9 @@ import {
   Check,
   ChevronsUpDown,
   HardHat,
+  Hash,
   Loader2,
   ShieldCheck,
-  Sparkles,
   Users,
 } from 'lucide-react';
 import { cn } from 'cn';
@@ -77,32 +77,84 @@ const STAGE_LABELS = {
   completed: 'Completed',
 } satisfies Record<string, string>;
 
-const projectSchema = z.object({
-  code: z.string().trim().min(1, 'Project code is required.'),
-  name: z.string().trim().min(1, 'Project name is required.'),
-  stage: z.enum([
-    'planning',
-    'design',
-    'construction',
-    'handover',
-    'completed',
-  ]),
-  master_authority_id: z.number().int().positive(),
-  client_name: z.string().trim().min(1, 'Client name is required.'),
-  contractor_name: z.string().trim().min(1, 'Contractor name is required.'),
-  client_emails: z.string(),
-  contractor_emails: z.string(),
-  client_contractor_amount: z
-    .number({ error: 'Enter a valid amount.' })
-    .min(0, 'Amount cannot be negative.'),
-  client_consultant_amount: z
-    .number({ error: 'Enter a valid amount.' })
-    .min(0, 'Amount cannot be negative.'),
-  design_commencement_date: z.string().optional(),
-  design_completion_date: z.string().optional(),
-  supervision_commencement_date: z.string().optional(),
-  supervision_completion_date: z.string().optional(),
-});
+const parseEmails = (str?: string) =>
+  (str ?? '')
+    .split(',')
+    .map((e) => e.trim())
+    .filter((e) => e.length > 0);
+
+const validateEmailList = (emails?: string) => {
+  if (!emails) return true;
+  const list = parseEmails(emails);
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return list.every((e) => emailRegex.test(e));
+};
+
+const projectSchema = z
+  .object({
+    code: z.string().trim().min(1, 'Project code is required.'),
+    name: z.string().trim().min(1, 'Project name is required.'),
+    stage: z.enum([
+      'planning',
+      'design',
+      'construction',
+      'handover',
+      'completed',
+    ]),
+    master_authority_id: z.number().int().positive(),
+    client_name: z.string().trim().min(1, 'Client name is required.'),
+    contractor_name: z.string().trim().min(1, 'Contractor name is required.'),
+    client_emails: z.string(),
+    contractor_emails: z.string(),
+    client_contractor_amount: z
+      .number({ error: 'Enter a valid amount.' })
+      .min(0, 'Amount cannot be negative.'),
+    client_consultant_amount: z
+      .number({ error: 'Enter a valid amount.' })
+      .min(0, 'Amount cannot be negative.'),
+    design_commencement_date: z.string().optional(),
+    design_completion_date: z.string().optional(),
+    supervision_commencement_date: z.string().optional(),
+    supervision_completion_date: z.string().optional(),
+  })
+  .refine((data) => validateEmailList(data.client_emails), {
+    message: 'One or more client email addresses are invalid.',
+    path: ['client_emails'],
+  })
+  .refine((data) => validateEmailList(data.contractor_emails), {
+    message: 'One or more contractor email addresses are invalid.',
+    path: ['contractor_emails'],
+  })
+  .refine(
+    (data) => {
+      if (data.design_commencement_date && data.design_completion_date) {
+        return data.design_completion_date >= data.design_commencement_date;
+      }
+      return true;
+    },
+    {
+      message: 'Design completion date cannot precede commencement date.',
+      path: ['design_completion_date'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (
+        data.supervision_commencement_date &&
+        data.supervision_completion_date
+      ) {
+        return (
+          data.supervision_completion_date >=
+          data.supervision_commencement_date
+        );
+      }
+      return true;
+    },
+    {
+      message: 'Supervision completion date cannot precede commencement date.',
+      path: ['supervision_completion_date'],
+    },
+  );
 
 type ProjectFormValues = z.infer<typeof projectSchema>;
 
@@ -110,12 +162,6 @@ interface ProjectRegistrationFormProps {
   authorities?: MasterAuthorityRecord[];
   teamProfiles?: ProfileItem[];
 }
-
-const parseEmails = (str?: string) =>
-  (str ?? '')
-    .split(',')
-    .map((e) => e.trim())
-    .filter((e) => e.length > 0);
 
 const UNASSIGNED = 'unassigned';
 
@@ -170,7 +216,7 @@ function StaffSelect({
         )}
       />
       <span className="truncate">{o.name}</span>
-      <span className="ml-auto shrink-0 text-[10px] capitalize text-muted-foreground">
+      <span className="ml-auto shrink-0 text-xs capitalize text-muted-foreground">
         {formatRole(o.role)}
       </span>
     </CommandItem>
@@ -260,6 +306,7 @@ export function ProjectRegistrationForm({
   const [mepId, setMepId] = useState<string>('unassigned');
   const [civilId, setCivilId] = useState<string>('unassigned');
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [initialAutoCode, setInitialAutoCode] = useState<string | null>(null);
   const [codeAvailability, setCodeAvailability] = useState<{
     checked: boolean;
     available?: boolean;
@@ -308,8 +355,14 @@ export function ProjectRegistrationForm({
     mepId !== 'unassigned' ||
     civilId !== 'unassigned';
 
+  const hasCustomCode = Boolean(
+    projectCode &&
+    projectCode.trim().length > 0 &&
+    projectCode !== initialAutoCode,
+  );
+
   const hasFilledText = Boolean(
-    (projectCode && projectCode.trim().length > 0) ||
+    hasCustomCode ||
     (projectName && projectName.trim().length > 0) ||
     (clientName && clientName.trim().length > 0) ||
     (contractorName && contractorName.trim().length > 0),
@@ -345,6 +398,7 @@ export function ProjectRegistrationForm({
       const res = await getNextProjectCode();
       if (res.ok && res.code) {
         setValue('code', res.code, { shouldValidate: true, shouldDirty: true });
+        setInitialAutoCode(res.code);
         setCodeAvailability({
           checked: true,
           available: true,
@@ -382,7 +436,8 @@ export function ProjectRegistrationForm({
     if (!projectCode) {
       getNextProjectCode().then((res) => {
         if (res.ok && res.code) {
-          setValue('code', res.code, { shouldValidate: true });
+          setValue('code', res.code, { shouldValidate: true, shouldDirty: false });
+          setInitialAutoCode(res.code);
           setCodeAvailability({
             checked: true,
             available: true,
@@ -443,8 +498,14 @@ export function ProjectRegistrationForm({
       'master_authority_id',
       'client_name',
       'contractor_name',
+      'client_emails',
+      'contractor_emails',
       'client_contractor_amount',
       'client_consultant_amount',
+      'design_commencement_date',
+      'design_completion_date',
+      'supervision_commencement_date',
+      'supervision_completion_date',
     ]);
     if (valid) {
       setStep(2);
@@ -490,24 +551,38 @@ export function ProjectRegistrationForm({
       if (modalContext) {
         modalContext.closeModal();
       } else {
-        router.push('/noc-tracker');
+        router.push(res.projectId ? (`/projects/${res.projectId}` as Route) : ('/noc-tracker' as Route));
         router.refresh();
       }
     });
   };
 
+  const isModal = Boolean(modalContext);
+  const teamMembers = collectMembers();
+  const teamCount = teamMembers.length;
+
+  const Container = isModal ? 'div' : Card;
+  const Header = isModal ? 'div' : CardHeader;
+  const Content = isModal ? 'div' : CardContent;
+  const Footer = isModal ? 'div' : CardFooter;
+
   return (
     <>
-      <Card className="border-border bg-card shadow-xs">
+      <Container className={cn(isModal ? 'space-y-4' : 'border-border bg-card shadow-xs')}>
       {/* 2-Phase Wizard Stepper */}
-      <div className="flex items-center justify-between border-b border-border/80 px-6 py-3.5 bg-muted/15">
+      <div
+        className={cn(
+          'flex items-center justify-between border-b border-border/80 px-6 py-3.5 bg-muted/15',
+          isModal && 'rounded-md border border-border/70 px-4 py-2.5',
+        )}
+      >
         <div className="flex items-center gap-2.5">
           <div
             className={cn(
               'flex size-6 items-center justify-center rounded-full text-xs font-semibold transition-colors',
               step === 1
-                ? 'bg-(--site-cyan) text-white'
-                : 'bg-(--site-cyan)/20 text-(--site-cyan)',
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-primary/15 text-primary',
             )}
           >
             1
@@ -531,7 +606,7 @@ export function ProjectRegistrationForm({
             className={cn(
               'flex size-6 items-center justify-center rounded-full text-xs font-semibold transition-colors',
               step === 2
-                ? 'bg-(--site-cyan) text-white'
+                ? 'bg-primary text-primary-foreground'
                 : 'bg-muted text-muted-foreground',
             )}
           >
@@ -553,12 +628,12 @@ export function ProjectRegistrationForm({
       <form noValidate>
         {step === 1 ? (
           <>
-            <CardHeader>
+            <Header className={cn(isModal && 'pb-1 pt-1')}>
               <CardTitle className="text-base font-semibold">
                 Project Metadata & Stakeholders
               </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </Header>
+            <Content className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -567,13 +642,13 @@ export function ProjectRegistrationForm({
                       type="button"
                       onClick={handleAutoGenerateCode}
                       disabled={isGeneratingCode || pending}
-                      className="inline-flex items-center gap-1 text-[11px] font-medium text-(--site-cyan) hover:underline disabled:opacity-50"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-50"
                       title="Auto-calculate next sequential code for current year"
                     >
                       {isGeneratingCode ? (
-                        <Loader2 className="size-3 animate-spin" />
+                        <Loader2 className="size-3.5 animate-spin" />
                       ) : (
-                        <Sparkles className="size-3" />
+                        <Hash className="size-3.5" />
                       )}
                       <span>{isGeneratingCode ? 'Generating...' : 'Auto-Generate'}</span>
                     </button>
@@ -581,6 +656,7 @@ export function ProjectRegistrationForm({
                   <Input
                     id="code"
                     placeholder="e.g. 26004"
+                    className="font-mono tracking-wider text-xs"
                     aria-invalid={!!errors.code}
                     {...register('code', {
                       onBlur: (e) => handleCheckCodeAvailability(e.target.value),
@@ -594,10 +670,10 @@ export function ProjectRegistrationForm({
                   {!errors.code && codeAvailability.checked && (
                     <p
                       className={cn(
-                        'text-[10px]',
+                        'text-xs font-medium',
                         codeAvailability.available
-                          ? 'text-emerald-600 dark:text-emerald-400 font-medium'
-                          : 'text-destructive font-medium',
+                          ? 'text-emerald-700 dark:text-emerald-400'
+                          : 'text-destructive',
                       )}
                     >
                       {codeAvailability.message}
@@ -645,11 +721,11 @@ export function ProjectRegistrationForm({
                     </p>
                   )}
                   {authorities.length === 0 && (
-                    <p className="text-[11px] text-amber-500">
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
                       No authorities found.{' '}
                       <Link
                         href={'/authorities' as Route}
-                        className="underline hover:text-amber-400"
+                        className="underline hover:text-amber-500"
                       >
                         Register one first
                       </Link>
@@ -745,11 +821,18 @@ export function ProjectRegistrationForm({
                   <Input
                     id="clientEmails"
                     placeholder="pm@client.ae, director@client.ae"
+                    aria-invalid={!!errors.client_emails}
                     {...register('client_emails')}
                   />
-                  <p className="text-[10px] text-muted-foreground">
-                    Comma-separated emails for automated alerts.
-                  </p>
+                  {errors.client_emails ? (
+                    <p className="text-xs text-destructive">
+                      {errors.client_emails.message}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Comma-separated emails for automated alerts.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="contractorEmails">
@@ -758,11 +841,18 @@ export function ProjectRegistrationForm({
                   <Input
                     id="contractorEmails"
                     placeholder="project@contractor.ae"
+                    aria-invalid={!!errors.contractor_emails}
                     {...register('contractor_emails')}
                   />
-                  <p className="text-[10px] text-muted-foreground">
-                    Comma-separated emails for automated alerts.
-                  </p>
+                  {errors.contractor_emails ? (
+                    <p className="text-xs text-destructive">
+                      {errors.contractor_emails.message}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Comma-separated emails for automated alerts.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -771,22 +861,32 @@ export function ProjectRegistrationForm({
                   <Label htmlFor="contractorAmount">
                     Client–Contractor Contract Sum (AED)
                   </Label>
-                  <Input
-                    id="contractorAmount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    aria-invalid={!!errors.client_contractor_amount}
-                    {...register('client_contractor_amount', {
-                      valueAsNumber: true,
-                    })}
-                  />
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-xs font-semibold text-muted-foreground">
+                      AED
+                    </span>
+                    <Input
+                      id="contractorAmount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="pl-12 font-mono text-xs"
+                      placeholder="0.00"
+                      onFocus={(e) => {
+                        if (e.target.value === '0') e.target.select();
+                      }}
+                      aria-invalid={!!errors.client_contractor_amount}
+                      {...register('client_contractor_amount', {
+                        valueAsNumber: true,
+                      })}
+                    />
+                  </div>
                   {errors.client_contractor_amount ? (
                     <p className="text-xs text-destructive">
                       {errors.client_contractor_amount.message}
                     </p>
                   ) : (
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       Visible to internal project team.
                     </p>
                   )}
@@ -795,22 +895,32 @@ export function ProjectRegistrationForm({
                   <Label htmlFor="consultantAmount">
                     Client–Consultant Sum (AED) [Confidential]
                   </Label>
-                  <Input
-                    id="consultantAmount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    aria-invalid={!!errors.client_consultant_amount}
-                    {...register('client_consultant_amount', {
-                      valueAsNumber: true,
-                    })}
-                  />
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-xs font-semibold text-muted-foreground">
+                      AED
+                    </span>
+                    <Input
+                      id="consultantAmount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="pl-12 font-mono text-xs"
+                      placeholder="0.00"
+                      onFocus={(e) => {
+                        if (e.target.value === '0') e.target.select();
+                      }}
+                      aria-invalid={!!errors.client_consultant_amount}
+                      {...register('client_consultant_amount', {
+                        valueAsNumber: true,
+                      })}
+                    />
+                  </div>
                   {errors.client_consultant_amount ? (
                     <p className="text-xs text-destructive">
                       {errors.client_consultant_amount.message}
                     </p>
                   ) : (
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       Restricted to Admin, CEO, and Area Manager.
                     </p>
                   )}
@@ -820,76 +930,91 @@ export function ProjectRegistrationForm({
               {/* Separate Contract Dates for Design and Supervision */}
               <div className="pt-3 border-t border-border space-y-3">
                 <div className="flex items-center gap-2">
-                  <Calendar className="size-4 text-(--site-cyan)" />
+                  <Calendar className="size-4 text-primary" />
                   <span className="text-xs font-semibold text-foreground">
                     Contract Schedules & Target Dates (Optional)
                   </span>
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
-                    <p className="text-[11px] font-semibold text-foreground">
+                    <p className="text-xs font-semibold text-foreground">
                       Design Contract Dates
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
-                        <Label htmlFor="designStart" className="text-[10px]">
+                        <Label htmlFor="designStart" className="text-xs">
                           Commencement
                         </Label>
                         <Input
                           id="designStart"
                           type="date"
-                          className="h-8 text-xs"
+                          className="h-9 text-xs"
                           {...register('design_commencement_date')}
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label htmlFor="designEnd" className="text-[10px]">
+                        <Label htmlFor="designEnd" className="text-xs">
                           Completion
                         </Label>
                         <Input
                           id="designEnd"
                           type="date"
-                          className="h-8 text-xs"
+                          className="h-9 text-xs"
+                          aria-invalid={!!errors.design_completion_date}
                           {...register('design_completion_date')}
                         />
                       </div>
                     </div>
+                    {errors.design_completion_date && (
+                      <p className="text-xs text-destructive">
+                        {errors.design_completion_date.message}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
-                    <p className="text-[11px] font-semibold text-foreground">
+                    <p className="text-xs font-semibold text-foreground">
                       Supervision Contract Dates
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
-                        <Label htmlFor="supervisionStart" className="text-[10px]">
+                        <Label htmlFor="supervisionStart" className="text-xs">
                           Commencement
                         </Label>
                         <Input
                           id="supervisionStart"
                           type="date"
-                          className="h-8 text-xs"
+                          className="h-9 text-xs"
                           {...register('supervision_commencement_date')}
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label htmlFor="supervisionEnd" className="text-[10px]">
+                        <Label htmlFor="supervisionEnd" className="text-xs">
                           Target Completion
                         </Label>
                         <Input
                           id="supervisionEnd"
                           type="date"
-                          className="h-8 text-xs"
+                          className="h-9 text-xs"
+                          aria-invalid={!!errors.supervision_completion_date}
                           {...register('supervision_completion_date')}
                         />
                       </div>
                     </div>
+                    {errors.supervision_completion_date && (
+                      <p className="text-xs text-destructive">
+                        {errors.supervision_completion_date.message}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
-            </CardContent>
+            </Content>
 
-            <CardFooter className="flex justify-between items-center border-t border-border py-4">
+            <Footer className={cn(
+              "flex justify-between items-center py-4",
+              isModal ? "border-t border-border pt-4 pb-0" : "border-t border-border"
+            )}>
               <Button
                 type="button"
                 variant="outline"
@@ -913,19 +1038,21 @@ export function ProjectRegistrationForm({
                   type="button"
                   onClick={handleProceedToStep2}
                   disabled={pending}
-                  className="bg-(--site-cyan) hover:bg-(--site-cyan-hover) text-white"
                 >
                   Next: Assign Team
                   <ArrowRight className="ml-1.5 size-4" />
                 </Button>
               </div>
-            </CardFooter>
+            </Footer>
           </>
         ) : (
           <>
-            <CardHeader className="space-y-1">
+            <Header className={cn(
+              "space-y-1",
+              isModal ? "pb-2 pt-1" : ""
+            )}>
               <div className="flex items-center gap-2">
-                <span className="flex size-7 items-center justify-center rounded-md bg-(--site-cyan)/10 text-(--site-cyan)">
+                <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
                   <Users className="size-4" />
                 </span>
                 <CardTitle className="text-base font-semibold">
@@ -935,25 +1062,25 @@ export function ProjectRegistrationForm({
               <p className="text-xs text-muted-foreground">
                 Assign registered staff to oversight and discipline engineering
                 roles for project{' '}
-                <span className="font-semibold text-foreground">
+                <span className="font-semibold text-foreground font-mono">
                   {projectCode || 'New Project'}
                 </span>
                 .
               </p>
-            </CardHeader>
+            </Header>
 
-            <CardContent className="space-y-4">
+            <Content className="space-y-4">
               {/* Context Project Summary */}
               <div className="rounded-md border border-border bg-muted/20 p-3 text-xs flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <div className="truncate">
-                  <span className="font-semibold text-foreground">
+                  <span className="font-semibold text-foreground font-mono">
                     {projectCode || '—'}
                   </span>{' '}
                   <span className="text-muted-foreground truncate">
                     {projectName || '—'}
                   </span>
                 </div>
-                <span className="text-[11px] text-muted-foreground shrink-0">
+                <span className="text-xs text-muted-foreground shrink-0">
                   Staffing can be adjusted anytime via Projects Directory.
                 </span>
               </div>
@@ -1035,9 +1162,12 @@ export function ProjectRegistrationForm({
                   />
                 </div>
               </div>
-            </CardContent>
+            </Content>
 
-            <CardFooter className="flex justify-between items-center border-t border-border py-4">
+            <Footer className={cn(
+              "flex justify-between items-center py-4",
+              isModal ? "border-t border-border pt-4 pb-0" : "border-t border-border"
+            )}>
               <Button
                 type="button"
                 variant="outline"
@@ -1051,27 +1181,21 @@ export function ProjectRegistrationForm({
               <div className="flex items-center gap-2.5">
                 <Button
                   type="button"
-                  variant="ghost"
-                  onClick={handleSubmit((vals) => submitProject(vals, false))}
-                  disabled={pending}
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Skip Staffing & Register
-                </Button>
-                <Button
-                  type="button"
                   onClick={handleSubmit((vals) => submitProject(vals, true))}
                   disabled={pending}
-                  className="bg-(--site-cyan) hover:bg-(--site-cyan-hover) text-white"
                 >
-                  {pending ? 'Registering...' : 'Register Project with Team'}
+                  {pending
+                    ? 'Registering...'
+                    : teamCount > 0
+                    ? `Register Project (${teamCount} Assigned)`
+                    : 'Register Project'}
                 </Button>
               </div>
-            </CardFooter>
+            </Footer>
           </>
         )}
       </form>
-    </Card>
+    </Container>
 
     {!modalContext && (
       <Dialog

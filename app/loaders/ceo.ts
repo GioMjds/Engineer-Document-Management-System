@@ -1,9 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import {
-  SEED_PROJECTS,
-  INITIAL_NOCS_PROJECT_26001,
-  calculateDaysRemaining,
-} from '@/lib/noc-tracker';
+import { calculateDaysRemaining } from '@/lib/noc-tracker';
 
 export interface ExecutiveKpiSummary {
   activeProjectsCount: number;
@@ -22,53 +18,16 @@ export interface ExecutiveKpiSummary {
   }>;
 }
 
-// Default fallback seed financials for development/offline mode
-const SEED_FINANCIALS: Record<string, { contractor: number; consultant: number }> = {
-  '26001': { contractor: 45000000, consultant: 3200000 },
-  '26002': { contractor: 28000000, consultant: 2100000 },
+const emptySummary: ExecutiveKpiSummary = {
+  activeProjectsCount: 0,
+  nocCompletionPercentage: 0,
+  criticalDelaysCount: 0,
+  expiringNocsCount: 0,
+  reviewBacklogCount: 0,
+  totalContractorAmount: 0,
+  totalConsultantAmount: 0,
+  projectFinancials: [],
 };
-
-function computeSeedSummary(): ExecutiveKpiSummary {
-  const allNocs = [...INITIAL_NOCS_PROJECT_26001];
-  const totalNocs = allNocs.length;
-  const approvedNocs = allNocs.filter((n) => n.status === 'Approved').length;
-  const today = new Date().toISOString().split('T')[0];
-
-  const criticalDelays = allNocs.filter(
-    (n) => n.status !== 'Approved' && n.status !== 'Not Needed' && n.planDate && n.planDate < today,
-  ).length;
-
-  const expiringNocs = allNocs.filter((n) => {
-    if (n.status !== 'Approved' || !n.expiryDate) return false;
-    const days = calculateDaysRemaining(n.expiryDate);
-    return days !== null && days >= 0 && days <= 14;
-  }).length;
-
-  const projectFinancials = SEED_PROJECTS.map((p) => {
-    const fin = SEED_FINANCIALS[p.code] || { contractor: 0, consultant: 0 };
-    return {
-      projectId: p.code,
-      projectName: p.name,
-      stage: p.lifecycleStage || 'Pre-Construction',
-      contractorAmount: p.clientContractorAmount || fin.contractor,
-      consultantAmount: p.clientConsultantAmount || fin.consultant,
-    };
-  });
-
-  const totalContractorAmount = projectFinancials.reduce((sum, p) => sum + p.contractorAmount, 0);
-  const totalConsultantAmount = projectFinancials.reduce((sum, p) => sum + p.consultantAmount, 0);
-
-  return {
-    activeProjectsCount: SEED_PROJECTS.length,
-    nocCompletionPercentage: totalNocs > 0 ? Math.round((approvedNocs / totalNocs) * 100) : 0,
-    criticalDelaysCount: criticalDelays,
-    expiringNocsCount: expiringNocs,
-    reviewBacklogCount: 1, // Seed review backlog item
-    totalContractorAmount,
-    totalConsultantAmount,
-    projectFinancials,
-  };
-}
 
 export async function getExecutiveDashboardSummary(): Promise<ExecutiveKpiSummary> {
   try {
@@ -81,21 +40,8 @@ export async function getExecutiveDashboardSummary(): Promise<ExecutiveKpiSummar
       .is('archived_at', null)
       .order('code', { ascending: true });
 
-    if (projError) {
-      return computeSeedSummary();
-    }
-
-    if (!dbProjects || dbProjects.length === 0) {
-      return {
-        activeProjectsCount: 0,
-        nocCompletionPercentage: 0,
-        criticalDelaysCount: 0,
-        expiringNocsCount: 0,
-        reviewBacklogCount: 0,
-        totalContractorAmount: 0,
-        totalConsultantAmount: 0,
-        projectFinancials: [],
-      };
+    if (projError || !dbProjects || dbProjects.length === 0) {
+      return emptySummary;
     }
 
     const projectIds = dbProjects.map((p) => p.id);
@@ -176,6 +122,6 @@ export async function getExecutiveDashboardSummary(): Promise<ExecutiveKpiSummar
       projectFinancials,
     };
   } catch {
-    return computeSeedSummary();
+    return emptySummary;
   }
 }

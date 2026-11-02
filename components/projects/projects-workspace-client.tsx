@@ -50,7 +50,7 @@ const STAGE_FILTERS = [
   { value: 'Pre-Construction', label: 'Pre-Construction' },
   { value: 'Construction', label: 'Construction' },
   { value: 'Handover', label: 'Handover' },
-];
+] as const;
 
 const ROLE_FILTERS = [
   { value: 'all', label: 'All Roles & Assignments' },
@@ -64,7 +64,7 @@ const ROLE_FILTERS = [
   { value: 'structure_engineer', label: 'Structural Engineer' },
   { value: 'mep_engineer', label: 'MEP Engineer' },
   { value: 'civil_engineer', label: 'Civil Engineer' },
-];
+] as const;
 
 function stageTone(stage: ProjectLifecycleStage) {
   switch (stage) {
@@ -113,20 +113,14 @@ export function ProjectsWorkspaceClient({
       (p) => p.lifecycleStage === 'Handover',
     ).length;
 
-    // Check if fully staffed across 8 disciplines
+    // Projects staffed with resident engineer and team members
     const fullyStaffed = projects.filter((p) => {
       const r = p.assignedRoles;
       if (!r) return false;
-      return (
-        r.residentEngineer !== 'Unassigned' &&
-        r.areaManager !== 'Unassigned' &&
-        r.authorityEngineer !== 'Unassigned' &&
-        r.docController !== 'Unassigned' &&
-        r.architectEngineer !== 'Unassigned' &&
-        r.structureEngineer !== 'Unassigned' &&
-        r.mepEngineer !== 'Unassigned' &&
-        r.civilEngineer !== 'Unassigned'
-      );
+      const assignedCount = Object.values(r).filter(
+        (name) => name && name !== 'Unassigned',
+      ).length;
+      return assignedCount > 0 && r.residentEngineer !== 'Unassigned';
     }).length;
 
     return { total, preConstruction, construction, handover, fullyStaffed };
@@ -685,7 +679,7 @@ function ProjectGridCard({
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
         <div className="flex items-center gap-2">
           <Link
-            href={`/noc-tracker/${project.code}` as Route}
+            href={`/noc-tracker/${project.code}`}
             className={cn(
               buttonVariants({ variant: 'outline', size: 'sm' }),
               'h-8 gap-1.5 text-xs',
@@ -695,14 +689,14 @@ function ProjectGridCard({
             NOC Tracker
           </Link>
           <Link
-            href={`/projects/${project.code}` as Route}
+            href={`/projects/${project.code}`}
             className={cn(
               buttonVariants({ variant: 'outline', size: 'sm' }),
               'h-8 gap-1.5 text-xs',
             )}
           >
             <FileText className="size-3.5" />
-            Documents
+            See Projects
           </Link>
         </div>
 

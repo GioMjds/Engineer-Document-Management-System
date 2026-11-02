@@ -1,9 +1,5 @@
 import { getAuthorityName } from '@/lib/noc-matrix';
-import {
-  INITIAL_NOCS_PROJECT_26001,
-  SEED_PROJECTS,
-  isLapsed,
-} from '@/lib/noc-tracker';
+import { isLapsed } from '@/lib/noc-tracker';
 import { createClient } from '@/lib/supabase/server';
 import type {
   AssignedProject,
@@ -95,22 +91,21 @@ interface RawDbNoc {
   noc_resubmission_history?: RawResubmission[] | null;
 }
 
-// Maps database project record into AssignedProject model.
+// Maps database project record into AssignedProject model using database values only.
 function mapDbProjectToAssigned(
   p: RawDbProject,
   masterAuth: MasterAuthority,
   clientConsultantAmount?: number,
 ): AssignedProject {
-  const seed = SEED_PROJECTS.find((sp) => sp.code === p.code);
   const roles: AssignedProject['assignedRoles'] = {
-    authorityEngineer: seed?.assignedRoles.authorityEngineer ?? 'Unassigned',
-    architectEngineer: seed?.assignedRoles.architectEngineer ?? 'Unassigned',
-    mepEngineer: seed?.assignedRoles.mepEngineer ?? 'Unassigned',
-    structureEngineer: seed?.assignedRoles.structureEngineer ?? 'Unassigned',
-    civilEngineer: seed?.assignedRoles.civilEngineer ?? 'Unassigned',
-    residentEngineer: seed?.assignedRoles.residentEngineer ?? 'Unassigned',
-    areaManager: seed?.assignedRoles.areaManager ?? 'Unassigned',
-    docController: seed?.assignedRoles.docController ?? 'Unassigned',
+    authorityEngineer: 'Unassigned',
+    architectEngineer: 'Unassigned',
+    mepEngineer: 'Unassigned',
+    structureEngineer: 'Unassigned',
+    civilEngineer: 'Unassigned',
+    residentEngineer: 'Unassigned',
+    areaManager: 'Unassigned',
+    docController: 'Unassigned',
   };
 
   const memberIds: NonNullable<AssignedProject['assignedMemberIds']> = {};
@@ -119,8 +114,8 @@ function mapDbProjectToAssigned(
     for (const pm of p.project_members) {
       const profile = pm.profiles;
       if (!profile) continue;
-      const name = profile.full_name || 'Engineer';
-      const lower = name.toLowerCase();
+      const name = profile.full_name || 'Staff Member';
+
       switch (profile.role) {
         case 'authority_engineer':
           roles.authorityEngineer = name;
@@ -140,28 +135,16 @@ function mapDbProjectToAssigned(
           memberIds.docController = pm.user_id;
           break;
         case 'engineer':
-          if (pm.discipline === 'mep' || (!pm.discipline && lower.includes('mep'))) {
+          if (pm.discipline === 'mep') {
             roles.mepEngineer = name;
             memberIds.mepEngineer = pm.user_id;
-          } else if (
-            pm.discipline === 'architect' ||
-            (!pm.discipline && lower.includes('architect'))
-          ) {
+          } else if (pm.discipline === 'architect') {
             roles.architectEngineer = name;
             memberIds.architectEngineer = pm.user_id;
-          } else if (
-            pm.discipline === 'structure' ||
-            (!pm.discipline && lower.includes('structur'))
-          ) {
+          } else if (pm.discipline === 'structure') {
             roles.structureEngineer = name;
             memberIds.structureEngineer = pm.user_id;
-          } else if (
-            pm.discipline === 'civil' ||
-            (!pm.discipline && (lower.includes('civil') || lower.includes('ismail')))
-          ) {
-            roles.civilEngineer = name;
-            memberIds.civilEngineer = pm.user_id;
-          } else if (roles.civilEngineer === 'Unassigned') {
+          } else if (pm.discipline === 'civil') {
             roles.civilEngineer = name;
             memberIds.civilEngineer = pm.user_id;
           }
@@ -186,13 +169,12 @@ function mapDbProjectToAssigned(
     projectType: 'Commercial & Residential',
     location: 'Dubai, UAE',
     contractType: 'Design & Supervision',
-    contractorName: p.contractor_name || seed?.contractorName || undefined,
+    contractorName: p.contractor_name || undefined,
     clientContractorAmount:
       p.client_contractor_amount != null
         ? Number(p.client_contractor_amount)
-        : (seed?.clientContractorAmount ?? 0),
-    clientConsultantAmount:
-      clientConsultantAmount ?? seed?.clientConsultantAmount ?? undefined,
+        : 0,
+    clientConsultantAmount: clientConsultantAmount ?? undefined,
     currentStage: p.stage
       ? p.stage.charAt(0).toUpperCase() + p.stage.slice(1)
       : 'Pre-Construction',
@@ -200,7 +182,7 @@ function mapDbProjectToAssigned(
       ? stageMap[p.stage as keyof typeof stageMap] || 'Pre-Construction'
       : 'Pre-Construction',
     milestones:
-      (p.milestones as StageMilestoneDates) || seed?.milestones || undefined,
+      (p.milestones as StageMilestoneDates) || undefined,
     assignedRoles: roles,
     assignedMemberIds: memberIds,
   };
@@ -297,19 +279,12 @@ function mapDbNocToItem(
   };
 }
 
-// TODO: Must remove any seeded datas here.
-// Fetches live project and NOC data with automatic fallback to seed items.
+// Fetches live project and NOC data purely from Supabase.
 export async function getNocTrackerData(): Promise<NocTrackerData> {
-  const fallbackData: NocTrackerData = {
-    projects: SEED_PROJECTS,
-    nocs: INITIAL_NOCS_PROJECT_26001.map((item) => ({
-      ...item,
-      status:
-        item.status === 'Approved' && item.expiryDate && isLapsed(item.expiryDate)
-          ? 'Expired'
-          : item.status,
-    })),
-    isLive: false,
+  const emptyData: NocTrackerData = {
+    projects: [],
+    nocs: [],
+    isLive: true,
   };
 
   try {
@@ -343,16 +318,8 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
       .is('archived_at', null)
       .order('code', { ascending: true });
 
-    if (projectsError) {
-      return fallbackData;
-    }
-
-    if (!dbProjects || dbProjects.length === 0) {
-      return {
-        projects: [],
-        nocs: [],
-        isLive: true,
-      };
+    if (projectsError || !dbProjects || dbProjects.length === 0) {
+      return emptyData;
     }
 
     // 2. Fetch master and reviewing authorities lookup maps
@@ -409,7 +376,7 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
       projectDbIdToCode.set(rawProj.id, rawProj.code);
     }
 
-    // 4. Fetch project NOCs for accessible projects
+    // 5. Fetch project NOCs for accessible projects
     const projectIds = Array.from(projectDbIdToCode.keys());
     const { data: dbNocs } = await supabase
       .from('project_nocs')
@@ -459,28 +426,9 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
       .in('project_id', projectIds)
       .order('sequence_no', { ascending: true });
 
-    const seedNocsMap: Record<string, ProjectNocItem[]> = {
-      '26001': INITIAL_NOCS_PROJECT_26001.map((item) => ({
-        ...item,
-        status:
-          item.status === 'Approved' && item.expiryDate && isLapsed(item.expiryDate)
-            ? 'Expired'
-            : item.status,
-      })),
-      '26002': INITIAL_NOCS_PROJECT_26001.map((item) => ({
-        ...item,
-        id: item.id.replace('26001', '26002'),
-        projectCode: '26002',
-        status:
-          item.status === 'Approved' && item.expiryDate && isLapsed(item.expiryDate)
-            ? 'Expired'
-            : item.status,
-      })),
-    };
-
-    // 5. Map NOC records from database
+    // 6. Map NOC records from database
     const mappedNocs: ProjectNocItem[] = (dbNocs || []).map((row) => {
-      const projectCode = projectDbIdToCode.get(row.project_id) || '26001';
+      const projectCode = projectDbIdToCode.get(row.project_id) || '';
       const reviewingAuthName = (revAuthMap.get(row.reviewing_authority_id) ||
         `Authority #${row.reviewing_authority_id}`) as ReviewingAuthority;
       return mapDbNocToItem(
@@ -490,21 +438,12 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
       );
     });
 
-    // Ensure every accessible project has NOCs available (fallback to seed if DB has none)
-    const combinedNocs = [...mappedNocs];
-    for (const projectCode of projectMap.keys()) {
-      const hasNocs = combinedNocs.some((n) => n.projectCode === projectCode);
-      if (!hasNocs && seedNocsMap[projectCode]) {
-        combinedNocs.push(...seedNocsMap[projectCode]);
-      }
-    }
-
     return {
       projects: Array.from(projectMap.values()),
-      nocs: combinedNocs,
+      nocs: mappedNocs,
       isLive: true,
     };
   } catch {
-    return fallbackData;
+    return emptyData;
   }
 }

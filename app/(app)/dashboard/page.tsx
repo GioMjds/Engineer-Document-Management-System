@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { ExecutiveDashboardClient } from '@/components/dashboard/executive-dashboard-client';
 import { getNocTrackerData } from '@/lib/server/noc-data';
 import { getExecutiveDashboardSummary } from '@/app/loaders/ceo';
+import type { ProjectDisciplineStatus } from '@/types/noc';
 
 export const metadata: Metadata = {
   title: 'Dashboard',
@@ -17,6 +18,13 @@ export default async function DashboardPage() {
     getNocTrackerData(),
     getExecutiveDashboardSummary(),
   ]);
+
+  const initialDisciplineStatuses: Record<string, ProjectDisciplineStatus> = {};
+  for (const p of projects) {
+    if (p.milestones?.disciplineStatus) {
+      initialDisciplineStatuses[p.code] = p.milestones.disciplineStatus;
+    }
+  }
 
   let initialEngineerStats;
   if (user.role === 'engineer') {
@@ -58,6 +66,7 @@ export default async function DashboardPage() {
         projects={projects}
         initialNocs={nocs}
         currentUserRole={user.role}
+        initialDisciplineStatuses={initialDisciplineStatuses}
         initialEngineerStats={initialEngineerStats}
         initialAreaManagerStats={initialAreaManagerStats}
         executiveSummary={executiveSummary}

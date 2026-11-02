@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { type AppRole } from '@/lib/permissions';
 import { sendUserInviteEmail } from '@/lib/email/notifications';
-import { INITIAL_NOCS_PROJECT_26001, SEED_PROJECTS } from '@/lib/noc-tracker';
 import type { Json } from '@/types/database';
 
 const roleSchema = z.enum([
@@ -717,68 +716,6 @@ export async function createProject(
         }
       }
     }
-  } else {
-    // Statutory baseline instantiation fallback for unseeded authorities
-    const revAuthMap: Record<string, number> = {
-      Trakhees: 1,
-      Nakheel: 2,
-      DEWA: 3,
-      Empower: 4,
-      RTA: 5,
-      EHS: 6,
-      DCAA: 7,
-      DM: 8,
-      DU: 9,
-      Etisalat: 10,
-      'Green Building': 11,
-      'Third Party': 12,
-      DCD: 13,
-      DDA: 14,
-    };
-    const stageMap: Record<
-      string,
-      'design' | 'information' | 'construction' | 'handover'
-    > = {
-      'Design NOC': 'design',
-      'Information NOC': 'information',
-      'Construction NOC': 'construction',
-      'Handover NOC': 'handover',
-    };
-
-    for (const seedNoc of INITIAL_NOCS_PROJECT_26001) {
-      const stageCode = stageMap[seedNoc.stage] || 'design';
-      const revAuthId = revAuthMap[seedNoc.reviewingAuthority] || 1;
-
-      const { data: insertedNoc } = await adminClient
-        .from('project_nocs')
-        .insert({
-          project_id: project.id,
-          sequence_no: seedNoc.sequenceNumber,
-          stage: stageCode,
-          reviewing_authority_id: revAuthId,
-          description: seedNoc.description,
-          submitted_by: 'consultant',
-          status_code: 'not_started',
-          payment_fee: seedNoc.paymentFee || 0,
-          is_paid: false,
-          blocking_sequence_no: seedNoc.blockingSequenceNumber,
-          current_revision: 'R00',
-        })
-        .select('id')
-        .single();
-
-      if (insertedNoc) {
-        instantiatedNocsCount++;
-        if (seedNoc.requirements && seedNoc.requirements.length > 0) {
-          const reqInserts = seedNoc.requirements.map((r) => ({
-            project_noc_id: insertedNoc.id,
-            title: r.title,
-            is_satisfied: false,
-          }));
-          await adminClient.from('project_noc_requirements').insert(reqInserts);
-        }
-      }
-    }
   }
 
   // Audit log with instantiated count
@@ -969,10 +906,6 @@ export async function getNextProjectCode(): Promise<{
       }
     }
 
-    for (const sp of SEED_PROJECTS) {
-      existingCodes.add(sp.code.trim());
-    }
-
     let maxSeq = 0;
     const yearRegex = new RegExp(`^${yearPrefix}(\\d{3})$`);
     for (const code of existingCodes) {
@@ -1018,10 +951,7 @@ export async function checkProjectCodeAvailability(
       return { ok: true, available: false };
     }
 
-    const inSeed = SEED_PROJECTS.some(
-      (sp) => sp.code.toLowerCase() === trimmed.toLowerCase(),
-    );
-    return { ok: true, available: !inSeed };
+    return { ok: true, available: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to verify code';
     return { ok: false, available: false, error: message };

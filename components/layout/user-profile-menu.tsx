@@ -63,11 +63,6 @@ export function UserProfileMenu({
   const displayName = parsedName || user.email || 'User';
   const initials = getInitials(parsedName || user.full_name, user.email);
 
-  const triggerSubtitle =
-    isEngineer && engineeringSpecialty
-      ? `${roleLabel} • ${engineeringSpecialty}`
-      : roleLabel;
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
@@ -81,22 +76,6 @@ export function UserProfileMenu({
             {/* User Avatar Circle */}
             <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-navy font-bold text-white shadow-2xs ring-1 ring-border dark:bg-brand-cyan dark:text-brand-navy-deep text-[11px]">
               {initials}
-            </span>
-
-            {/* User Name & Role (hidden on mobile) */}
-            <span className="hidden sm:flex flex-col text-left leading-none max-w-36 md:max-w-48">
-              <span
-                className="truncate text-xs font-semibold text-foreground"
-                title={displayName}
-              >
-                {displayName}
-              </span>
-              <span
-                className="mt-0.5 truncate text-[10px] text-muted-foreground"
-                title={triggerSubtitle}
-              >
-                {triggerSubtitle}
-              </span>
             </span>
 
             <ChevronDown className="size-3 text-muted-foreground shrink-0 hidden sm:block" />

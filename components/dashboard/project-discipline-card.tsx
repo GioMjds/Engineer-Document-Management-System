@@ -102,7 +102,7 @@ export function ProjectDisciplineCard({
           <Link href={`/noc-tracker/${project.code}`}>
             <Button variant="outline" size="sm" className="gap-1.5 text-xs">
               <FileCheck2 className="h-3.5 w-3.5 text-(--site-cyan)" />
-              NOC Matrix
+              NOC Tracker
               <ArrowRight className="h-3 w-3 text-muted-foreground" />
             </Button>
           </Link>

@@ -37,6 +37,7 @@ export interface StageMilestoneDates {
     targetCompletionDate?: string;
   };
   customPrerequisites?: CustomStagePrerequisite[];
+  disciplineStatus?: ProjectDisciplineStatus;
 }
 
 export interface StageGatePrerequisiteItem {

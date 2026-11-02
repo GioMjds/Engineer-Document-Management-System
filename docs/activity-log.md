@@ -2,6 +2,97 @@
 
 ## Session 2026-11-02
 
+- Shared Database Persistence for Discipline Progress and Real-time Stage Status Across Roles:
+  - Background & Objective: Fixed issue where Admin saw approved discipline progress and specialist studies on Project 26003, but other roles (e.g. Authority Engineer Zayed Al-Hashimi "ZA") saw "Not Started" / "By Unassigned" due to state only living in client memory. Also resolved false renewal warnings ("4 Expiring in 14 Days" and "Renew NOC") for completed projects and permanent clearances.
+  - Implementation:
+    - Updated [types/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/types/noc.ts): Added `disciplineStatus?: ProjectDisciplineStatus` to `StageMilestoneDates`.
+    - Created `updateProjectDisciplineStatusAction` in [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts): Persists discipline progress and specialist records directly into `projects.milestones.disciplineStatus` with audit logging and path revalidation.
+    - Updated [app/(app)/dashboard/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/dashboard/page.tsx): Hydrates `initialDisciplineStatuses` directly from `project.milestones.disciplineStatus` for all authenticated roles.
+    - Updated [components/dashboard/executive-dashboard-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/executive-dashboard-client.tsx): Initializes `disciplineStatuses` with server-hydrated data and calls `updateProjectDisciplineStatusAction` whenever disciplines, authority stages, or specialist studies are updated.
+    - Updated [components/dashboard/use-dashboard-data.ts](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/use-dashboard-data.ts): Excludes completed projects from triggering urgent `expiringNocs` renewal alerts, aligning with statutory lifecycle where completed/handed over projects have no active site permits to renew.
+    - Updated [components/noc/noc-alert-banner.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-alert-banner.tsx): Explicitly checks `Boolean(i.expiryDate)` so permanent clearances never trigger false expiry warnings.
+    - Updated Supabase database: Seeded Project 26003 `milestones.disciplineStatus` with approved progress and set completed NOC clearances to `expiry_date: null` (Permanent).
+    - Fixed linting error in [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts) and removed unused imports in [lib/project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts).
+
+- Purged Static Hardcoded Mocks, Client-Side State Poisoning, and Guesswork Across Workspace:
+  - Background & Objective: Resolves hardcoded static values (26001, 26002, SEED_PROJECTS), mock bypasses, name-based discipline guessing, and localStorage state overrides that conflicted with CVTEC Consulting Engineers dynamic database workflow.
+  - Implementation:
+    - Updated [lib/noc-tracker.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/noc-tracker.ts):
+      - Removed `SEED_PROJECTS` and `INITIAL_NOCS_PROJECT_26001`.
+      - Retained pure utility functions (`calculateDaysRemaining`, `isExpiringSoon`, `isLapsed`, `isPlanDueOrAtRisk`, `checkBlockingPrerequisite`).
+    - Updated [lib/server/noc-data.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/server/noc-data.ts):
+      - Purged `SEED_PROJECTS` and `seedNocsMap` fallback.
+      - Removed name-based discipline guessing substrings (`ismail`, `mep`).
+      - Cleaned `mapDbProjectToAssigned` to map only real database members and disciplines from `project_members`.
+    - Updated [app/loaders/ceo.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/loaders/ceo.ts):
+      - Removed `SEED_PROJECTS`, `INITIAL_NOCS_PROJECT_26001`, `SEED_FINANCIALS`, and `computeSeedSummary()`.
+      - Returns zeroed `emptySummary` on database query errors without injecting fake mock data.
+    - Updated [app/actions/admin.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/admin.ts):
+      - Removed mock seed project arrays and fallbacks from `createProject`.
+      - Removed hardcoded project code array from `getNextProjectCode` and `checkProjectCodeAvailability`.
+    - Updated [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts):
+      - Removed mock bypass check (`if (!UUID_REGEX.test(nocId)) return { success: true }`).
+      - Validates UUIDs and returns `{ success: false, error: 'Invalid NOC identifier.' }`.
+    - Updated [lib/project-status.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-status.ts):
+      - Removed `INITIAL_PROJECT_DISCIPLINE_STATUS` and client localStorage functions (`getStoredDisciplineStatus`, `saveStoredDisciplineStatus`).
+      - Retained `calculateSubmittalDelays` and `canUserEditDiscipline`.
+    - Updated [lib/project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts):
+      - Removed `INITIAL_PROJECT_MILESTONES` and localStorage functions (`getStoredProjectMilestones`, `saveStoredProjectMilestones`, `getStoredProjectStage`, `saveStoredProjectStage`).
+      - Refactored `evaluateStageGateReadiness` to evaluate against live `project.milestones`, live statutory NOCs, and `projectDocuments`.
+    - Updated [components/lifecycle/stage-gate-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/lifecycle/stage-gate-drawer.tsx):
+      - Removed `INITIAL_PROJECT_MILESTONES` import and mock fallbacks.
+    - Updated [components/noc/noc-tracker-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-tracker-client.tsx):
+      - Removed localStorage synchronization hooks and mock fallbacks.
+      - Connected stage gate and milestone mutations directly to live server actions.
+    - Updated [components/dashboard/executive-dashboard-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/executive-dashboard-client.tsx):
+      - Removed client hydration override loop that overwrote server-fetched project stages and milestones with localStorage data.
+      - Removed dev role preview dropdown and bound active role to authenticated user context.
+      - Removed localStorage read/write invocations from stage and milestone handlers.
+      - Updated `evaluateStageGateReadiness` invocations to match database-driven signature.
+    - Updated [components/projects/project-team-dialog.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-team-dialog.tsx):
+      - Removed name-based discipline guessing (`nameLower.includes(disciplineKeyword)`).
+      - Allowed any engineer with role `engineer` to be suggested and assigned to any discipline.
+    - Updated [components/projects/projects-workspace-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/projects-workspace-client.tsx):
+      - Replaced rigid 8-slot staffing requirement with dynamic check for active resident engineer and team members.
+    - Cleaned up unused document upload files:
+      - Deleted unreferenced [app/(app)/documents/upload-form.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/documents/upload-form.tsx).
+      - Removed unused `createDocument` and `docNumberExists` from [app/(app)/documents/actions.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/documents/actions.ts).
+    - Updated [scripts/seed-users.ts](file:///D:/giomj/Projects/engineer-docs-collab/scripts/seed-users.ts):
+      - Trimmed seed users to 7 canonical CVTEC roles.
+      - Removed artificial parenthetical title suffixes from user full names.
+      - Removed hardcoded project assignment loop so staffing is purely user-defined in database.
+    - Fixed [app/(app)/projects/new/project-form.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/new/project-form.tsx):
+      - Added missing `Sparkles` import from `lucide-react`.
+  - Verification:
+    - `pnpm exec tsc --noEmit`: 0 type errors.
+    - `pnpm run build`: 24 static and dynamic routes compiled cleanly with Turbopack.
+
+- Implemented Permanent Authority Clearances and Fixed False "Renew NOC" Dashboard Radar:
+  - Background & Objective: Resolves the issue where statutory NOCs with 100% satisfied requirements still triggered urgent "Renew NOC" alerts on the Executive Dashboard (/dashboard) and 14-day countdown warnings on the NOC Tracker (/noc-tracker/[projectID]). Previously, the system enforced a mandatory future expiration date for all approvals, making it impossible to record permanent milestone clearances (e.g. BCC, Handover, Information NOCs).
+  - Implementation:
+    - Updated [components/noc/authority-result-modal.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/authority-result-modal.tsx):
+      - Added `isPermanent` boolean toggle to `authorityResultSchema` and `AuthorityResultModal`.
+      - Conditionally required future expiry date only for temporary permits (`!isPermanent`).
+      - Added interactive checkbox: "Permanent Clearance / Milestone NOC" with contextual explanatory guidance.
+      - Integrated `useEffect` to synchronize modal form state with current NOC data, allowing existing approved permits to have validity updated or toggled to permanent.
+      - Clear and disable expiry date when marked permanent, returning `expiryDate: null`.
+    - Updated [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts):
+      - Relaxed `authorityDecisionSchema` so `expiryDate` is optional when `isPermanent` is set.
+      - Updated `recordAuthorityDecision` to persist `expiry_date: finalExpiryDate` (`null` when permanent) and record in audit log metadata.
+    - Updated [components/noc/noc-data-table.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-data-table.tsx):
+      - Rendered green `Permanent` badge in the Expiry Date column for approved permits without expiration dates.
+    - Updated [components/noc/noc-inspector-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-inspector-drawer.tsx):
+      - Dynamic button label: shows "Update Validity" when viewing an approved NOC to allow toggling permanent status or adjusting dates.
+      - Rendered `Permanent (No Expiry)` in Key Timeline Dates for non-expiring clearances.
+    - Updated [components/dashboard/use-dashboard-data.ts](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/use-dashboard-data.ts):
+      - Updated `expiringNocs` filter to capture both expiring and lapsed permits while strictly ignoring permanent clearances (`Boolean(n.expiryDate)`).
+    - Fixed typing in [lib/project-status.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-status.ts):
+      - Added `Record<string, ProjectDisciplineStatus>` to `INITIAL_PROJECT_DISCIPLINE_STATUS` to fix string indexing type safety in stage gate evaluation.
+  - Verification:
+    - `npx tsc --noEmit`: 0 type errors.
+    - `pnpm lint`: 0 ESLint warnings/errors.
+    - `pnpm build`: 24 static and dynamic routes compiled cleanly with Turbopack.
+
 - Enhanced NOC Tracker Statutory Submissions, Resubmission Flow, and Two-Tier Expiration Lifecycle:
   - Background & Objective: Resolves critical blockers in authority NOC application submissions, dispatched drawing resubmissions, and expired permit alerts identified in the NOC Tracker (/noc-tracker/[projectID]).
   - Implementation:
@@ -1168,6 +1259,18 @@
 
 
 ## Session 2026-11-02
+
+- Shared Database Persistence for Discipline Progress and Real-time Stage Status Across Roles:
+  - Background & Objective: Fixed issue where Admin saw approved discipline progress and specialist studies on Project 26003, but other roles (e.g. Authority Engineer Zayed Al-Hashimi "ZA") saw "Not Started" / "By Unassigned" due to state only living in client memory. Also resolved false renewal warnings ("4 Expiring in 14 Days" and "Renew NOC") for completed projects and permanent clearances.
+  - Implementation:
+    - Updated [types/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/types/noc.ts): Added `disciplineStatus?: ProjectDisciplineStatus` to `StageMilestoneDates`.
+    - Created `updateProjectDisciplineStatusAction` in [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts): Persists discipline progress and specialist records directly into `projects.milestones.disciplineStatus` with audit logging and path revalidation.
+    - Updated [app/(app)/dashboard/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/dashboard/page.tsx): Hydrates `initialDisciplineStatuses` directly from `project.milestones.disciplineStatus` for all authenticated roles.
+    - Updated [components/dashboard/executive-dashboard-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/executive-dashboard-client.tsx): Initializes `disciplineStatuses` with server-hydrated data and calls `updateProjectDisciplineStatusAction` whenever disciplines, authority stages, or specialist studies are updated.
+    - Updated [components/dashboard/use-dashboard-data.ts](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/use-dashboard-data.ts): Excludes completed projects from triggering urgent `expiringNocs` renewal alerts, aligning with statutory lifecycle where completed/handed over projects have no active site permits to renew.
+    - Updated [components/noc/noc-alert-banner.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-alert-banner.tsx): Explicitly checks `Boolean(i.expiryDate)` so permanent clearances never trigger false expiry warnings.
+    - Updated Supabase database: Seeded Project 26003 `milestones.disciplineStatus` with approved progress and set completed NOC clearances to `expiry_date: null` (Permanent).
+    - Fixed linting error in [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts) and removed unused imports in [lib/project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts).
 
 - Resolved Phase 1 Gaps, Redundancies & Post-MVP Enhancements:
   - Background & Objective: Audit and resolve gaps, technical debt, and redundant mock patterns identified in Phase 1 scope following the MVP presentation.

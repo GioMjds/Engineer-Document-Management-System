@@ -4,7 +4,12 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireCan } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import type { StageMilestoneDates, ProjectLifecycleStage } from '@/types/noc';
+import type {
+  StageMilestoneDates,
+  ProjectLifecycleStage,
+  ProjectDisciplineStatus,
+} from '@/types/noc';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { canUserAdvanceStage, canUserModifyMilestones } from '@/lib/project-lifecycle';
 import type { Json } from '@/types/database';
 
@@ -26,6 +31,7 @@ const submitNocSchema = z.object({
 const authorityDecisionSchema = z
   .object({
     decision: z.enum(['obtained', 'rejected'] as const),
+    isPermanent: z.boolean().optional(),
     expiryDate: z.string().optional(),
     rejectionReason: z.string().optional(),
     officialDocumentUrl: z.string().optional(),
@@ -33,6 +39,7 @@ const authorityDecisionSchema = z
   .refine(
     (data) => {
       if (data.decision === 'obtained') {
+        if (data.isPermanent) return true;
         if (!data.expiryDate) return false;
         const exp = new Date(data.expiryDate);
         return !isNaN(exp.getTime()) && exp.getTime() > Date.now();
@@ -40,7 +47,7 @@ const authorityDecisionSchema = z
       return true;
     },
     {
-      message: 'Future expiry date is required when NOC is obtained',
+      message: 'Future expiry date is required when NOC is obtained and not marked permanent',
       path: ['expiryDate'],
     },
   )
@@ -83,10 +90,7 @@ export async function submitNocApplication(
     const now = new Date().toISOString();
 
     if (!UUID_REGEX.test(nocId)) {
-      // Mock / seed project fallback: revalidate and return success for client-side state update
-      revalidatePath('/noc-tracker');
-      revalidatePath('/');
-      return { success: true };
+      return { success: false, error: 'Invalid NOC identifier.' };
     }
 
     const { data: currentNoc, error: fetchErr } = await supabase
@@ -185,6 +189,7 @@ export async function recordAuthorityDecision(
   nocId: string,
   input: {
     decision: 'obtained' | 'rejected';
+    isPermanent?: boolean;
     expiryDate?: string;
     rejectionReason?: string;
     officialDocumentUrl?: string;
@@ -197,17 +202,14 @@ export async function recordAuthorityDecision(
     return { success: false, error: parsed.error.issues[0]?.message || 'Invalid decision input' };
   }
 
-  const { decision, expiryDate, rejectionReason, officialDocumentUrl } = parsed.data;
+  const { decision, isPermanent, expiryDate, rejectionReason, officialDocumentUrl } = parsed.data;
 
   try {
     const supabase = await createClient();
     const now = new Date().toISOString();
 
     if (!UUID_REGEX.test(nocId)) {
-      // Mock / seed project fallback: revalidate and return success for client-side state update
-      revalidatePath('/noc-tracker');
-      revalidatePath('/');
-      return { success: true };
+      return { success: false, error: 'Invalid NOC identifier.' };
     }
 
     const { data: currentNoc } = await supabase
@@ -225,12 +227,13 @@ export async function recordAuthorityDecision(
         const isHttpUrl = Boolean(trimmedDoc && /^https?:\/\//i.test(trimmedDoc));
         const fileUrl = isHttpUrl ? trimmedDoc : null;
         const certRemark = trimmedDoc && !isHttpUrl ? `Certificate #${trimmedDoc}` : null;
+        const finalExpiryDate = isPermanent ? null : (expiryDate || null);
 
         const { error: updateError } = await supabase
           .from('project_nocs')
           .update({
             status_code: 'approved',
-            expiry_date: expiryDate!,
+            expiry_date: finalExpiryDate,
             receive_date: now.split('T')[0],
             file_url: fileUrl,
             remarks: certRemark,
@@ -248,7 +251,7 @@ export async function recordAuthorityDecision(
           actor_id: user.id,
           entity: 'project_nocs',
           entity_id: nocId,
-          metadata: { decision, expiryDate, officialDocumentUrl: trimmedDoc || null },
+          metadata: { decision, isPermanent: Boolean(isPermanent), expiryDate: finalExpiryDate, officialDocumentUrl: trimmedDoc || null },
         });
       } else {
         const currentRev = currentNoc.current_revision || 'R00';
@@ -374,11 +377,11 @@ export async function updateNocMatrixItem(
 
   try {
     const supabase = await createClient();
-    const isUuid = UUID_REGEX.test(matrixItemId);
-    let createdRevisionId: string | undefined;
+    if (!UUID_REGEX.test(matrixItemId)) {
+      return { success: false, error: 'Valid matrix item UUID is required.' };
+    }
 
-    if (isUuid) {
-      const { data: existing } = await supabase
+    const { data: existing } = await supabase
         .from('noc_matrix_items')
         .select('*')
         .eq('id', matrixItemId)
@@ -460,8 +463,7 @@ export async function updateNocMatrixItem(
         .select('id')
         .single();
 
-      createdRevisionId = revData?.id;
-    }
+      const createdRevisionId = revData?.id;
 
     revalidatePath('/noc-matrix');
     revalidatePath('/noc-tracker');
@@ -598,6 +600,77 @@ export async function advanceProjectStageAction(
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to advance project stage';
+    return { success: false, error: message };
+  }
+}
+
+/** Updates project discipline progress and specialist studies in public.projects milestones */
+export async function updateProjectDisciplineStatusAction(
+  projectCode: string,
+  disciplineStatus: ProjectDisciplineStatus,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    const adminClient = createAdminClient();
+    const { data: project, error: fetchError } = await adminClient
+      .from('projects')
+      .select('milestones')
+      .eq('code', projectCode)
+      .single();
+
+    if (fetchError || !project) {
+      return { success: false, error: fetchError?.message || 'Project not found.' };
+    }
+
+    const currentMilestones =
+      typeof project.milestones === 'object' && project.milestones !== null
+        ? (project.milestones as Record<string, unknown>)
+        : {};
+
+    const updatedMilestones = {
+      ...currentMilestones,
+      disciplineStatus,
+    };
+
+    const { error: updateError } = await adminClient
+      .from('projects')
+      .update({
+        milestones: updatedMilestones as unknown as Json,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('code', projectCode);
+
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
+
+    await adminClient.from('audit_log').insert({
+      actor_id: user.id,
+      action: 'UPDATE_PROJECT_DISCIPLINE_STATUS',
+      entity: 'projects',
+      entity_id: projectCode,
+      metadata: { projectCode, disciplineStatus: disciplineStatus as unknown as Json },
+    });
+
+    revalidatePath('/dashboard');
+    revalidatePath(`/noc-tracker/${projectCode}`);
+    revalidatePath('/');
+
+    return { success: true };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : 'Failed to update project discipline status';
+    return { success: false, error: message };
     return { success: false, error: message };
   }
 }

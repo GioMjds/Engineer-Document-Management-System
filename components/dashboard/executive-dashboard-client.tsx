@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useMemo, useState } from 'react';
 import {
   advanceProjectStageAction,
   updateProjectMilestonesAction,
+  updateProjectDisciplineStatusAction,
 } from '@/app/actions/noc';
 import type { ExecutiveKpiSummary } from '@/app/loaders/ceo';
 import { StageGateDrawer } from '@/components/lifecycle/stage-gate-drawer';
@@ -18,18 +19,8 @@ import {
 } from '@/components/ui/select';
 import { can } from '@/lib/permissions';
 import {
-  INITIAL_PROJECT_MILESTONES,
   evaluateStageGateReadiness,
-  getStoredProjectMilestones,
-  getStoredProjectStage,
-  saveStoredProjectMilestones,
-  saveStoredProjectStage,
 } from '@/lib/project-lifecycle';
-import {
-  INITIAL_PROJECT_DISCIPLINE_STATUS,
-  getStoredDisciplineStatus,
-  saveStoredDisciplineStatus,
-} from '@/lib/project-status';
 import { cn } from '@/lib/utils';
 import type {
   AssignedProject,
@@ -40,7 +31,7 @@ import type {
   StageMilestoneDates,
   ThirdPartySpecialistType,
 } from '@/types/noc';
-import { Building2, FolderPlus, UserCheck } from 'lucide-react';
+import { Building2, FolderPlus } from 'lucide-react';
 import { ActionQueue } from './action-queue';
 import { AreaManagerSummaryCards } from './area-manager-summary-cards';
 import { AttentionTiles, type QueueFilter } from './attention-tiles';
@@ -55,6 +46,7 @@ interface ExecutiveDashboardClientProps {
   projects: AssignedProject[];
   initialNocs: ProjectNocItem[];
   currentUserRole: string;
+  initialDisciplineStatuses?: Record<string, ProjectDisciplineStatus>;
   initialEngineerStats?: {
     totalUploaded: number;
     underReview: number;
@@ -65,29 +57,6 @@ interface ExecutiveDashboardClientProps {
   };
   executiveSummary?: ExecutiveKpiSummary;
 }
-
-/** Dev-only. Set NEXT_PUBLIC_ENABLE_ROLE_PREVIEW=true in .env.local to show it. */
-const ROLE_PREVIEW_ENABLED =
-  process.env.NEXT_PUBLIC_ENABLE_ROLE_PREVIEW === 'true';
-
-// Remove this when we have a proper role-based auth system in place.
-// For now, this is just a dev convenience to preview the dashboard as different roles.
-const AVAILABLE_ROLES = [
-  { value: 'admin', label: 'Admin (Full Access)' },
-  { value: 'ceo', label: 'CEO (Read Only Portfolio)' },
-  { value: 'area_manager', label: 'Area Manager (Executive Review)' },
-  { value: 'architect_engineer', label: 'Architect Engineer (Engr. Abram)' },
-  { value: 'structure_engineer', label: 'Structure Engineer (Engr. Khalid)' },
-  { value: 'mep_engineer', label: 'MEP Engineer (Engr. Hisham)' },
-  { value: 'authority_engineer', label: 'Authority Engineer (Engr. Rasha)' },
-  { value: 'resident_engineer', label: 'Resident Engineer (Engr. Abdel)' },
-  { value: 'engineer', label: 'Engineer (Discipline Engineer)' },
-  { value: 'dc', label: 'Document Controller (Ms. Jalilah)' },
-  {
-    value: 'doc_controller',
-    label: 'Document Controller (Legacy doc_controller)',
-  },
-];
 
 const now = () => new Date().toISOString();
 
@@ -125,20 +94,11 @@ function emptyStatus(projectCode: string): ProjectDisciplineStatus {
   };
 }
 
-const noopSubscribe = () => () => {};
-
-function useHydrated() {
-  return useSyncExternalStore(
-    noopSubscribe,
-    () => true,
-    () => false,
-  );
-}
-
 export function ExecutiveDashboardClient({
   projects,
   initialNocs,
   currentUserRole,
+  initialDisciplineStatuses,
   initialEngineerStats,
   initialAreaManagerStats,
   executiveSummary,
@@ -147,7 +107,7 @@ export function ExecutiveDashboardClient({
   const [milestonesMap, setMilestonesMap] = useState<
     Record<string, StageMilestoneDates>
   >(() => {
-    const initialMap = { ...INITIAL_PROJECT_MILESTONES };
+    const initialMap: Record<string, StageMilestoneDates> = {};
     for (const p of projects) {
       if (p.milestones && Object.keys(p.milestones).length > 0) {
         initialMap[p.code] = p.milestones;
@@ -157,56 +117,11 @@ export function ExecutiveDashboardClient({
   });
   const [disciplineStatuses, setDisciplineStatuses] = useState<
     Record<string, ProjectDisciplineStatus>
-  >(INITIAL_PROJECT_DISCIPLINE_STATUS);
-  const [syncedProjects, setSyncedProjects] = useState<
-    AssignedProject[] | null
-  >(null);
-  const hydrated = useHydrated();
-
-  // Synchronize stored milestones, lifecycle stages, and discipline statuses on client mount.
-  if (hydrated && syncedProjects !== projects) {
-    setSyncedProjects(projects);
-
-    setProjectList((prev) =>
-      prev.map((p) => {
-        const storedStage = getStoredProjectStage(
-          p.code,
-          p.lifecycleStage || 'Pre-Construction',
-        );
-        return {
-          ...p,
-          milestones: getStoredProjectMilestones(p.code, p.milestones),
-          lifecycleStage: storedStage,
-          currentStage: `${storedStage} Stage`,
-        };
-      }),
-    );
-
-    setMilestonesMap((prev) => {
-      const next = { ...prev };
-      for (const p of projects) {
-        const stored = getStoredProjectMilestones(p.code, p.milestones);
-        if (stored && Object.keys(stored).length > 0) next[p.code] = stored;
-      }
-      return next;
-    });
-
-    setDisciplineStatuses((prev) => {
-      const next = { ...prev };
-      for (const p of projects) {
-        const stored = getStoredDisciplineStatus(p.code);
-        if (stored) next[p.code] = stored;
-      }
-      return next;
-    });
-  }
-
+  >(() => ({ ...initialDisciplineStatuses }));
   const [gateDrawerProjectCode, setGateDrawerProjectCode] = useState<
     string | null
   >(null);
-  const [currentRole, setCurrentRole] = useState<string>(
-    currentUserRole || 'admin',
-  );
+  const currentRole = currentUserRole || 'admin';
   const [scope, setScope] = useState<string>('all');
   const [queueFilter, setQueueFilter] = useState<QueueFilter>('all');
   const [nocItems] = useState<ProjectNocItem[]>(initialNocs);
@@ -328,18 +243,15 @@ export function ExecutiveDashboardClient({
     disciplineStatuses,
   ]);
 
-  /* ---------- mutations (local state + local storage persistence) ---------- */
+  /* ---------- mutations (local state) ---------- */
   const patch = (
     code: string,
     fn: (c: ProjectDisciplineStatus) => ProjectDisciplineStatus,
   ) =>
     setDisciplineStatuses((prev) => {
-      const current =
-        prev[code] ??
-        getStoredDisciplineStatus(code, emptyStatus(code)) ??
-        emptyStatus(code);
+      const current = prev[code] ?? emptyStatus(code);
       const nextStatus = fn(current);
-      saveStoredDisciplineStatus(code, nextStatus);
+      void updateProjectDisciplineStatusAction(code, nextStatus);
       return { ...prev, [code]: nextStatus };
     });
 
@@ -450,7 +362,6 @@ export function ExecutiveDashboardClient({
     code: string,
     newStage: ProjectLifecycleStage,
   ) => {
-    saveStoredProjectStage(code, newStage);
     setProjectList((prev) =>
       prev.map((p) =>
         p.code === code
@@ -469,7 +380,6 @@ export function ExecutiveDashboardClient({
     code: string,
     milestones: StageMilestoneDates,
   ) => {
-    saveStoredProjectMilestones(code, milestones);
     setMilestonesMap((prev) => ({ ...prev, [code]: milestones }));
     setProjectList((prev) =>
       prev.map((p) => (p.code === code ? { ...p, milestones } : p)),
@@ -573,33 +483,6 @@ export function ExecutiveDashboardClient({
         </div>
       </header>
 
-      {ROLE_PREVIEW_ENABLED && (
-        <div className="flex w-fit items-center gap-2 rounded-lg border border-dashed border-warning bg-warning-subtle px-3 py-1.5 text-warning-fg">
-          <UserCheck className="size-4" aria-hidden />
-          <span className="text-xs font-semibold">Dev role preview</span>
-          <Select
-            value={currentRole}
-            items={AVAILABLE_ROLES}
-            onValueChange={(v) => v && setCurrentRole(v)}
-          >
-            <SelectTrigger
-              className="h-8 w-56 border-0 bg-transparent text-xs font-semibold"
-              aria-label="Preview role"
-            >
-              <SelectValue>
-                {AVAILABLE_ROLES.find((r) => r.value === currentRole)?.label}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {AVAILABLE_ROLES.map((r) => (
-                <SelectItem key={r.value} value={r.value} className="text-xs">
-                  {r.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
 
       {isEngineer && (
         <EngineerSummaryCards
@@ -685,11 +568,7 @@ export function ExecutiveDashboardClient({
                 disciplineStatuses[project.code] ?? emptyStatus(project.code)
               }
               userRole={currentRole}
-              readiness={evaluateStageGateReadiness(
-                p,
-                nocItems,
-                disciplineStatuses[project.code],
-              )}
+              readiness={evaluateStageGateReadiness(p, nocItems)}
               milestones={milestonesMap[project.code]}
               onOpenGateDetails={() => setGateDrawerProjectCode(project.code)}
               onUpdateDiscipline={handleUpdateDiscipline}
@@ -707,7 +586,6 @@ export function ExecutiveDashboardClient({
           readiness={evaluateStageGateReadiness(
             drawerProject,
             nocItems,
-            disciplineStatuses[drawerProject.code],
           )}
           currentUserRole={currentRole}
           isOpen

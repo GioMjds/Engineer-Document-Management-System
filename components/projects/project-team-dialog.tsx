@@ -177,20 +177,12 @@ export function ProjectTeamDialog({
   };
 
   const getRoleOptions = useCallback(
-    (
-      primaryRole: string,
-      disciplineKeyword?: 'architect' | 'structur' | 'mep' | 'civil',
-    ) => {
+    (targetRole: string) => {
       const isSuggested = (p: ProfileItem) => {
-        if (disciplineKeyword) {
-          if (p.role !== 'engineer') return false;
-          const nameLower = (p.full_name || '').toLowerCase();
-          return nameLower.includes(disciplineKeyword);
-        }
-        if (primaryRole === 'dc') {
+        if (targetRole === 'dc') {
           return p.role === 'dc' || p.role === 'doc_controller';
         }
-        return p.role === primaryRole;
+        return p.role === targetRole;
       };
 
       const suggested: RoleOption[] = [];
@@ -243,19 +235,19 @@ export function ProjectTeamDialog({
     [getRoleOptions],
   );
   const archOptions = useMemo(
-    () => getRoleOptions('engineer', 'architect'),
+    () => getRoleOptions('engineer'),
     [getRoleOptions],
   );
   const structOptions = useMemo(
-    () => getRoleOptions('engineer', 'structur'),
+    () => getRoleOptions('engineer'),
     [getRoleOptions],
   );
   const mepOptions = useMemo(
-    () => getRoleOptions('engineer', 'mep'),
+    () => getRoleOptions('engineer'),
     [getRoleOptions],
   );
   const civilOptions = useMemo(
-    () => getRoleOptions('engineer', 'civil'),
+    () => getRoleOptions('engineer'),
     [getRoleOptions],
   );
 

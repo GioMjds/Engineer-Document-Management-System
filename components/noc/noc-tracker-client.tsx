@@ -17,13 +17,7 @@ import {
 import { matchesUrgentFilter } from '@/lib/noc-summary';
 import {
   evaluateStageGateReadiness,
-  getStoredProjectMilestones,
-  getStoredProjectStage,
-  INITIAL_PROJECT_MILESTONES,
-  saveStoredProjectMilestones,
-  saveStoredProjectStage,
 } from '@/lib/project-lifecycle';
-import { INITIAL_PROJECT_DISCIPLINE_STATUS } from '@/lib/project-status';
 import { createClient } from '@/lib/supabase/client';
 import type {
   AssignedProject,
@@ -86,9 +80,7 @@ export function NocTrackerClient({
     project.lifecycleStage || 'Pre-Construction',
   );
   const [milestones, setMilestones] = useState<StageMilestoneDates>(
-    project.milestones && Object.keys(project.milestones).length > 0
-      ? project.milestones
-      : (INITIAL_PROJECT_MILESTONES[project.code] ?? {}),
+    project.milestones || {},
   );
   const [isGateDrawerOpen, setIsGateDrawerOpen] = useState(false);
   const [nocItems, setNocItems] = useState<ProjectNocItem[]>(initialNocs);
@@ -104,40 +96,6 @@ export function NocTrackerClient({
     const timeoutId = window.setTimeout(() => setNocItems(initialNocs), 0);
     return () => window.clearTimeout(timeoutId);
   }, [initialNocs]);
-
-  // Synchronize stored milestones and lifecycle stages after mount.
-  useEffect(() => {
-    const storedStage = getStoredProjectStage(
-      project.code,
-      project.lifecycleStage || 'Pre-Construction',
-    );
-    const nextStage =
-      storedStage &&
-      storedStage !== (project.lifecycleStage || 'Pre-Construction')
-        ? storedStage
-        : null;
-    let nextMilestones: StageMilestoneDates | null = null;
-
-    if (!project.milestones || Object.keys(project.milestones).length === 0) {
-      const storedMilestones = getStoredProjectMilestones(
-        project.code,
-        project.milestones,
-      );
-      if (storedMilestones && Object.keys(storedMilestones).length > 0) {
-        nextMilestones = storedMilestones;
-      }
-    } else {
-      saveStoredProjectMilestones(project.code, project.milestones);
-    }
-
-    if (nextStage || nextMilestones) {
-      const timeoutId = window.setTimeout(() => {
-        if (nextStage) setLifecycleStage(nextStage);
-        if (nextMilestones) setMilestones(nextMilestones);
-      }, 0);
-      return () => window.clearTimeout(timeoutId);
-    }
-  }, [project.code, project.lifecycleStage, project.milestones]);
 
   // Subscribe to real-time database changes for milestone synchronization across roles.
   useEffect(() => {
@@ -157,7 +115,6 @@ export function NocTrackerClient({
             const newMilestones = payload.new.milestones as StageMilestoneDates;
             if (newMilestones) {
               setMilestones(newMilestones);
-              saveStoredProjectMilestones(project.code, newMilestones);
             }
           }
           if (payload.new && 'stage' in payload.new) {
@@ -171,7 +128,6 @@ export function NocTrackerClient({
             const rawStage = payload.new.stage as string;
             const nextLifecycle = stageMap[rawStage] || 'Pre-Construction';
             setLifecycleStage(nextLifecycle);
-            saveStoredProjectStage(project.code, nextLifecycle);
           }
           router.refresh();
         },
@@ -217,7 +173,6 @@ export function NocTrackerClient({
       evaluateStageGateReadiness(
         currentProject,
         nocItems,
-        INITIAL_PROJECT_DISCIPLINE_STATUS[currentProject.code],
         projectDocuments,
       ),
     [currentProject, nocItems, projectDocuments],
@@ -270,14 +225,12 @@ export function NocTrackerClient({
 
   async function handleAdvanceStage(newStage: ProjectLifecycleStage) {
     setLifecycleStage(newStage);
-    saveStoredProjectStage(project.code, newStage);
     setIsGateDrawerOpen(false);
     await advanceProjectStageAction(project.code, newStage);
   }
 
   async function handleUpdateMilestones(updated: StageMilestoneDates) {
     setMilestones(updated);
-    saveStoredProjectMilestones(project.code, updated);
     await updateProjectMilestonesAction(project.code, updated);
   }
 

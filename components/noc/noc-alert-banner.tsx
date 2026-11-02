@@ -17,11 +17,13 @@ export function NocAlertBanner({
 }: NocAlertBannerProps) {
   const expiredCount = items.filter(
     (i) =>
-      i.status === 'Expired' ||
-      (i.status === 'Approved' && isLapsed(i.expiryDate)),
+      Boolean(i.expiryDate) &&
+      (i.status === 'Expired' ||
+        (i.status === 'Approved' && isLapsed(i.expiryDate))),
   ).length;
   const expiringCount = items.filter(
     (i) =>
+      Boolean(i.expiryDate) &&
       isExpiringSoon(i.expiryDate) &&
       i.status !== 'Expired' &&
       !isLapsed(i.expiryDate),
