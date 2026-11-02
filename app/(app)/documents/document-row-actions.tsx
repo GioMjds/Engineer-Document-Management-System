@@ -33,6 +33,7 @@ import {
 import { DocumentEditModal } from './document-edit-modal';
 import { DocumentRevisionModal } from './document-revision-modal';
 import { archiveDocument, getDownloadUrl } from '@/app/actions/documents';
+import { downloadFileFromUrl } from '@/lib/download';
 
 interface DocumentRowItem {
   id: string;
@@ -79,20 +80,22 @@ export function DocumentRowActions({
 
   async function handleDownload() {
     setDownloading(true);
-    const res = await getDownloadUrl(document.id);
-    setDownloading(false);
-
-    if (!res.ok || !res.url) {
-      toast.error(res.error || 'Failed to generate download URL.');
-      return;
+    try {
+      const res = await getDownloadUrl(document.id);
+      if (!res.ok || !res.url) {
+        toast.error(res.error || 'Failed to generate download URL.');
+        return;
+      }
+      await downloadFileFromUrl(
+        res.url,
+        document.file_name || `${document.doc_number}.pdf`,
+      );
+      toast.success(`Downloaded ${document.file_name || document.doc_number}`);
+    } catch {
+      toast.error('Download failed.');
+    } finally {
+      setDownloading(false);
     }
-
-    const a = window.document.createElement('a');
-    a.href = res.url;
-    a.download = document.file_name || 'document';
-    window.document.body.appendChild(a);
-    a.click();
-    window.document.body.removeChild(a);
   }
 
   async function handleArchive() {

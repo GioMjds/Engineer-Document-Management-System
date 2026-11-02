@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,14 +22,16 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import type { DisciplineDetail, DisciplineStageStatus } from '@/types/noc';
 import { canUserEditDiscipline } from '@/lib/project-status';
-import { ShieldAlert, Clock, Edit3 } from 'lucide-react';
+import { ShieldAlert, Clock, Edit3, ArrowRight } from 'lucide-react';
 
 interface DisciplineStatusBadgeProps {
   discipline: 'architecture' | 'structure' | 'mep';
   label: string;
   detail: DisciplineDetail;
   userRole: string;
-  onUpdate: (newStatus: DisciplineStageStatus, remarks?: string) => void;
+  isReadOnly?: boolean;
+  projectCode?: string;
+  onUpdate?: (newStatus: DisciplineStageStatus, remarks?: string) => void;
 }
 
 const STAGE_OPTIONS: DisciplineStageStatus[] = [
@@ -45,13 +48,15 @@ export function DisciplineStatusBadge({
   label,
   detail,
   userRole,
+  isReadOnly = false,
+  projectCode,
   onUpdate,
 }: DisciplineStatusBadgeProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<DisciplineStageStatus>(detail.status);
   const [remarks, setRemarks] = useState(detail.remarks || '');
 
-  const canEdit = canUserEditDiscipline(userRole, discipline);
+  const canEdit = !isReadOnly && canUserEditDiscipline(userRole, discipline);
 
   const getStatusColor = (status: DisciplineStageStatus) => {
     switch (status) {
@@ -77,7 +82,9 @@ export function DisciplineStatusBadge({
   };
 
   const handleSave = () => {
-    onUpdate(selectedStatus, remarks);
+    if (onUpdate) {
+      onUpdate(selectedStatus, remarks);
+    }
     setIsOpen(false);
   };
 
@@ -93,9 +100,11 @@ export function DisciplineStatusBadge({
           <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
             {label}
           </span>
-          <span className="opacity-0 transition-opacity group-hover:opacity-100">
-            <Edit3 className="h-3 w-3 text-slate-400" />
-          </span>
+          {!isReadOnly && (
+            <span className="opacity-0 transition-opacity group-hover:opacity-100">
+              <Edit3 className="h-3 w-3 text-slate-400" />
+            </span>
+          )}
         </div>
         <Badge
           variant="outline"
@@ -112,15 +121,21 @@ export function DisciplineStatusBadge({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span>{label} Status Update</span>
-              {!canEdit && (
+              <span>{label} Status Details</span>
+              {isReadOnly ? (
+                <Badge variant="secondary" className="text-xs font-normal">
+                  Analytics (Read Only)
+                </Badge>
+              ) : !canEdit ? (
                 <Badge variant="secondary" className="text-xs font-normal">
                   Read Only
                 </Badge>
-              )}
+              ) : null}
             </DialogTitle>
             <DialogDescription>
-              {canEdit
+              {isReadOnly
+                ? `Viewing ${label} engineering status overview. Stage updates are performed in NOC Tracker.`
+                : canEdit
                 ? `Update the current engineering progress stage and remarks for ${label}.`
                 : `Viewing latest ${label} sign-off and milestone history.`}
             </DialogDescription>
@@ -171,17 +186,31 @@ export function DisciplineStatusBadge({
             </div>
           ) : (
             <div className="space-y-3 py-2">
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-                <div className="flex items-start gap-2">
-                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                  <div>
-                    <p className="font-semibold">Permission Restricted</p>
-                    <p className="mt-0.5 text-[11px]">
-                      Only assigned {label} Engineers and Administrators are authorized to update {label} status.
-                    </p>
+              {isReadOnly ? (
+                <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-300">
+                  <div className="flex items-start gap-2">
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Analytics View</p>
+                      <p className="mt-0.5 text-[11px]">
+                        Discipline progress updates and submittals are managed directly in the project NOC Tracker.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+                  <div className="flex items-start gap-2">
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Permission Restricted</p>
+                      <p className="mt-0.5 text-[11px]">
+                        Only assigned {label} Engineers and Administrators are authorized to update {label} status.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2 rounded-md border p-3 text-xs">
                 <div className="flex justify-between">
@@ -212,7 +241,15 @@ export function DisciplineStatusBadge({
             <Button variant="outline" size="sm" onClick={() => setIsOpen(false)}>
               Close
             </Button>
-            {canEdit && (
+            {isReadOnly && projectCode && (
+              <Link href={`/noc-tracker/${projectCode}`}>
+                <Button size="sm" className="gap-1.5">
+                  <span>Open in NOC Tracker</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            )}
+            {!isReadOnly && canEdit && (
               <Button size="sm" onClick={handleSave}>
                 Save Changes
               </Button>

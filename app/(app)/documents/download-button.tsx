@@ -5,20 +5,29 @@ import { toast } from 'sonner';
 import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getDownloadUrl } from './actions';
+import { downloadFileFromUrl } from '@/lib/download';
 
 export function DownloadButton({ documentId }: { documentId: string }) {
   const [loading, setLoading] = useState(false);
 
   async function onClick() {
     setLoading(true);
-    const result = await getDownloadUrl(documentId);
-    setLoading(false);
-
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
+    try {
+      const result = await getDownloadUrl(documentId);
+      if (!result.ok || !result.url) {
+        toast.error(result.error || 'Failed to download document.');
+        return;
+      }
+      await downloadFileFromUrl(
+        result.url,
+        result.fileName || 'engineering-document.pdf',
+      );
+      toast.success('Document downloaded.');
+    } catch {
+      toast.error('Download failed.');
+    } finally {
+      setLoading(false);
     }
-    window.location.href = result.url;
   }
 
   return (

@@ -343,11 +343,10 @@ function SidebarContent({
                   <Image
                     src="/cvtec-logo.svg"
                     alt="CVTEC Logo"
-                    width={28}
-                    height={28}
+                    width={260}
+                    height={86}
                     className="h-7 w-auto object-contain"
-                    quality={100}
-                    loading="lazy"
+                    priority
                   />
                 </Link>
               }
@@ -366,11 +365,10 @@ function SidebarContent({
           <Image
             src="/cvtec-logo.svg"
             alt="CVTEC Logo"
-            width={32}
-            height={32}
+            width={260}
+            height={86}
             className="h-8 w-auto object-contain"
-            quality={100}
-            loading="lazy"
+            priority
           />
           <span className="flex flex-col leading-tight">
             <span className="text-sm font-bold tracking-tight text-sidebar-foreground">

@@ -2,6 +2,53 @@
 
 ## Session 2026-11-02
 
+- Restructured Dashboard to Pure Read-Only Analytics and Dedicated Operational Submittals to NOC Tracker:
+  - Background & Objective: Resolves operational ambiguity where discipline progress, authority review stages, and third-party specialist files could be edited and submitted from the Executive Dashboard. Dashboard is reserved exclusively for high-level portfolio KPIs and analytics, while operational submittals and stage gate progression belong strictly on the dedicated NOC Tracker page (/noc-tracker/[projectID]). Also updated the NOC Tracker loading skeleton to eliminate cumulative layout shift (CLS).
+  - Implementation:
+    - Updated [components/dashboard/discipline-status-badge.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/discipline-status-badge.tsx): Added `isReadOnly` and `projectCode` props. Hides hover edit affordance when read-only and opens an analytics detail dialog with an "Open in NOC Tracker" link button instead of an editable form.
+    - Updated [components/dashboard/authorities-stage-row.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/authorities-stage-row.tsx): Added `isReadOnly` and `projectCode` props. Replaces editable modal with read-only information modal linking directly to `/noc-tracker/${projectCode}`.
+    - Updated [components/dashboard/project-discipline-card.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/project-discipline-card.tsx): Added `isReadOnly` prop. Displays an "Analytics View" header badge and replaces the "Manage Studies & Files" drawer button with an "Open in NOC Tracker" link. Prevents mounting the `ThirdPartySpecialistDrawer` when read-only.
+    - Updated [components/dashboard/portfolio-table.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/portfolio-table.tsx): Updated portfolio subtitle clarifying that submissions and approvals are managed in the project NOC Tracker.
+    - Updated [components/dashboard/executive-dashboard-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/executive-dashboard-client.tsx): Stripped mutation actions and handlers (`handleUpdateDiscipline`, `handleUpdateAuthorityStage`, `handleUploadSpecialistFile`, `handleApproveSpecialistFile`), and passed `isReadOnly` to all nested `ProjectDisciplineCard` instances.
+    - Updated [app/(app)/noc-tracker/[projectID]/loading.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/noc-tracker/[projectID]/loading.tsx): Updated skeleton structure to match the new runtime layout with `ProjectDisciplineCard` and `NocAlertBanner` placed between `ProjectLifecycleStepper` and the filter toolbar, preventing layout shift during hydration.
+    - Updated [docs/manual-mvp-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/manual-mvp-workflow.md): Clarified the boundary between `/dashboard` (read-only portfolio analytics) and `/noc-tracker/[projectID]` (operational submission workspace).
+  - Verification:
+    - `pnpm exec tsc --noEmit`: 0 type errors.
+    - `pnpm exec eslint`: 0 errors, 0 warnings across all modified components.
+    - `pnpm run build`: Production build succeeded with all 24 static and dynamic routes compiled.
+
+- Enabled Dynamic Custom Stage Gate Categories and Added Discipline Technical Approval:
+  - Background & Objective: Resolves issue where Custom Stage Gate Prerequisites in StageGateDrawer were restricted to 3 hardcoded static options (Regulatory Milestone, Authority NOC, Specialist Study), missing Discipline Technical Approval and preventing users from creating project-specific custom prerequisite categories.
+  - Implementation:
+    - Updated [types/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/types/noc.ts): Defined `StageGateCategory` union supporting `'authority_noc'`, `'specialist_study'`, `'regulatory_milestone'`, `'discipline_approval'`, `'commercial_milestone'`, `'safety_quality'`, and open string literals `(string & {})`.
+    - Updated [components/lifecycle/stage-gate-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/lifecycle/stage-gate-drawer.tsx):
+      - Expanded `DEFAULT_CATEGORIES` list to include `discipline_approval` (Discipline Technical Approval), `commercial_milestone` (Commercial & Client Milestone), and `safety_quality` (Site Safety & Quality).
+      - Added dynamic category aggregation in `availableCategories` using `useMemo` to harvest any unique custom categories already present across the active stage gates and project custom prerequisites.
+      - Integrated "+ Enter Custom Category..." selector option with dedicated custom text input, live validation, and back toggle.
+      - Updated `formatCategoryLabel` to cleanly handle known keys, snake_case, kebab-case, and user-defined category strings.
+  - Verification:
+    - `pnpm exec tsc --noEmit`: 0 type errors.
+    - `pnpm exec eslint components/lifecycle/stage-gate-drawer.tsx`: 0 errors, 0 warnings.
+
+- Updated Manual MVP Workflow Guide for Full System Lifecycle & Project Creation Enhancements:
+  - Background & Objective: Synchronized docs/manual-mvp-workflow.md with recent system features including sequential project code auto-generation, contract schedules (design vs supervision dates), quick register bypass vs 2-phase staffing wizard, searchable typeahead staff selection, discipline upload scope enforcement, custom gate prerequisites, permanent clearances, and full 4-stage lifecycle progression through to terminal Completed stage.
+  - Implementation:
+    - Updated [docs/manual-mvp-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/manual-mvp-workflow.md):
+      - Documented Global Command Palette (Ctrl+K) and sidebar rail collapse (Ctrl+B).
+      - Updated Step 1 with sequential code auto-generation, availability status validation, design/supervision contract schedules, quick register option, and searchable popover staffing with suggested vs other staff.
+      - Added Step 2 documenting post-registration team management (ProjectTeamDialog) and deliverable inspection (ProjectDocumentsView) on /projects.
+      - Documented custom stage gate prerequisite creation, interactive toggle/delete controls, and actionable To satisfy resolution guides in Step 3.
+      - Documented server-side discipline scope check (e.g. Architectural engineer blocked from uploading MEP drawings) in Step 4.
+      - Documented permanent authority clearances (expiryDate null), custom NOC requirement creation, and two-tier expiry alerts in Step 6.
+      - Documented complete 4-stage progression advancing all the way from Pre-Construction to Construction, Handover, and terminal Completed stage in Step 8.
+      - Documented CEO dashboard separation, smart expiry radar, and complete read-only lockdown in Step 9.
+
+- Resolved Next.js Image LCP and Aspect Ratio Distortion Warnings for Brand Logo:
+  - Background & Objective: Fixed browser/dev warnings where `/cvtec-logo.svg` triggered LCP eager loading warnings and width/height aspect ratio distortion errors in both collapsed and expanded shell states.
+  - Implementation:
+    - Updated [components/layout/app-shell.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/app-shell.tsx): Corrected intrinsic `width={260}` and `height={86}` props to match the vector SVG viewBox (`0 0 260 85.9`). Removed `loading="lazy"` and added `priority` to both collapsed and expanded sidebar brand logos to ensure instant above-the-fold preloading and clear LCP warnings.
+    - Updated [app/(auth)/login/brand-panel.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(auth)/login/brand-panel.tsx): Adjusted logo dimensions to intrinsic `width={260}` and `height={86}` to align with responsive classes `w-40 lg:w-52 h-auto` and eliminate aspect ratio mismatch warnings.
+
 - Shared Database Persistence for Discipline Progress and Real-time Stage Status Across Roles:
   - Background & Objective: Fixed issue where Admin saw approved discipline progress and specialist studies on Project 26003, but other roles (e.g. Authority Engineer Zayed Al-Hashimi "ZA") saw "Not Started" / "By Unassigned" due to state only living in client memory. Also resolved false renewal warnings ("4 Expiring in 14 Days" and "Renew NOC") for completed projects and permanent clearances.
   - Implementation:
@@ -1260,6 +1307,19 @@
 
 ## Session 2026-11-02
 
+- Updated Manual MVP Workflow Guide for Full System Lifecycle & Project Creation Enhancements:
+  - Background & Objective: Synchronized docs/manual-mvp-workflow.md with recent system features including sequential project code auto-generation, contract schedules (design vs supervision dates), quick register bypass vs 2-phase staffing wizard, searchable typeahead staff selection, discipline upload scope enforcement, custom gate prerequisites, permanent clearances, and full 4-stage lifecycle progression through to terminal Completed stage.
+  - Implementation:
+    - Updated [docs/manual-mvp-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/manual-mvp-workflow.md):
+      - Documented Global Command Palette (Ctrl+K) and sidebar rail collapse (Ctrl+B).
+      - Updated Step 1 with sequential code auto-generation, availability status validation, design/supervision contract schedules, quick register option, and searchable popover staffing with suggested vs other staff.
+      - Added Step 2 documenting post-registration team management (ProjectTeamDialog) and deliverable inspection (ProjectDocumentsView) on /projects.
+      - Documented custom stage gate prerequisite creation, interactive toggle/delete controls, and actionable To satisfy resolution guides in Step 3.
+      - Documented server-side discipline scope check (e.g. Architectural engineer blocked from uploading MEP drawings) in Step 4.
+      - Documented permanent authority clearances (expiryDate null), custom NOC requirement creation, and two-tier expiry alerts in Step 6.
+      - Documented complete 4-stage progression advancing all the way from Pre-Construction to Construction, Handover, and terminal Completed stage in Step 8.
+      - Documented CEO dashboard separation, smart expiry radar, and complete read-only lockdown in Step 9.
+
 - Shared Database Persistence for Discipline Progress and Real-time Stage Status Across Roles:
   - Background & Objective: Fixed issue where Admin saw approved discipline progress and specialist studies on Project 26003, but other roles (e.g. Authority Engineer Zayed Al-Hashimi "ZA") saw "Not Started" / "By Unassigned" due to state only living in client memory. Also resolved false renewal warnings ("4 Expiring in 14 Days" and "Renew NOC") for completed projects and permanent clearances.
   - Implementation:
@@ -1319,3 +1379,128 @@
       - Set `hasPurge: true` uniformly across all row skeletons, avoiding flickering action slots during data loading.
   - Verification:
     - Executed `pnpm build`: all 24 routes compiled cleanly with 0 TypeScript or layout errors.
+
+## Session 2026-11-02
+
+- Fixed Stage Gate Checklist Milestone Updates, RLS Mutation Permissions & Cross-Role Realtime Sync:
+  - Background & Objective: Resolves critical defects where Area Managers and Resident Engineers modifying statutory milestone dates or stage gate prerequisites in the Stage Gate Drawer saw optimistic updates in their local tab, but other roles and subsequent refreshes saw stale data due to silent 0-row updates in PostgreSQL, lack of Supabase Realtime publication on `public.projects`, and JSONB overwrite clobbering concurrent discipline status fields.
+  - Implementation:
+    - Created database migration [20261102000000_enable_projects_realtime_and_milestones_rls.sql](file:///D:/giomj/Projects/engineer-docs-collab/supabase/migrations/20261102000000_enable_projects_realtime_and_milestones_rls.sql):
+      - Added `public.projects` to `supabase_realtime` publication.
+      - Configured `REPLICA IDENTITY FULL` on `public.projects` for full payload change events.
+      - Added explicit Row Level Security `re_am_admin_projects_update` on `public.projects` granting UPDATE privileges to `admin`, `area_manager`, and assigned `resident_engineer`.
+      - Added explicit RLS `re_projects_select` on `public.projects` for assigned `resident_engineer`.
+    - Pushed migration to remote Supabase instance and verified live RLS update grants across all canonical roles.
+    - Updated [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts):
+      - In `updateProjectMilestonesAction`: transitioned to `createAdminClient()` after verifying user role permissions, fetched existing `milestones` JSONB, performed safe deep-merge preserving `disciplineStatus` and untouched stages, and asserted row count updates before emitting audit log entries.
+      - In `advanceProjectStageAction`: transitioned to `createAdminClient()` after verifying stage progression permissions, safely updating project stage enum with row verification and audit logging.
+    - Updated [components/noc/noc-tracker-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-tracker-client.tsx):
+      - Added rollback handling and toast alerts in `handleAdvanceStage` and `handleUpdateMilestones` on server action failure.
+    - Updated [components/dashboard/executive-dashboard-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/executive-dashboard-client.tsx):
+      - Added Supabase Realtime channel subscription listening to `projects` table updates and propagating live milestone and stage changes across all projects in the dashboard.
+      - Added rollback handling and toast alerts in `handleAdvanceProjectStage` and `handleUpdateProjectMilestones`.
+    - Fixed typing mismatch in [lib/project-status.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-status.ts) for `ALL_SPECIALIST_TYPES` aligning with `types/noc.ts`.
+  - Verification:
+    - Executed live multi-role test scripts confirming 1-row updates for `resident_engineer` and `area_manager`.
+    - Executed live websocket tests confirming `AUTH USER REALTIME RECEIVED: UPDATE 26004`.
+    - `pnpm exec tsc --noEmit` passed with 0 errors.
+    - `pnpm build` passed compiling all 24 static and dynamic routes cleanly.
+
+- Fixed Dashboard Discipline Progress Updates, Dynamic Custom Gate Categories & Added Discipline Tracking to NOC Tracker:
+  - Background & Objective: Resolves issues where updating engineering discipline progress on the Executive Dashboard (/dashboard) failed to persist due to side effects inside state updater callbacks, and adds discipline progress tracking to individual project tracker (/noc-tracker/[projectID]). Also makes Custom Stage Gate Prerequisite categories dynamic with Discipline Technical Approval.
+  - Implementation:
+    - Custom Stage Gate Prerequisites Dynamic Categories ([types/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/types/noc.ts), [components/lifecycle/stage-gate-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/lifecycle/stage-gate-drawer.tsx)):
+      - Updated StageGateCategory type with discipline_approval, standard category keys, and dynamic string literals.
+      - Dynamic category selector in StageGateDrawer allows choosing standard presets or typing a custom category name.
+    - Server Action Hardening ([app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts)):
+      - In updateProjectDisciplineStatusAction: queried project by code or id, updated by project.id, safely caught audit log inserts, and revalidated paths /dashboard and /noc-tracker/[projectID].
+    - Permissions Alignment ([lib/project-status.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-status.ts)):
+      - Updated canUserEditDiscipline: allowed admin, area_manager, and resident_engineer to edit all disciplines, authority stages, and specialists; allowed specialized discipline engineers to update discipline status.
+      - Exported ALL_SPECIALIST_TYPES and emptyDisciplineStatus helper.
+    - Dashboard Discipline Progress Optimistic Updates ([components/dashboard/executive-dashboard-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/executive-dashboard-client.tsx)):
+      - Refactored discipline mutations into async optimistic updates with toast notifications.
+      - Synchronized disciplineStatuses and milestonesMap with Supabase Realtime channel.
+    - NOC Tracker Discipline Card Integration ([components/dashboard/project-discipline-card.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/project-discipline-card.tsx), [components/noc/noc-tracker-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-tracker-client.tsx)):
+      - Added hideHeaderAndStepper prop to ProjectDisciplineCard.
+      - Mounted ProjectDisciplineCard directly in /noc-tracker/[projectID] between ProjectLifecycleStepper and NocAlertBanner.
+      - Implemented discipline update handlers dispatching updateProjectDisciplineStatusAction.
+    - Workflow Documentation ([docs/manual-mvp-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/manual-mvp-workflow.md)):
+      - Added Step 3B detailing discipline engineering progress tracking across dashboard and NOC tracker.
+  - Verification:
+    - pnpm exec tsc --noEmit passed with 0 errors.
+    - pnpm exec eslint passed on all modified components with 0 errors and 0 warnings.
+    - pnpm run build compiled all 24 static and dynamic routes cleanly in Turbopack.
+
+
+- Resolved UUID Syntax Error on Discipline & Specialist Updates:
+  - Background & Objective: Resolves `invalid input syntax for type uuid: "26004"` toast error when updating discipline progress, authority review stages, and specialist studies from `/noc-tracker/[projectID]` or `/dashboard`.
+  - Implementation:
+    - In [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts):
+      - Fixed `updateProjectDisciplineStatusAction`, `updateProjectMilestonesAction`, and `advanceProjectStageAction`: replaced unsafe PostgREST filter `.or('code.eq.26004,id.eq.26004')` with regex UUID validation (`UUID_REGEX.test(trimmed)`). Queries by `id` if input is a valid UUID, and queries by `code` if input is a project code string.
+  - Verification:
+    - Executed standalone test scripts confirming clean 1-row update without Postgres casting exceptions.
+    - Verified `pnpm exec tsc --noEmit` and `pnpm build` compile with 0 errors.
+
+- Synchronized Default Gate Checklist Evaluation with Live Specialist Studies & Discipline Approvals:
+  - Background & Objective: Resolves bug where approving geotechnical investigation or topographical surveys in the Third-Party Specialist Studies drawer did not satisfy the corresponding default gate checklist items (e.g., Geotechnical Soil Investigation Approved remained Pending Action). Also unifies how authorized roles satisfy each default checklist item across all project lifecycle stages.
+  - Implementation:
+    - [lib/project-lifecycle.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts):
+      - In evaluateStageGateReadiness for Pre-Construction:
+        - Enhanced gate-geotech: Evaluates isSatisfied against milestones.disciplineStatus.specialists for Geotechnical with status Approved, falling back to uploaded geotechnical technical submittal documents. Uses uploaded specialist filename as sourceReference.
+        - Enhanced gate-topo: Evaluates isSatisfied against milestones.disciplineStatus.specialists for Topographical with status Approved, surveyCompletionDate in milestones, or uploaded topographical drawing.
+      - In evaluateStageGateReadiness for Construction:
+        - Enhanced gate-superstructure: Evaluates isSatisfied against milestones.disciplineStatus.structure.status === 'Approved', authorities.constructionStage === 'Approved', or uploaded structural documents.
+        - Enhanced gate-mep-submittal: Evaluates isSatisfied against milestones.disciplineStatus.mep.status === 'Approved', milestones.handover.commissioningDate, or uploaded MEP documents.
+    - [components/noc/noc-tracker-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-tracker-client.tsx):
+      - Explicitly passed live disciplineStatus inside currentProject.milestones so readiness recalculates immediately upon approving specialist studies or updating discipline progress in local state.
+    - [components/dashboard/executive-dashboard-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/executive-dashboard-client.tsx):
+      - Synchronized withMilestones helper with disciplineStatuses[code] so portfolio cards and drawer view reflect approved specialist studies and discipline progress.
+    - Documentation & Screenshots:
+      - Captured user workflow screenshots into [docs/screenshots/specialist-studies-modal.jpg](file:///D:/giomj/Projects/engineer-docs-collab/docs/screenshots/specialist-studies-modal.jpg) and [docs/screenshots/stage-gate-readiness-drawer.jpg](file:///D:/giomj/Projects/engineer-docs-collab/docs/screenshots/stage-gate-readiness-drawer.jpg).
+      - Updated [docs/manual-mvp-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/manual-mvp-workflow.md) Step 3 with a complete role satisfaction matrix for each default prerequisite item per lifecycle stage.
+  - Verification:
+    - Verified Supabase database for Project 26004 already has Geotechnical specialist study Approved (GEOTECH-SOIL-BEARING-CAPACITY.pdf).
+    - pnpm exec tsc --noEmit passed with 0 errors.
+    - pnpm exec eslint passed with 0 errors and 0 warnings.
+    - pnpm run build compiled all 24 routes cleanly.
+
+- Added File Download, Multi-Role Approval/Rejection with Remarks, and Revision Tracking to Specialist Studies:
+  - Background & Objective: Resolves user requirement for how respective roles see/download submitted specialist files, review them (approve or reject with specific deficiency remarks), and re-upload sequential revisions (e.g. R00 -> R01).
+  - Implementation:
+    - [types/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/types/noc.ts):
+      - Updated ThirdPartySpecialistRecord to support status 'Rejected', optional revision (e.g. 'R00'), remarks, reviewedBy, reviewedAt, and fileUrl.
+    - [lib/project-status.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-status.ts):
+      - Added canUserReviewSpecialist (admin, area_manager, resident_engineer) and canUserUploadSpecialist helper functions.
+    - [components/dashboard/third-party-specialist-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/third-party-specialist-drawer.tsx):
+      - Download action: Any assigned role can download the submitted report with statutory transmittal slip containing project code, specialist scope, revision, and reviewer notes.
+      - Review action (Approve / Reject): Reviewers (RE, AM, Admin) can approve or reject. Rejecting triggers an inline remarks editor for deficiency notes, persisting reviewer attribution and timestamp.
+      - Revision re-upload: Re-uploading automatically advances revision index (R00 -> R01), resets status to Uploaded (Under Review), and clears prior rejection notes.
+    - [components/dashboard/project-discipline-card.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/project-discipline-card.tsx) & [components/noc/noc-tracker-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-tracker-client.tsx):
+      - Added handleRejectSpecialistFile and updated handleUploadSpecialistFile/handleApproveSpecialistFile to support revisions and review remarks.
+    - [docs/manual-mvp-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/manual-mvp-workflow.md):
+      - Updated Step 3B documenting specialist file downloading, review actions with remarks, and revision lifecycle.
+  - Verification:
+    - pnpm exec tsc --noEmit passed with 0 errors.
+    - pnpm exec eslint passed on all modified components with 0 errors and 0 warnings.
+    - Production build verification confirmed clean compilation.
+
+- Removed Hardcoded/Automated Specialist File Submissions and Enabled Native File Uploads:
+  - Background & Objective: Resolves user confusion caused by automated static mock file submissions (e.g. 6.4 MB hardcoded filenames across the 5 specialist scopes). Replaces simulation with native file picking and resets Project 26004 back to clean unsubmitted status.
+  - Implementation:
+    - [components/dashboard/third-party-specialist-drawer.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/third-party-specialist-drawer.tsx):
+      - Removed handleSimulateUpload and hardcoded defaultFileNames dictionary.
+      - Attached native file input trigger directly to Attach Report, Replace, and Upload Revision buttons.
+      - Dynamically calculated file size in KB or MB based on actual uploaded file bytes.
+      - Added removal action (trash icon) to clear submittals and return scope to Pending.
+    - [components/dashboard/project-discipline-card.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/project-discipline-card.tsx):
+      - Added onRemoveSpecialistFile prop forwarding to ThirdPartySpecialistDrawer.
+    - [components/noc/noc-tracker-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-tracker-client.tsx):
+      - Implemented handleRemoveSpecialistFile to reset specialist item to Pending.
+    - Database:
+      - Reset Project 26004 specialists in milestones.disciplineStatus to Pending state without hardcoded file names or static sizes.
+    - [docs/manual-mvp-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/manual-mvp-workflow.md):
+      - Updated Step 3B documentation detailing dynamic file attachment and removal flow.
+  - Verification:
+    - pnpm exec tsc --noEmit passed with 0 errors.
+    - pnpm exec eslint passed on modified files with 0 warnings.
+    - Production build compiled all 24 routes cleanly.

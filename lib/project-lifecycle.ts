@@ -72,7 +72,11 @@ export function evaluateStageGateReadiness(
         d.title.toLowerCase().includes('survey') ||
         d.docNumber.toLowerCase().includes('topo'),
     );
+    const topoSpecialist = milestones.disciplineStatus?.specialists?.find(
+      (s) => s.type === 'Topographical',
+    );
     const isTopoSatisfied =
+      topoSpecialist?.status === 'Approved' ||
       Boolean(topoDoc) ||
       Boolean(milestones.preConstruction?.surveyCompletionDate);
 
@@ -81,10 +85,14 @@ export function evaluateStageGateReadiness(
       title: 'Topographical Affection Survey Completed',
       category: 'specialist_study',
       isSatisfied: isTopoSatisfied,
-      sourceReference: topoDoc?.docNumber || milestones.preConstruction?.surveyCompletionDate,
+      sourceReference:
+        topoSpecialist?.fileName ||
+        topoDoc?.docNumber ||
+        milestones.preConstruction?.surveyCompletionDate ||
+        (topoSpecialist?.status === 'Approved' ? 'Approved Study' : undefined),
       mandatoryForNextStage: true,
       actionHint:
-        'Upload topographical survey drawing in Technical Submittals or set survey date in milestones.',
+        'Upload & approve topographical survey in Specialist Studies, Technical Submittals, or set survey date in milestones.',
     });
 
     const geotechDoc = projectDocuments?.find(
@@ -93,17 +101,24 @@ export function evaluateStageGateReadiness(
         d.title.toLowerCase().includes('soil') ||
         d.docNumber.toLowerCase().includes('geo'),
     );
-    const isGeotechSatisfied = Boolean(geotechDoc);
+    const geotechSpecialist = milestones.disciplineStatus?.specialists?.find(
+      (s) => s.type === 'Geotechnical',
+    );
+    const isGeotechSatisfied =
+      geotechSpecialist?.status === 'Approved' || Boolean(geotechDoc);
 
     prerequisites.push({
       id: 'gate-geotech',
       title: 'Geotechnical Soil Investigation Approved',
       category: 'specialist_study',
       isSatisfied: isGeotechSatisfied,
-      sourceReference: geotechDoc?.docNumber,
+      sourceReference:
+        geotechSpecialist?.fileName ||
+        geotechDoc?.docNumber ||
+        (geotechSpecialist?.status === 'Approved' ? 'Approved Study' : undefined),
       mandatoryForNextStage: true,
       actionHint:
-        'Upload geotechnical soil investigation report in Technical Submittals.',
+        'Upload & approve geotechnical report in Specialist Studies (Third-Party Studies drawer).',
     });
 
     prerequisites.push({
@@ -180,15 +195,26 @@ export function evaluateStageGateReadiness(
         d.discipline === 'structure' &&
         (d.status === 'approved' || d.status === 'ready_for_authority'),
     );
+    const isStructSatisfied =
+      milestones.disciplineStatus?.structure?.status === 'Approved' ||
+      milestones.disciplineStatus?.authorities?.constructionStage === 'Approved' ||
+      Boolean(structDoc);
+
     prerequisites.push({
       id: 'gate-superstructure',
       title: 'Core & Structural Superstructure Inspection',
-      category: 'regulatory_milestone',
-      isSatisfied: Boolean(structDoc),
-      sourceReference: structDoc?.docNumber,
+      category: 'discipline_approval',
+      isSatisfied: isStructSatisfied,
+      sourceReference:
+        structDoc?.docNumber ||
+        (milestones.disciplineStatus?.structure?.status === 'Approved'
+          ? 'Structure Discipline Approved'
+          : milestones.disciplineStatus?.authorities?.constructionStage === 'Approved'
+            ? 'Authorities Construction Approved'
+            : undefined),
       mandatoryForNextStage: true,
       actionHint:
-        'Ensure an approved Structure technical drawing exists in Documents.',
+        'Approve Structure discipline progress or ensure an approved structural drawing exists.',
     });
 
     const mepDoc = projectDocuments?.find(
@@ -196,15 +222,25 @@ export function evaluateStageGateReadiness(
         d.discipline === 'mep' &&
         (d.status === 'approved' || d.status === 'ready_for_authority'),
     );
+    const isMepSatisfied =
+      milestones.disciplineStatus?.mep?.status === 'Approved' ||
+      Boolean(milestones.handover?.commissioningDate) ||
+      Boolean(mepDoc);
+
     prerequisites.push({
       id: 'gate-mep-submittal',
       title: 'MEP Riser & Chilled Water Commissioning Sign-off',
-      category: 'regulatory_milestone',
-      isSatisfied: Boolean(mepDoc),
-      sourceReference: mepDoc?.docNumber,
+      category: 'discipline_approval',
+      isSatisfied: isMepSatisfied,
+      sourceReference:
+        mepDoc?.docNumber ||
+        (milestones.disciplineStatus?.mep?.status === 'Approved'
+          ? 'MEP Discipline Approved'
+          : undefined) ||
+        milestones.handover?.commissioningDate,
       mandatoryForNextStage: false,
       actionHint:
-        'Ensure an approved MEP technical drawing exists in Documents.',
+        'Approve MEP discipline progress or ensure an approved MEP drawing exists.',
     });
   } else {
     // Handover Stage: Dynamic statutory authority NOCs assigned to this project

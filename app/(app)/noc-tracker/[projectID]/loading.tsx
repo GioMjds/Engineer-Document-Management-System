@@ -170,6 +170,85 @@ export default function NocProjectLoading() {
             </div>
           </div>
 
+          {/* Discipline Progress & Technical Coordination Skeleton */}
+          <div
+            aria-label="Loading discipline coordination"
+            className="flex flex-col justify-between rounded-xl border border-border bg-card p-5"
+          >
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <Bone w={16} h={16} r={3} />
+                    <Bone w={260} h={16} r={4} />
+                  </div>
+                  <Bone w={360} h={12} className="mt-1" />
+                </div>
+              </div>
+
+              {/* Discipline Progress Cards */}
+              <div className="space-y-1.5">
+                <Bone w={130} h={12} />
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="flex flex-col items-start gap-1 rounded-md border border-slate-200 bg-white p-2.5 dark:border-slate-800 dark:bg-slate-900"
+                    >
+                      <Bone w={75} h={12} />
+                      <Bone w={85} h={20} r={4} className="my-0.5" />
+                      <Bone w={95} h={11} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Authorities Stage Row */}
+              <div className="pt-2 border-t border-border space-y-1.5">
+                <Bone w={140} h={12} />
+                <div className="grid grid-cols-3 gap-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="flex flex-col items-start gap-1 rounded-md border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-900"
+                    >
+                      <Bone w={60} h={11} />
+                      <Bone w={65} h={16} r={4} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Specialist Studies Row */}
+              <div className="pt-2 border-t border-border flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Bone w={14} h={14} r={3} />
+                  <Bone w={110} h={12} />
+                  <div className="flex items-center gap-1.5">
+                    <Bone w={75} h={18} r={4} />
+                    <Bone w={75} h={18} r={4} />
+                  </div>
+                </div>
+                <Bone w={140} h={28} r={6} />
+              </div>
+            </div>
+          </div>
+
+          {/* NOC Alert Banner Skeleton */}
+          <div
+            aria-label="Loading NOC alerts"
+            className="flex items-center justify-between rounded border border-border bg-card p-3"
+          >
+            <div className="flex items-center gap-2">
+              <Bone w={16} h={16} r={3} />
+              <Bone w={280} h={14} />
+            </div>
+            <div className="hidden sm:flex items-center gap-1.5">
+              <Bone w={70} h={22} r={999} />
+              <Bone w={70} h={22} r={999} />
+            </div>
+          </div>
+
           {/* Filter & Action Bar */}
           <div className="flex flex-col items-stretch justify-between gap-3 pt-1 md:flex-row md:items-center">
             <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">

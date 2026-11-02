@@ -4,10 +4,19 @@ export type ProjectLifecycleStage =
   | 'Handover'
   | 'Completed';
 
+export type StageGateCategory =
+  | 'authority_noc'
+  | 'specialist_study'
+  | 'regulatory_milestone'
+  | 'discipline_approval'
+  | 'commercial_milestone'
+  | 'safety_quality'
+  | (string & {});
+
 export interface CustomStagePrerequisite {
   id: string;
   title: string;
-  category: 'authority_noc' | 'specialist_study' | 'regulatory_milestone';
+  category: StageGateCategory;
   stage: ProjectLifecycleStage;
   isSatisfied: boolean;
   mandatoryForNextStage?: boolean;
@@ -43,7 +52,7 @@ export interface StageMilestoneDates {
 export interface StageGatePrerequisiteItem {
   id: string;
   title: string;
-  category: 'authority_noc' | 'specialist_study' | 'regulatory_milestone';
+  category: StageGateCategory;
   isSatisfied: boolean;
   sourceReference?: string;
   mandatoryForNextStage: boolean;
@@ -247,7 +256,13 @@ export interface ThirdPartySpecialistRecord {
   fileSize?: string;
   uploadedBy?: string;
   uploadedAt?: string;
-  status: 'Pending' | 'Uploaded' | 'Approved';
+  status: 'Pending' | 'Uploaded' | 'Approved' | 'Rejected';
+  revision?: string;
+  remarks?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  fileUrl?: string;
+  filePath?: string;
 }
 
 export interface DisciplineDetail {

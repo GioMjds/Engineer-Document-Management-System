@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   X,
   CheckCircle2,
@@ -25,8 +25,8 @@ import type {
   StageGateReadiness,
   StageMilestoneDates,
   ProjectLifecycleStage,
-  StageGatePrerequisiteItem,
   CustomStagePrerequisite,
+  StageGateCategory,
 } from '@/types/noc';
 
 export interface StageGateDrawerProps {
@@ -59,10 +59,18 @@ function formatMilestoneDate(dateStr?: string): string | null {
   return dateStr;
 }
 
+const DEFAULT_CATEGORIES: { value: string; label: string }[] = [
+  { value: 'regulatory_milestone', label: 'Regulatory Milestone' },
+  { value: 'authority_noc', label: 'Authority NOC' },
+  { value: 'specialist_study', label: 'Specialist Study' },
+  { value: 'discipline_approval', label: 'Discipline Technical Approval' },
+  { value: 'commercial_milestone', label: 'Commercial & Client Milestone' },
+  { value: 'safety_quality', label: 'Site Safety & Quality' },
+];
+
 // Format prerequisite category label.
-function formatCategoryLabel(
-  cat: StageGatePrerequisiteItem['category'],
-): string {
+function formatCategoryLabel(cat?: string): string {
+  if (!cat) return 'General';
   switch (cat) {
     case 'authority_noc':
       return 'Authority NOC';
@@ -70,7 +78,18 @@ function formatCategoryLabel(
       return 'Specialist Study';
     case 'regulatory_milestone':
       return 'Regulatory Milestone';
+    case 'discipline_approval':
+      return 'Discipline Technical Approval';
+    case 'commercial_milestone':
+      return 'Commercial & Client Milestone';
+    case 'safety_quality':
+      return 'Site Safety & Quality';
     default:
+      if (cat.includes('_') || cat.includes('-')) {
+        return cat
+          .replace(/[_-]/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+      }
       return cat;
   }
 }
@@ -180,10 +199,32 @@ function StageGateDrawerContent({
   // Custom prerequisite creation state
   const [isAddingPrerequisite, setIsAddingPrerequisite] = useState(false);
   const [newPrereqTitle, setNewPrereqTitle] = useState('');
-  const [newPrereqCategory, setNewPrereqCategory] =
-    useState<StageGatePrerequisiteItem['category']>('regulatory_milestone');
+  const [selectedCategoryOption, setSelectedCategoryOption] =
+    useState<string>('discipline_approval');
+  const [customCategoryText, setCustomCategoryText] = useState('');
   const [newPrereqHint, setNewPrereqHint] = useState('');
   const [newPrereqMandatory, setNewPrereqMandatory] = useState(true);
+
+  // Dynamically resolve all unique categories from standard presets and existing prerequisites
+  const availableCategories = useMemo(() => {
+    const map = new Map<string, string>();
+    DEFAULT_CATEGORIES.forEach((c) => map.set(c.value, c.label));
+
+    const allPrereqs = [
+      ...(readiness.prerequisites || []),
+      ...(draftMilestones.customPrerequisites || []),
+    ];
+    for (const p of allPrereqs) {
+      if (p.category && !map.has(p.category)) {
+        map.set(p.category, formatCategoryLabel(p.category));
+      }
+    }
+
+    return Array.from(map.entries()).map(([value, label]) => ({
+      value,
+      label,
+    }));
+  }, [readiness.prerequisites, draftMilestones.customPrerequisites]);
 
   // Handle Escape key to dismiss drawer.
   useEffect(() => {
@@ -231,10 +272,15 @@ function StageGateDrawerContent({
     const title = newPrereqTitle.trim();
     if (!title) return;
 
+    const finalCategory: StageGateCategory =
+      selectedCategoryOption === '__custom__'
+        ? customCategoryText.trim() || 'Custom'
+        : selectedCategoryOption;
+
     const newItem: CustomStagePrerequisite = {
       id: 'custom-' + Date.now(),
       title,
-      category: newPrereqCategory,
+      category: finalCategory,
       stage: readiness.stage,
       isSatisfied: false,
       mandatoryForNextStage: newPrereqMandatory,
@@ -257,6 +303,8 @@ function StageGateDrawerContent({
     setIsAddingPrerequisite(false);
     setNewPrereqTitle('');
     setNewPrereqHint('');
+    setCustomCategoryText('');
+    setSelectedCategoryOption('discipline_approval');
     toast.success('Custom gate prerequisite added.');
   };
 
@@ -497,17 +545,23 @@ function StageGateDrawerContent({
                       Category
                     </label>
                     <select
-                      value={newPrereqCategory}
-                      onChange={(e) =>
-                        setNewPrereqCategory(
-                          e.target.value as StageGatePrerequisiteItem['category'],
-                        )
-                      }
+                      value={selectedCategoryOption}
+                      onChange={(e) => {
+                        setSelectedCategoryOption(e.target.value);
+                        if (e.target.value !== '__custom__') {
+                          setCustomCategoryText('');
+                        }
+                      }}
                       className="w-full h-7 px-1.5 text-xs font-mono rounded border border-border bg-background text-foreground"
                     >
-                      <option value="regulatory_milestone">Regulatory Milestone</option>
-                      <option value="authority_noc">Authority NOC</option>
-                      <option value="specialist_study">Specialist Study</option>
+                      <optgroup label="Available Categories">
+                        {availableCategories.map((cat) => (
+                          <option key={cat.value} value={cat.value}>
+                            {cat.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <option value="__custom__">+ Enter Custom Category...</option>
                     </select>
                   </div>
                   <div className="flex items-end pb-1.5">
@@ -522,6 +576,32 @@ function StageGateDrawerContent({
                     </label>
                   </div>
                 </div>
+
+                {selectedCategoryOption === '__custom__' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] text-muted-foreground block">
+                        Custom Category Name *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCategoryOption('discipline_approval')}
+                        className="text-[10px] text-primary hover:underline"
+                      >
+                        ← Back to list
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      value={customCategoryText}
+                      onChange={(e) => setCustomCategoryText(e.target.value)}
+                      placeholder="e.g. Environmental Compliance"
+                      className="w-full h-7 px-2 text-xs font-mono rounded border border-border bg-background text-foreground"
+                      autoFocus
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="text-[11px] text-muted-foreground block mb-1">
                     Action Hint / Requirement to Finish
@@ -543,6 +623,8 @@ function StageGateDrawerContent({
                       setIsAddingPrerequisite(false);
                       setNewPrereqTitle('');
                       setNewPrereqHint('');
+                      setCustomCategoryText('');
+                      setSelectedCategoryOption('discipline_approval');
                     }}
                     className="h-7 text-xs"
                   >
@@ -551,7 +633,11 @@ function StageGateDrawerContent({
                   <Button
                     type="submit"
                     size="sm"
-                    disabled={!newPrereqTitle.trim()}
+                    disabled={
+                      !newPrereqTitle.trim() ||
+                      (selectedCategoryOption === '__custom__' &&
+                        !customCategoryText.trim())
+                    }
                     className="h-7 text-xs font-semibold px-3 rounded bg-zinc-900 text-zinc-100 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900"
                   >
                     Save Gate Prerequisite

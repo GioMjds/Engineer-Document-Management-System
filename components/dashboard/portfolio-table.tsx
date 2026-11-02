@@ -50,8 +50,7 @@ export function PortfolioTable({
             Project portfolio
           </h2>
           <p className="text-xs text-muted-foreground">
-            Expand a project to update disciplines, authority stages and
-            specialist files.
+            Discipline health, authority review stages, and specialist study clearance overview. Submissions and approvals are managed in the project NOC Tracker.
           </p>
         </div>
         <span className="font-mono text-xs tabular-nums text-muted-foreground">

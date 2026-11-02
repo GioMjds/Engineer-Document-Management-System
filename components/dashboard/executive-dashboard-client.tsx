@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
+import { createClient } from '@/lib/supabase/client';
 import {
   advanceProjectStageAction,
   updateProjectMilestonesAction,
-  updateProjectDisciplineStatusAction,
 } from '@/app/actions/noc';
 import type { ExecutiveKpiSummary } from '@/app/loaders/ceo';
 import { StageGateDrawer } from '@/components/lifecycle/stage-gate-drawer';
@@ -21,15 +23,14 @@ import { can } from '@/lib/permissions';
 import {
   evaluateStageGateReadiness,
 } from '@/lib/project-lifecycle';
+import { emptyDisciplineStatus } from '@/lib/project-status';
 import { cn } from '@/lib/utils';
 import type {
   AssignedProject,
-  DisciplineStageStatus,
   ProjectDisciplineStatus,
   ProjectLifecycleStage,
   ProjectNocItem,
   StageMilestoneDates,
-  ThirdPartySpecialistType,
 } from '@/types/noc';
 import { Building2, FolderPlus } from 'lucide-react';
 import { ActionQueue } from './action-queue';
@@ -58,42 +59,6 @@ interface ExecutiveDashboardClientProps {
   executiveSummary?: ExecutiveKpiSummary;
 }
 
-const now = () => new Date().toISOString();
-
-const ALL_SPECIALIST_TYPES = [
-  'Vertical Transportation',
-  'Traffic Impact Study',
-  'Green Building',
-  'Topographical',
-  'Geotechnical',
-] satisfies ThirdPartySpecialistType[];
-
-function emptyStatus(projectCode: string): ProjectDisciplineStatus {
-  const base = {
-    status: 'Not Started' as const,
-    updatedBy: 'Unassigned',
-    updatedAt: now(),
-  };
-  return {
-    projectCode,
-    architecture: { ...base },
-    structure: { ...base },
-    mep: { ...base },
-    authorities: {
-      designStage: 'Not Started',
-      constructionStage: 'Not Started',
-      revisionStage: 'Not Started',
-      updatedBy: 'Unassigned',
-      updatedAt: now(),
-    },
-    specialists: ALL_SPECIALIST_TYPES.map((type, idx) => ({
-      id: `spec-${projectCode}-${idx + 1}`,
-      type,
-      status: 'Pending' as const,
-    })),
-  };
-}
-
 export function ExecutiveDashboardClient({
   projects,
   initialNocs,
@@ -103,6 +68,7 @@ export function ExecutiveDashboardClient({
   initialAreaManagerStats,
   executiveSummary,
 }: ExecutiveDashboardClientProps) {
+  const router = useRouter();
   const [projectList, setProjectList] = useState<AssignedProject[]>(projects);
   const [milestonesMap, setMilestonesMap] = useState<
     Record<string, StageMilestoneDates>
@@ -118,6 +84,84 @@ export function ExecutiveDashboardClient({
   const [disciplineStatuses, setDisciplineStatuses] = useState<
     Record<string, ProjectDisciplineStatus>
   >(() => ({ ...initialDisciplineStatuses }));
+
+  // Real-time synchronization for projects table and milestone updates across roles
+  useEffect(() => {
+    const supabase = createClient();
+    const stageMap: Record<string, ProjectLifecycleStage> = {
+      planning: 'Pre-Construction',
+      design: 'Pre-Construction',
+      construction: 'Construction',
+      handover: 'Handover',
+      completed: 'Completed',
+    };
+
+    const channel = supabase
+      .channel('realtime-dashboard-projects')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'projects',
+        },
+        (payload) => {
+          const updatedRow = payload.new as {
+            code?: string;
+            stage?: string;
+            milestones?: StageMilestoneDates;
+          };
+          if (!updatedRow?.code) return;
+
+          if (updatedRow.milestones) {
+            setMilestonesMap((prev) => ({
+              ...prev,
+              [updatedRow.code!]: updatedRow.milestones!,
+            }));
+            if (updatedRow.milestones.disciplineStatus) {
+              setDisciplineStatuses((prev) => ({
+                ...prev,
+                [updatedRow.code!]: updatedRow.milestones!.disciplineStatus!,
+              }));
+            }
+          }
+
+          if (updatedRow.stage) {
+            const nextLifecycle =
+              stageMap[updatedRow.stage] || 'Pre-Construction';
+            setProjectList((prev) =>
+              prev.map((p) =>
+                p.code === updatedRow.code
+                  ? {
+                      ...p,
+                      lifecycleStage: nextLifecycle,
+                      milestones: updatedRow.milestones || p.milestones,
+                    }
+                  : p,
+              ),
+            );
+          }
+          router.refresh();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [router]);
+
+  useEffect(() => {
+    if (initialDisciplineStatuses && Object.keys(initialDisciplineStatuses).length > 0) {
+      const timeoutId = window.setTimeout(() => {
+        setDisciplineStatuses((prev) => ({
+          ...prev,
+          ...initialDisciplineStatuses,
+        }));
+      }, 0);
+      return () => window.clearTimeout(timeoutId);
+    }
+  }, [initialDisciplineStatuses]);
   const [gateDrawerProjectCode, setGateDrawerProjectCode] = useState<
     string | null
   >(null);
@@ -243,125 +287,12 @@ export function ExecutiveDashboardClient({
     disciplineStatuses,
   ]);
 
-  /* ---------- mutations (local state) ---------- */
-  const patch = (
-    code: string,
-    fn: (c: ProjectDisciplineStatus) => ProjectDisciplineStatus,
-  ) =>
-    setDisciplineStatuses((prev) => {
-      const current = prev[code] ?? emptyStatus(code);
-      const nextStatus = fn(current);
-      void updateProjectDisciplineStatusAction(code, nextStatus);
-      return { ...prev, [code]: nextStatus };
-    });
-
-  const handleUpdateDiscipline = (
-    code: string,
-    discipline: 'architecture' | 'structure' | 'mep',
-    status: DisciplineStageStatus,
-    remarks?: string,
-  ) => {
-    const actor =
-      currentRole === 'admin'
-        ? 'System Administrator'
-        : currentRole.replace(/_/g, ' ');
-    patch(code, (c) => ({
-      ...c,
-      [discipline]: {
-        ...c[discipline],
-        status,
-        remarks: remarks !== undefined ? remarks : c[discipline].remarks,
-        updatedBy: actor,
-        updatedAt: now(),
-      },
-    }));
-  };
-
-  const handleUpdateAuthorityStage = (
-    code: string,
-    stageKey: 'designStage' | 'constructionStage' | 'revisionStage',
-    status: DisciplineStageStatus,
-  ) => {
-    const actor =
-      currentRole === 'admin'
-        ? 'System Administrator'
-        : currentRole.replace(/_/g, ' ');
-    patch(code, (c) => ({
-      ...c,
-      authorities: {
-        ...c.authorities,
-        [stageKey]: status,
-        updatedBy: actor,
-        updatedAt: now(),
-      },
-    }));
-  };
-
-  const handleUploadSpecialistFile = (
-    code: string,
-    type: ThirdPartySpecialistType,
-    fileName: string,
-    fileSize: string,
-  ) => {
-    const actor =
-      currentRole === 'admin'
-        ? 'System Administrator'
-        : currentRole.replace(/_/g, ' ');
-    patch(code, (c) => {
-      const list = c.specialists || [];
-      const exists = list.some((s) => s.type === type);
-      const updatedItem = {
-        id: `spec-${code}-${type.toLowerCase().replace(/\s+/g, '-')}`,
-        type,
-        fileName,
-        fileSize,
-        uploadedBy: actor,
-        uploadedAt: now(),
-        status: 'Uploaded' as const,
-      };
-
-      const updatedSpecialists = exists
-        ? list.map((s) => (s.type === type ? { ...s, ...updatedItem } : s))
-        : [...list, updatedItem];
-
-      return {
-        ...c,
-        specialists: updatedSpecialists,
-      };
-    });
-  };
-
-  const handleApproveSpecialistFile = (
-    code: string,
-    type: ThirdPartySpecialistType,
-  ) =>
-    patch(code, (c) => {
-      const list = c.specialists || [];
-      const exists = list.some((s) => s.type === type);
-      const updatedSpecialists = exists
-        ? list.map((s) =>
-            s.type === type ? { ...s, status: 'Approved' as const } : s,
-          )
-        : [
-            ...list,
-            {
-              id: `spec-${code}-${type.toLowerCase().replace(/\s+/g, '-')}`,
-              type,
-              status: 'Approved' as const,
-              uploadedAt: now(),
-            },
-          ];
-
-      return {
-        ...c,
-        specialists: updatedSpecialists,
-      };
-    });
-
+  /* ---------- mutations (lifecycle & milestones) ---------- */
   const handleAdvanceProjectStage = async (
     code: string,
     newStage: ProjectLifecycleStage,
   ) => {
+    const prevList = projectList;
     setProjectList((prev) =>
       prev.map((p) =>
         p.code === code
@@ -373,34 +304,49 @@ export function ExecutiveDashboardClient({
           : p,
       ),
     );
-    await advanceProjectStageAction(code, newStage);
+    const res = await advanceProjectStageAction(code, newStage);
+    if (!res.success) {
+      setProjectList(prevList);
+      toast.error(res.error || 'Failed to advance project stage.');
+    }
   };
 
   const handleUpdateProjectMilestones = async (
     code: string,
     milestones: StageMilestoneDates,
   ) => {
+    const prevMap = milestonesMap;
+    const prevList = projectList;
     setMilestonesMap((prev) => ({ ...prev, [code]: milestones }));
     setProjectList((prev) =>
       prev.map((p) => (p.code === code ? { ...p, milestones } : p)),
     );
-    await updateProjectMilestonesAction(code, milestones);
+    const res = await updateProjectMilestonesAction(code, milestones);
+    if (!res.success) {
+      setMilestonesMap(prevMap);
+      setProjectList(prevList);
+      toast.error(res.error || 'Failed to update project milestones.');
+    }
   };
 
   /* ---------- derived ---------- */
-  const withMilestones = (p: AssignedProject): AssignedProject => ({
-    ...p,
-    milestones: milestonesMap[p.code] || p.milestones,
-  });
+  const withMilestones = useCallback(
+    (p: AssignedProject): AssignedProject => ({
+      ...p,
+      milestones: {
+        ...(milestonesMap[p.code] || p.milestones || {}),
+        disciplineStatus: disciplineStatuses[p.code],
+      },
+    }),
+    [milestonesMap, disciplineStatuses],
+  );
 
   const drawerProject = useMemo(() => {
     const found = gateDrawerProjectCode
       ? projectList.find((p) => p.code === gateDrawerProjectCode)
       : null;
-    return found
-      ? { ...found, milestones: milestonesMap[found.code] || found.milestones }
-      : null;
-  }, [projectList, gateDrawerProjectCode, milestonesMap]);
+    return found ? withMilestones(found) : null;
+  }, [projectList, gateDrawerProjectCode, withMilestones]);
 
   const scopeOptions = useMemo(
     () => [
@@ -558,23 +504,20 @@ export function ExecutiveDashboardClient({
       <PortfolioTable
         projects={data.scopedProjects}
         nocStats={data.nocStats}
-        statusFor={(code) => disciplineStatuses[code] ?? emptyStatus(code)}
+        statusFor={(code) => disciplineStatuses[code] ?? emptyDisciplineStatus(code)}
         renderDetail={(project) => {
           const p = withMilestones(project);
           return (
             <ProjectDisciplineCard
               project={p}
               statusRecord={
-                disciplineStatuses[project.code] ?? emptyStatus(project.code)
+                disciplineStatuses[project.code] ?? emptyDisciplineStatus(project.code)
               }
               userRole={currentRole}
               readiness={evaluateStageGateReadiness(p, nocItems)}
               milestones={milestonesMap[project.code]}
               onOpenGateDetails={() => setGateDrawerProjectCode(project.code)}
-              onUpdateDiscipline={handleUpdateDiscipline}
-              onUpdateAuthorityStage={handleUpdateAuthorityStage}
-              onUploadSpecialistFile={handleUploadSpecialistFile}
-              onApproveSpecialistFile={handleApproveSpecialistFile}
+              isReadOnly
             />
           );
         }}

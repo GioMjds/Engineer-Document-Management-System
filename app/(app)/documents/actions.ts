@@ -5,39 +5,25 @@ import { createClient } from '@/lib/supabase/server';
 import {
   archiveDocument as appArchiveDocument,
   restoreDocument as appRestoreDocument,
+  getDownloadUrl as appGetDownloadUrl,
 } from '@/app/actions/documents';
 
 export async function getDownloadUrl(documentId: string): Promise<
   | {
       ok: true;
       url: string;
+      fileName?: string;
     }
   | {
       ok: false;
       error: string;
     }
 > {
-  await requireUser();
-  const supabase = await createClient();
-
-  const { data: doc } = await supabase
-    .from('documents')
-    .select('file_path, file_name')
-    .eq('id', documentId)
-    .single();
-
-  if (!doc) return { ok: false, error: 'Document not found.' };
-
-  const { data, error } = await supabase.storage
-    .from('documents')
-    .createSignedUrl(doc.file_path, 60, { download: doc.file_name });
-
-  if (error || !data)
-    return {
-      ok: false,
-      error: error?.message || 'Failed to generate download URL.',
-    };
-  return { ok: true, url: data.signedUrl };
+  const res = await appGetDownloadUrl(documentId);
+  if (!res.ok || !res.url) {
+    return { ok: false, error: res.error || 'Failed to generate download URL.' };
+  }
+  return { ok: true, url: res.url, fileName: res.fileName };
 }
 
 export async function archiveDocument(documentId: string): Promise<

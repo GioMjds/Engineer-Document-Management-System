@@ -39,8 +39,8 @@ export function BrandPanel() {
       <Image
         src="/cvtec-logo.svg"
         alt="CVTEC Consulting Engineers"
-        width={208}
-        height={69}
+        width={260}
+        height={86}
         priority
         className="h-auto w-40 lg:w-52"
       />

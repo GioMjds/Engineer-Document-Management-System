@@ -556,6 +556,7 @@ export async function restoreDocument(
 export async function getDownloadUrl(documentId: string): Promise<{
   ok: boolean;
   url?: string;
+  fileName?: string;
   error?: string;
 }> {
   const user = await requireUser();
@@ -592,5 +593,5 @@ export async function getDownloadUrl(documentId: string): Promise<{
     };
   }
 
-  return { ok: true, url: data.signedUrl };
+  return { ok: true, url: data.signedUrl, fileName: doc.file_name };
 }

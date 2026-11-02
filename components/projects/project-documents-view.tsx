@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/status-badge';
 import { formatSize } from '@/utils/formatters';
 import { getDownloadUrl } from '@/app/(app)/documents/actions';
+import { downloadFileFromUrl } from '@/lib/download';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Route } from 'next';
@@ -175,18 +176,15 @@ export function ProjectDocumentsView({
     setDownloadingId(doc.id);
     try {
       const res = await getDownloadUrl(doc.id);
-      if (!res.ok) {
+      if (!res.ok || !res.url) {
         toast.error(res.error || 'Failed to download document');
         return;
       }
-      const a = document.createElement('a');
-      a.href = res.url;
-      a.download = doc.file_name || `${doc.doc_number}.pdf`;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      await downloadFileFromUrl(
+        res.url,
+        doc.file_name || `${doc.doc_number}.pdf`,
+      );
+      toast.success(`Downloaded ${doc.file_name || doc.doc_number}`);
     } catch {
       toast.error('Network error during file download request');
     } finally {

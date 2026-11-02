@@ -19,6 +19,7 @@ import {
 } from './drawing-review-modal';
 import { EscalationBadge } from './escalation-badge';
 import { getDownloadUrl } from '@/app/actions/documents';
+import { downloadFileFromUrl } from '@/lib/download';
 import { toast } from 'sonner';
 
 const DISCIPLINE_COLORS = {
@@ -84,20 +85,22 @@ export function ReviewQueueTable({
 
   async function handleQuickDownload(doc: ReviewDocument) {
     setDownloadingId(doc.id);
-    const res = await getDownloadUrl(doc.id);
-    setDownloadingId(null);
-
-    if (!res.ok || !res.url) {
-      toast.error(res.error || 'Failed to generate download URL.');
-      return;
+    try {
+      const res = await getDownloadUrl(doc.id);
+      if (!res.ok || !res.url) {
+        toast.error(res.error || 'Failed to generate download URL.');
+        return;
+      }
+      await downloadFileFromUrl(
+        res.url,
+        doc.file_name || `${doc.doc_number}.pdf`,
+      );
+      toast.success(`Downloaded ${doc.file_name || doc.doc_number}`);
+    } catch {
+      toast.error('Download failed.');
+    } finally {
+      setDownloadingId(null);
     }
-
-    const a = window.document.createElement('a');
-    a.href = res.url;
-    a.download = doc.file_name || 'drawing';
-    window.document.body.appendChild(a);
-    a.click();
-    window.document.body.removeChild(a);
   }
 
   return (

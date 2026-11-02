@@ -10,9 +10,11 @@ import type {
   ProjectDisciplineStatus,
 } from '@/types/noc';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { canUserAdvanceStage, canUserModifyMilestones } from '@/lib/project-lifecycle';
+import {
+  canUserAdvanceStage,
+  canUserModifyMilestones,
+} from '@/lib/project-lifecycle';
 import type { Json } from '@/types/database';
-
 
 const feePaymentSchema = z.object({
   amount: z.number().nonnegative('Amount must be non-negative'),
@@ -22,7 +24,10 @@ const feePaymentSchema = z.object({
 });
 
 const submitNocSchema = z.object({
-  authorityReference: z.string().trim().min(1, 'Authority reference number is required'),
+  authorityReference: z
+    .string()
+    .trim()
+    .min(1, 'Authority reference number is required'),
   submittedAt: z.string().trim().min(1, 'Submission date is required'),
   submissionProofUrl: z.string().optional(),
   statutoryWaiverReason: z.string().optional(),
@@ -47,14 +52,17 @@ const authorityDecisionSchema = z
       return true;
     },
     {
-      message: 'Future expiry date is required when NOC is obtained and not marked permanent',
+      message:
+        'Future expiry date is required when NOC is obtained and not marked permanent',
       path: ['expiryDate'],
     },
   )
   .refine(
     (data) => {
       if (data.decision === 'rejected') {
-        return Boolean(data.rejectionReason && data.rejectionReason.trim().length >= 5);
+        return Boolean(
+          data.rejectionReason && data.rejectionReason.trim().length >= 5,
+        );
       }
       return true;
     },
@@ -64,7 +72,8 @@ const authorityDecisionSchema = z
     },
   );
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Submits an application to statutory authority */
 export async function submitNocApplication(
@@ -80,10 +89,18 @@ export async function submitNocApplication(
 
   const parsed = submitNocSchema.safeParse(input);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message || 'Invalid submission input' };
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message || 'Invalid submission input',
+    };
   }
 
-  const { authorityReference, submittedAt, submissionProofUrl, statutoryWaiverReason } = parsed.data;
+  const {
+    authorityReference,
+    submittedAt,
+    submissionProofUrl,
+    statutoryWaiverReason,
+  } = parsed.data;
 
   try {
     const supabase = await createClient();
@@ -94,92 +111,102 @@ export async function submitNocApplication(
     }
 
     const { data: currentNoc, error: fetchErr } = await supabase
+      .from('project_nocs')
+      .select('id, project_id, blocking_sequence_no, override_reason')
+      .eq('id', nocId)
+      .maybeSingle();
+
+    if (fetchErr || !currentNoc) {
+      return { success: false, error: fetchErr?.message || 'NOC not found' };
+    }
+
+    if (currentNoc.blocking_sequence_no && !currentNoc.override_reason) {
+      const { data: prereq } = await supabase
         .from('project_nocs')
-        .select('id, project_id, blocking_sequence_no, override_reason')
-        .eq('id', nocId)
+        .select('id, status_code, sequence_no')
+        .eq('project_id', currentNoc.project_id)
+        .eq('sequence_no', currentNoc.blocking_sequence_no)
         .maybeSingle();
 
-      if (fetchErr || !currentNoc) {
-        return { success: false, error: fetchErr?.message || 'NOC not found' };
+      if (
+        prereq &&
+        prereq.status_code !== 'obtained' &&
+        prereq.status_code !== 'approved'
+      ) {
+        return {
+          success: false,
+          error: `Prerequisite NOC (Seq #${currentNoc.blocking_sequence_no}) not yet obtained.`,
+        };
       }
+    }
 
-      if (currentNoc.blocking_sequence_no && !currentNoc.override_reason) {
-        const { data: prereq } = await supabase
-          .from('project_nocs')
-          .select('id, status_code, sequence_no')
-          .eq('project_id', currentNoc.project_id)
-          .eq('sequence_no', currentNoc.blocking_sequence_no)
-          .maybeSingle();
+    // Strict Validation: enforce all statutory checklist requirements are satisfied
+    const { data: requirements, error: reqErr } = await supabase
+      .from('project_noc_requirements')
+      .select('id, title, is_satisfied')
+      .eq('project_noc_id', nocId);
 
-        if (prereq && prereq.status_code !== 'obtained' && prereq.status_code !== 'approved') {
-          return {
-            success: false,
-            error: `Prerequisite NOC (Seq #${currentNoc.blocking_sequence_no}) not yet obtained.`,
-          };
-        }
+    if (reqErr) {
+      return { success: false, error: reqErr.message };
+    }
+
+    const pendingReqs = (requirements || []).filter((r) => !r.is_satisfied);
+    if (pendingReqs.length > 0) {
+      const isAdmin = user.role === 'admin';
+      const trimmedWaiver = statutoryWaiverReason?.trim() || '';
+      const hasValidWaiver = isAdmin && trimmedWaiver.length >= 15;
+
+      if (!hasValidWaiver) {
+        const pendingTitles = pendingReqs
+          .map((r) => `"${r.title}"`)
+          .slice(0, 3)
+          .join(', ');
+        const extra =
+          pendingReqs.length > 3 ? ` and ${pendingReqs.length - 3} more` : '';
+        return {
+          success: false,
+          error: `Statutory submission blocked: ${pendingReqs.length} requirement(s) unsatisfied (${pendingTitles}${extra}). Complete all checklist items or provide documented Admin waiver (min 15 chars).`,
+        };
       }
+    }
 
-      // Strict Validation: enforce all statutory checklist requirements are satisfied
-      const { data: requirements, error: reqErr } = await supabase
-        .from('project_noc_requirements')
-        .select('id, title, is_satisfied')
-        .eq('project_noc_id', nocId);
+    const { error: updateError } = await supabase
+      .from('project_nocs')
+      .update({
+        reference_no: authorityReference,
+        apply_date: submittedAt,
+        status_code: 'applied',
+        receipt_file_url: submissionProofUrl || null,
+        override_reason:
+          statutoryWaiverReason?.trim() || currentNoc.override_reason,
+        updated_at: now,
+        updated_by: user.id,
+      })
+      .eq('id', nocId);
 
-      if (reqErr) {
-        return { success: false, error: reqErr.message };
-      }
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
 
-      const pendingReqs = (requirements || []).filter((r) => !r.is_satisfied);
-      if (pendingReqs.length > 0) {
-        const isAdmin = user.role === 'admin';
-        const trimmedWaiver = statutoryWaiverReason?.trim() || '';
-        const hasValidWaiver = isAdmin && trimmedWaiver.length >= 15;
-
-        if (!hasValidWaiver) {
-          const pendingTitles = pendingReqs.map((r) => `"${r.title}"`).slice(0, 3).join(', ');
-          const extra = pendingReqs.length > 3 ? ` and ${pendingReqs.length - 3} more` : '';
-          return {
-            success: false,
-            error: `Statutory submission blocked: ${pendingReqs.length} requirement(s) unsatisfied (${pendingTitles}${extra}). Complete all checklist items or provide documented Admin waiver (min 15 chars).`,
-          };
-        }
-      }
-
-      const { error: updateError } = await supabase
-        .from('project_nocs')
-        .update({
-          reference_no: authorityReference,
-          apply_date: submittedAt,
-          status_code: 'applied',
-          receipt_file_url: submissionProofUrl || null,
-          override_reason: statutoryWaiverReason?.trim() || currentNoc.override_reason,
-          updated_at: now,
-          updated_by: user.id,
-        })
-        .eq('id', nocId);
-
-      if (updateError) {
-        return { success: false, error: updateError.message };
-      }
-
-      await supabase.from('audit_log').insert({
-        action: 'NOC_SUBMITTED',
-        actor_id: user.id,
-        entity: 'project_nocs',
-        entity_id: nocId,
-        metadata: {
-          authorityReference,
-          submittedAt,
-          statutoryWaiverReason: statutoryWaiverReason?.trim() || null,
-          pendingRequirementsCount: pendingReqs.length,
-        },
-      });
+    await supabase.from('audit_log').insert({
+      action: 'NOC_SUBMITTED',
+      actor_id: user.id,
+      entity: 'project_nocs',
+      entity_id: nocId,
+      metadata: {
+        authorityReference,
+        submittedAt,
+        statutoryWaiverReason: statutoryWaiverReason?.trim() || null,
+        pendingRequirementsCount: pendingReqs.length,
+      },
+    });
 
     revalidatePath('/noc-tracker');
     revalidatePath('/');
     return { success: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to submit NOC application';
+    const message =
+      err instanceof Error ? err.message : 'Failed to submit NOC application';
     return { success: false, error: message };
   }
 }
@@ -199,10 +226,19 @@ export async function recordAuthorityDecision(
 
   const parsed = authorityDecisionSchema.safeParse(input);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message || 'Invalid decision input' };
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message || 'Invalid decision input',
+    };
   }
 
-  const { decision, isPermanent, expiryDate, rejectionReason, officialDocumentUrl } = parsed.data;
+  const {
+    decision,
+    isPermanent,
+    expiryDate,
+    rejectionReason,
+    officialDocumentUrl,
+  } = parsed.data;
 
   try {
     const supabase = await createClient();
@@ -213,90 +249,99 @@ export async function recordAuthorityDecision(
     }
 
     const { data: currentNoc } = await supabase
+      .from('project_nocs')
+      .select('id, current_revision')
+      .eq('id', nocId)
+      .maybeSingle();
+
+    if (!currentNoc) {
+      return { success: false, error: 'NOC not found' };
+    }
+
+    if (decision === 'obtained') {
+      const trimmedDoc = officialDocumentUrl?.trim();
+      const isHttpUrl = Boolean(trimmedDoc && /^https?:\/\//i.test(trimmedDoc));
+      const fileUrl = isHttpUrl ? trimmedDoc : null;
+      const certRemark =
+        trimmedDoc && !isHttpUrl ? `Certificate #${trimmedDoc}` : null;
+      const finalExpiryDate = isPermanent ? null : expiryDate || null;
+
+      const { error: updateError } = await supabase
         .from('project_nocs')
-        .select('id, current_revision')
-        .eq('id', nocId)
-        .maybeSingle();
+        .update({
+          status_code: 'approved',
+          expiry_date: finalExpiryDate,
+          receive_date: now.split('T')[0],
+          file_url: fileUrl,
+          remarks: certRemark,
+          updated_at: now,
+          updated_by: user.id,
+        })
+        .eq('id', nocId);
 
-      if (!currentNoc) {
-        return { success: false, error: 'NOC not found' };
+      if (updateError) {
+        return { success: false, error: updateError.message };
       }
 
-      if (decision === 'obtained') {
-        const trimmedDoc = officialDocumentUrl?.trim();
-        const isHttpUrl = Boolean(trimmedDoc && /^https?:\/\//i.test(trimmedDoc));
-        const fileUrl = isHttpUrl ? trimmedDoc : null;
-        const certRemark = trimmedDoc && !isHttpUrl ? `Certificate #${trimmedDoc}` : null;
-        const finalExpiryDate = isPermanent ? null : (expiryDate || null);
+      await supabase.from('audit_log').insert({
+        action: 'NOC_OBTAINED',
+        actor_id: user.id,
+        entity: 'project_nocs',
+        entity_id: nocId,
+        metadata: {
+          decision,
+          isPermanent: Boolean(isPermanent),
+          expiryDate: finalExpiryDate,
+          officialDocumentUrl: trimmedDoc || null,
+        },
+      });
+    } else {
+      const currentRev = currentNoc.current_revision || 'R00';
+      const match = currentRev.match(/^R(\d+)$/i);
+      const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
+      const nextRevision = `R${String(nextNum).padStart(2, '0')}`;
 
-        const { error: updateError } = await supabase
-          .from('project_nocs')
-          .update({
-            status_code: 'approved',
-            expiry_date: finalExpiryDate,
-            receive_date: now.split('T')[0],
-            file_url: fileUrl,
-            remarks: certRemark,
-            updated_at: now,
-            updated_by: user.id,
-          })
-          .eq('id', nocId);
+      await supabase.from('noc_resubmission_history').insert({
+        project_noc_id: nocId,
+        revision: nextRevision,
+        rejection_reason: rejectionReason!,
+        rejection_date: now,
+        resubmission_date: now,
+        resubmitted_by: user.id,
+      });
 
-        if (updateError) {
-          return { success: false, error: updateError.message };
-        }
+      const { error: updateError } = await supabase
+        .from('project_nocs')
+        .update({
+          status_code: 'rejected',
+          remarks: rejectionReason!,
+          current_revision: nextRevision,
+          updated_at: now,
+          updated_by: user.id,
+        })
+        .eq('id', nocId);
 
-        await supabase.from('audit_log').insert({
-          action: 'NOC_OBTAINED',
-          actor_id: user.id,
-          entity: 'project_nocs',
-          entity_id: nocId,
-          metadata: { decision, isPermanent: Boolean(isPermanent), expiryDate: finalExpiryDate, officialDocumentUrl: trimmedDoc || null },
-        });
-      } else {
-        const currentRev = currentNoc.current_revision || 'R00';
-        const match = currentRev.match(/^R(\d+)$/i);
-        const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
-        const nextRevision = `R${String(nextNum).padStart(2, '0')}`;
-
-        await supabase.from('noc_resubmission_history').insert({
-          project_noc_id: nocId,
-          revision: nextRevision,
-          rejection_reason: rejectionReason!,
-          rejection_date: now,
-          resubmission_date: now,
-          resubmitted_by: user.id,
-        });
-
-        const { error: updateError } = await supabase
-          .from('project_nocs')
-          .update({
-            status_code: 'rejected',
-            remarks: rejectionReason!,
-            current_revision: nextRevision,
-            updated_at: now,
-            updated_by: user.id,
-          })
-          .eq('id', nocId);
-
-        if (updateError) {
-          return { success: false, error: updateError.message };
-        }
-
-        await supabase.from('audit_log').insert({
-          action: 'NOC_REJECTED',
-          actor_id: user.id,
-          entity: 'project_nocs',
-          entity_id: nocId,
-          metadata: { decision, rejectionReason, nextRevision },
-        });
+      if (updateError) {
+        return { success: false, error: updateError.message };
       }
+
+      await supabase.from('audit_log').insert({
+        action: 'NOC_REJECTED',
+        actor_id: user.id,
+        entity: 'project_nocs',
+        entity_id: nocId,
+        metadata: { decision, rejectionReason, nextRevision },
+      });
+    }
 
     revalidatePath('/noc-tracker');
     revalidatePath('/');
     return { success: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to record authority decision';
+    const message =
+      err instanceof Error
+        ? err.message
+        : 'Failed to record authority decision';
     return { success: false, error: message };
   }
 }
@@ -315,7 +360,10 @@ export async function recordNocFeePayment(
 
   const parsed = feePaymentSchema.safeParse(input);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message || 'Invalid fee payment input' };
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message || 'Invalid fee payment input',
+    };
   }
 
   const { amount, payer, receiptNumber, receiptFileUrl } = parsed.data;
@@ -327,7 +375,8 @@ export async function recordNocFeePayment(
     if (!UUID_REGEX.test(nocId)) {
       return {
         success: false,
-        error: 'Recording fee payments requires a persisted database NOC. Please select an active project.',
+        error:
+          'Recording fee payments requires a persisted database NOC. Please select an active project.',
       };
     }
 
@@ -352,7 +401,8 @@ export async function recordNocFeePayment(
     revalidatePath('/');
     return { success: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to record fee payment';
+    const message =
+      err instanceof Error ? err.message : 'Failed to record fee payment';
     return { success: false, error: message };
   }
 }
@@ -382,95 +432,107 @@ export async function updateNocMatrixItem(
     }
 
     const { data: existing } = await supabase
-        .from('noc_matrix_items')
-        .select('*')
-        .eq('id', matrixItemId)
-        .maybeSingle();
+      .from('noc_matrix_items')
+      .select('*')
+      .eq('id', matrixItemId)
+      .maybeSingle();
 
-      if (!existing) {
-        return { success: false, error: 'Matrix item not found.' };
-      }
+    if (!existing) {
+      return { success: false, error: 'Matrix item not found.' };
+    }
 
-      type MatrixItemUpdatePayload = {
-        description?: string;
-        default_fee?: number;
-        validity_days?: number;
-        blocking_sequence_no?: number | null;
-        updated_at: string;
-      };
-      const updateData: MatrixItemUpdatePayload = {
-        updated_at: new Date().toISOString(),
-      };
-      if (typeof updates.description === 'string') updateData.description = updates.description;
-      if (typeof updates.defaultFee === 'number') updateData.default_fee = updates.defaultFee;
-      if (typeof updates.validityDays === 'number') updateData.validity_days = updates.validityDays;
-      if (typeof updates.blockingSequenceNo === 'number' || updates.blockingSequenceNo === null) {
-        updateData.blocking_sequence_no = updates.blockingSequenceNo;
-      }
+    type MatrixItemUpdatePayload = {
+      description?: string;
+      default_fee?: number;
+      validity_days?: number;
+      blocking_sequence_no?: number | null;
+      updated_at: string;
+    };
+    const updateData: MatrixItemUpdatePayload = {
+      updated_at: new Date().toISOString(),
+    };
+    if (typeof updates.description === 'string')
+      updateData.description = updates.description;
+    if (typeof updates.defaultFee === 'number')
+      updateData.default_fee = updates.defaultFee;
+    if (typeof updates.validityDays === 'number')
+      updateData.validity_days = updates.validityDays;
+    if (
+      typeof updates.blockingSequenceNo === 'number' ||
+      updates.blockingSequenceNo === null
+    ) {
+      updateData.blocking_sequence_no = updates.blockingSequenceNo;
+    }
 
-      const { error: updateError } = await supabase
-        .from('noc_matrix_items')
-        .update(updateData)
-        .eq('id', matrixItemId);
+    const { error: updateError } = await supabase
+      .from('noc_matrix_items')
+      .update(updateData)
+      .eq('id', matrixItemId);
 
-      if (updateError) {
-        return { success: false, error: updateError.message };
-      }
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
 
-      type ProjectNocUpdatePayload = {
-        description?: string;
-        payment_fee?: number;
-        blocking_sequence_no?: number | null;
-        updated_at: string;
-        updated_by: string;
-      };
-      const projectNocUpdates: ProjectNocUpdatePayload = {
-        updated_at: new Date().toISOString(),
-        updated_by: user.id,
-      };
-      if (typeof updates.description === 'string') projectNocUpdates.description = updates.description;
-      if (typeof updates.defaultFee === 'number') projectNocUpdates.payment_fee = updates.defaultFee;
-      if (typeof updates.blockingSequenceNo === 'number' || updates.blockingSequenceNo === null) {
-        projectNocUpdates.blocking_sequence_no = updates.blockingSequenceNo;
-      }
+    type ProjectNocUpdatePayload = {
+      description?: string;
+      payment_fee?: number;
+      blocking_sequence_no?: number | null;
+      updated_at: string;
+      updated_by: string;
+    };
+    const projectNocUpdates: ProjectNocUpdatePayload = {
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    };
+    if (typeof updates.description === 'string')
+      projectNocUpdates.description = updates.description;
+    if (typeof updates.defaultFee === 'number')
+      projectNocUpdates.payment_fee = updates.defaultFee;
+    if (
+      typeof updates.blockingSequenceNo === 'number' ||
+      updates.blockingSequenceNo === null
+    ) {
+      projectNocUpdates.blocking_sequence_no = updates.blockingSequenceNo;
+    }
 
-      const { data: updatedNocs } = await supabase
-        .from('project_nocs')
-        .update(projectNocUpdates)
-        .eq('matrix_item_id', matrixItemId)
-        .neq('status_code', 'obtained')
-        .neq('status_code', 'approved')
-        .select('id, project_id');
+    const { data: updatedNocs } = await supabase
+      .from('project_nocs')
+      .update(projectNocUpdates)
+      .eq('matrix_item_id', matrixItemId)
+      .neq('status_code', 'obtained')
+      .neq('status_code', 'approved')
+      .select('id, project_id');
 
-      const affectedProjects = updatedNocs
-        ? new Set(updatedNocs.map((r) => r.project_id)).size
-        : 0;
-      const affectedCount = updatedNocs?.length ?? 0;
+    const affectedProjects = updatedNocs
+      ? new Set(updatedNocs.map((r) => r.project_id)).size
+      : 0;
+    const affectedCount = updatedNocs?.length ?? 0;
 
-      const { data: revData } = await supabase
-        .from('noc_matrix_revisions')
-        .insert({
-          master_authority_id: existing.master_authority_id,
-          matrix_item_id: existing.id,
-          action: 'UPDATE',
-          changed_by: user.id,
-          change_summary: justification.trim(),
-          previous_data: JSON.parse(JSON.stringify(existing)),
-          new_data: JSON.parse(JSON.stringify(updates)),
-          propagated_projects_count: affectedProjects,
-          propagated_nocs_count: affectedCount,
-        })
-        .select('id')
-        .single();
+    const { data: revData } = await supabase
+      .from('noc_matrix_revisions')
+      .insert({
+        master_authority_id: existing.master_authority_id,
+        matrix_item_id: existing.id,
+        action: 'UPDATE',
+        changed_by: user.id,
+        change_summary: justification.trim(),
+        previous_data: JSON.parse(JSON.stringify(existing)),
+        new_data: JSON.parse(JSON.stringify(updates)),
+        propagated_projects_count: affectedProjects,
+        propagated_nocs_count: affectedCount,
+      })
+      .select('id')
+      .single();
 
-      const createdRevisionId = revData?.id;
+    const createdRevisionId = revData?.id;
 
     revalidatePath('/noc-matrix');
     revalidatePath('/noc-tracker');
     revalidatePath('/');
     return { success: true, revisionId: createdRevisionId };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to update matrix item';
+    const message =
+      err instanceof Error ? err.message : 'Failed to update matrix item';
     return { success: false, error: message };
   }
 }
@@ -504,24 +566,108 @@ export async function updateProjectMilestonesAction(
       };
     }
 
-    const { error } = await supabase
-      .from('projects')
-      .update({
-        milestones: milestones as unknown as Json,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('code', projectCode);
+    const trimmed = (projectCode || '').trim();
+    if (!trimmed) {
+      return { success: false, error: 'Project code is required.' };
+    }
+
+    const adminClient = createAdminClient();
+    const UUID_REGEX =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isUuid = UUID_REGEX.test(trimmed);
+
+    // Fetch existing milestones to merge without clobbering concurrent fields
+    const fetchQuery = isUuid
+      ? adminClient
+          .from('projects')
+          .select('id, code, milestones')
+          .eq('id', trimmed)
+      : adminClient
+          .from('projects')
+          .select('id, code, milestones')
+          .eq('code', trimmed);
+
+    const { data: currentProject, error: fetchErr } = await fetchQuery.maybeSingle();
+
+    if (fetchErr || !currentProject) {
+      return {
+        success: false,
+        error: fetchErr?.message || 'Project not found.',
+      };
+    }
+
+    const existingMilestones = (
+      typeof currentProject.milestones === 'object' &&
+      currentProject.milestones !== null
+        ? currentProject.milestones
+        : {}
+    ) as Record<string, unknown>;
+
+    // Deep merge statutory dates and custom prerequisites while preserving disciplineStatus
+    const mergedMilestones = {
+      ...existingMilestones,
+      ...milestones,
+      preConstruction: {
+        ...((existingMilestones.preConstruction as Record<string, unknown>) ||
+          {}),
+        ...((milestones.preConstruction as Record<string, unknown>) || {}),
+      },
+      construction: {
+        ...((existingMilestones.construction as Record<string, unknown>) || {}),
+        ...((milestones.construction as Record<string, unknown>) || {}),
+      },
+      handover: {
+        ...((existingMilestones.handover as Record<string, unknown>) || {}),
+        ...((milestones.handover as Record<string, unknown>) || {}),
+      },
+      customPrerequisites:
+        milestones.customPrerequisites !== undefined
+          ? milestones.customPrerequisites
+          : existingMilestones.customPrerequisites,
+      disciplineStatus:
+        milestones.disciplineStatus !== undefined
+          ? milestones.disciplineStatus
+          : existingMilestones.disciplineStatus,
+    } satisfies Record<string, unknown>;
+
+    const updateQuery = isUuid
+      ? adminClient
+          .from('projects')
+          .update({
+            milestones: mergedMilestones as unknown as Json,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', trimmed)
+      : adminClient
+          .from('projects')
+          .update({
+            milestones: mergedMilestones as unknown as Json,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('code', trimmed);
+
+    const { data: updatedRows, error } = await updateQuery.select('id, code');
 
     if (error) {
       return { success: false, error: error.message };
     }
 
-    await supabase.from('audit_log').insert({
+    if (!updatedRows || updatedRows.length === 0) {
+      return {
+        success: false,
+        error: 'Failed to update project milestones in database.',
+      };
+    }
+
+    await adminClient.from('audit_log').insert({
       actor_id: user.id,
       action: 'UPDATE_PROJECT_MILESTONES',
       entity: 'projects',
       entity_id: projectCode,
-      metadata: { projectCode, milestones: milestones as unknown as Json },
+      metadata: {
+        projectCode,
+        milestones: mergedMilestones as unknown as Json,
+      },
     });
 
     revalidatePath('/noc-tracker');
@@ -531,7 +677,8 @@ export async function updateProjectMilestonesAction(
 
     return { success: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to update milestones';
+    const message =
+      err instanceof Error ? err.message : 'Failed to update milestones';
     return { success: false, error: message };
   }
 }
@@ -561,30 +708,61 @@ export async function advanceProjectStageAction(
     if (!canUserAdvanceStage(role)) {
       return {
         success: false,
-        error: 'Advancing stage requires Resident Engineer or Management approval.',
+        error:
+          'Advancing stage requires Resident Engineer or Management approval.',
       };
     }
 
-    const stageEnumMap: Record<ProjectLifecycleStage, 'design' | 'construction' | 'handover' | 'completed'> = {
+    const stageEnumMap = {
       'Pre-Construction': 'design',
-      'Construction': 'construction',
-      'Handover': 'handover',
-      'Completed': 'completed',
-    };
+      Construction: 'construction',
+      Handover: 'handover',
+      Completed: 'completed',
+    } satisfies Record<
+      ProjectLifecycleStage,
+      'design' | 'construction' | 'handover' | 'completed'
+    >;
 
-    const { error } = await supabase
-      .from('projects')
-      .update({
-        stage: stageEnumMap[newStage] || 'design',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('code', projectCode);
+    const trimmed = (projectCode || '').trim();
+    if (!trimmed) {
+      return { success: false, error: 'Project code is required.' };
+    }
+
+    const adminClient = createAdminClient();
+    const UUID_REGEX =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isUuid = UUID_REGEX.test(trimmed);
+
+    const updateQuery = isUuid
+      ? adminClient
+          .from('projects')
+          .update({
+            stage: stageEnumMap[newStage] || 'design',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', trimmed)
+      : adminClient
+          .from('projects')
+          .update({
+            stage: stageEnumMap[newStage] || 'design',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('code', trimmed);
+
+    const { data: updatedRows, error } = await updateQuery.select('id, code');
 
     if (error) {
       return { success: false, error: error.message };
     }
 
-    await supabase.from('audit_log').insert({
+    if (!updatedRows || updatedRows.length === 0) {
+      return {
+        success: false,
+        error: 'Failed to advance project stage in database.',
+      };
+    }
+
+    await adminClient.from('audit_log').insert({
       actor_id: user.id,
       action: 'ADVANCE_PROJECT_STAGE',
       entity: 'projects',
@@ -599,7 +777,8 @@ export async function advanceProjectStageAction(
 
     return { success: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to advance project stage';
+    const message =
+      err instanceof Error ? err.message : 'Failed to advance project stage';
     return { success: false, error: message };
   }
 }
@@ -619,15 +798,35 @@ export async function updateProjectDisciplineStatusAction(
       return { success: false, error: 'Unauthorized.' };
     }
 
+    const trimmed = (projectCode || '').trim();
+    if (!trimmed) {
+      return { success: false, error: 'Project code is required.' };
+    }
+
     const adminClient = createAdminClient();
-    const { data: project, error: fetchError } = await adminClient
-      .from('projects')
-      .select('milestones')
-      .eq('code', projectCode)
-      .single();
+    const UUID_REGEX =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isUuid = UUID_REGEX.test(trimmed);
+
+    const query = isUuid
+      ? adminClient
+          .from('projects')
+          .select('id, code, milestones')
+          .eq('id', trimmed)
+      : adminClient
+          .from('projects')
+          .select('id, code, milestones')
+          .eq('code', trimmed);
+
+    const { data: project, error: fetchError } = await query
+      .limit(1)
+      .maybeSingle();
 
     if (fetchError || !project) {
-      return { success: false, error: fetchError?.message || 'Project not found.' };
+      return {
+        success: false,
+        error: fetchError?.message || 'Project not found.',
+      };
     }
 
     const currentMilestones =
@@ -646,22 +845,30 @@ export async function updateProjectDisciplineStatusAction(
         milestones: updatedMilestones as unknown as Json,
         updated_at: new Date().toISOString(),
       })
-      .eq('code', projectCode);
+      .eq('id', project.id);
 
     if (updateError) {
       return { success: false, error: updateError.message };
     }
 
-    await adminClient.from('audit_log').insert({
-      actor_id: user.id,
-      action: 'UPDATE_PROJECT_DISCIPLINE_STATUS',
-      entity: 'projects',
-      entity_id: projectCode,
-      metadata: { projectCode, disciplineStatus: disciplineStatus as unknown as Json },
-    });
+    try {
+      await adminClient.from('audit_log').insert({
+        actor_id: user.id,
+        action: 'UPDATE_PROJECT_DISCIPLINE_STATUS',
+        entity: 'projects',
+        entity_id: project.id,
+        metadata: {
+          projectCode: project.code,
+          disciplineStatus: disciplineStatus as unknown as Json,
+        },
+      });
+    } catch {
+      // Ignore non-fatal audit log insert errors
+    }
 
     revalidatePath('/dashboard');
-    revalidatePath(`/noc-tracker/${projectCode}`);
+    revalidatePath(`/noc-tracker/${project.code}`);
+    revalidatePath(`/noc-tracker/${trimmed}`);
     revalidatePath('/');
 
     return { success: true };
@@ -671,7 +878,5 @@ export async function updateProjectDisciplineStatusAction(
         ? err.message
         : 'Failed to update project discipline status';
     return { success: false, error: message };
-    return { success: false, error: message };
   }
 }
-

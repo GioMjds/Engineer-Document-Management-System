@@ -3,9 +3,12 @@
 import {
   advanceProjectStageAction,
   updateProjectMilestonesAction,
+  updateProjectDisciplineStatusAction,
 } from '@/app/actions/noc';
 import { ProjectLifecycleStepper } from '@/components/lifecycle/project-lifecycle-stepper';
 import { StageGateDrawer } from '@/components/lifecycle/stage-gate-drawer';
+import { ProjectDisciplineCard } from '@/components/dashboard/project-discipline-card';
+import { emptyDisciplineStatus } from '@/lib/project-status';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -21,16 +24,20 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import type {
   AssignedProject,
+  DisciplineStageStatus,
   NocStage,
+  ProjectDisciplineStatus,
   ProjectDocumentItem,
   ProjectLifecycleStage,
   ProjectNocItem,
   ReviewingAuthority,
   StageMilestoneDates,
+  ThirdPartySpecialistType,
 } from '@/types/noc';
 import { Filter, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { NocAlertBanner } from './noc-alert-banner';
 import { NocDataTable } from './noc-data-table';
 import { NocInspectorDrawer } from './noc-inspector-drawer';
@@ -82,6 +89,9 @@ export function NocTrackerClient({
   const [milestones, setMilestones] = useState<StageMilestoneDates>(
     project.milestones || {},
   );
+  const [disciplineStatus, setDisciplineStatus] = useState<ProjectDisciplineStatus>(
+    () => project.milestones?.disciplineStatus || emptyDisciplineStatus(project.code),
+  );
   const [isGateDrawerOpen, setIsGateDrawerOpen] = useState(false);
   const [nocItems, setNocItems] = useState<ProjectNocItem[]>(initialNocs);
   const [activeStage, setActiveStage] = useState<string>('all');
@@ -115,6 +125,9 @@ export function NocTrackerClient({
             const newMilestones = payload.new.milestones as StageMilestoneDates;
             if (newMilestones) {
               setMilestones(newMilestones);
+              if (newMilestones.disciplineStatus) {
+                setDisciplineStatus(newMilestones.disciplineStatus);
+              }
             }
           }
           if (payload.new && 'stage' in payload.new) {
@@ -164,8 +177,15 @@ export function NocTrackerClient({
   }, [project.code, project.id, router]);
 
   const currentProject = useMemo(
-    () => ({ ...project, lifecycleStage, milestones }),
-    [project, lifecycleStage, milestones],
+    () => ({
+      ...project,
+      lifecycleStage,
+      milestones: {
+        ...milestones,
+        disciplineStatus,
+      },
+    }),
+    [project, lifecycleStage, milestones, disciplineStatus],
   );
 
   const currentGateReadiness = useMemo(
@@ -224,14 +244,269 @@ export function NocTrackerClient({
   }
 
   async function handleAdvanceStage(newStage: ProjectLifecycleStage) {
+    const prev = lifecycleStage;
     setLifecycleStage(newStage);
     setIsGateDrawerOpen(false);
-    await advanceProjectStageAction(project.code, newStage);
+    const res = await advanceProjectStageAction(project.code, newStage);
+    if (!res.success) {
+      setLifecycleStage(prev);
+      toast.error(res.error || 'Failed to advance stage.');
+    }
   }
 
+  useEffect(() => {
+    const status = milestones.disciplineStatus;
+    if (status) {
+      const timeoutId = window.setTimeout(() => {
+        setDisciplineStatus(status);
+      }, 0);
+      return () => window.clearTimeout(timeoutId);
+    }
+  }, [milestones.disciplineStatus]);
+
+  const patchDisciplineStatus = async (
+    fn: (c: ProjectDisciplineStatus) => ProjectDisciplineStatus,
+  ) => {
+    const base = emptyDisciplineStatus(project.code);
+    const current = {
+      ...base,
+      ...disciplineStatus,
+      architecture: {
+        ...base.architecture,
+        ...(disciplineStatus?.architecture || {}),
+      },
+      structure: {
+        ...base.structure,
+        ...(disciplineStatus?.structure || {}),
+      },
+      mep: {
+        ...base.mep,
+        ...(disciplineStatus?.mep || {}),
+      },
+      authorities: {
+        ...base.authorities,
+        ...(disciplineStatus?.authorities || {}),
+      },
+      specialists: disciplineStatus?.specialists || base.specialists,
+    };
+    const nextStatus = fn(current);
+
+    setDisciplineStatus(nextStatus);
+    const updatedMilestones: StageMilestoneDates = {
+      ...milestones,
+      disciplineStatus: nextStatus,
+    };
+    setMilestones(updatedMilestones);
+
+    try {
+      const res = await updateProjectDisciplineStatusAction(
+        project.code,
+        nextStatus,
+      );
+      if (res.success) {
+        toast.success(`Discipline progress updated for #${project.code}`);
+      } else {
+        toast.error(res.error || 'Failed to update discipline progress.');
+        setDisciplineStatus(current);
+      }
+    } catch {
+      toast.error('Network error updating discipline progress.');
+      setDisciplineStatus(current);
+    }
+  };
+
+  const handleUpdateDiscipline = (
+    _code: string,
+    discipline: 'architecture' | 'structure' | 'mep',
+    status: DisciplineStageStatus,
+    remarks?: string,
+  ) => {
+    const actor =
+      currentUserRole === 'admin'
+        ? 'System Administrator'
+        : currentUserRole.replace(/_/g, ' ');
+    void patchDisciplineStatus((c) => ({
+      ...c,
+      [discipline]: {
+        ...c[discipline],
+        status,
+        remarks: remarks !== undefined ? remarks : c[discipline].remarks,
+        updatedBy: actor,
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  };
+
+  const handleUpdateAuthorityStage = (
+    _code: string,
+    stageKey: 'designStage' | 'constructionStage' | 'revisionStage',
+    status: DisciplineStageStatus,
+  ) => {
+    const actor =
+      currentUserRole === 'admin'
+        ? 'System Administrator'
+        : currentUserRole.replace(/_/g, ' ');
+    void patchDisciplineStatus((c) => ({
+      ...c,
+      authorities: {
+        ...c.authorities,
+        [stageKey]: status,
+        updatedBy: actor,
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  };
+
+  const handleUploadSpecialistFile = (
+    _code: string,
+    type: ThirdPartySpecialistType,
+    fileName: string,
+    fileSize: string,
+    revision?: string,
+  ) => {
+    const actor =
+      currentUserRole === 'admin'
+        ? 'System Administrator'
+        : currentUserRole.replace(/_/g, ' ');
+    void patchDisciplineStatus((c) => {
+      const list = c.specialists || [];
+      const exists = list.some((s) => s.type === type);
+      const prev = list.find((s) => s.type === type);
+      const computedRevision =
+        revision ||
+        (prev?.revision
+          ? `R${String(parseInt(prev.revision.replace(/\D/g, '') || '0', 10) + 1).padStart(2, '0')}`
+          : 'R00');
+
+      const updatedItem = {
+        id: prev?.id || `spec-${project.code}-${type.toLowerCase().replace(/\s+/g, '-')}`,
+        type,
+        fileName,
+        fileSize,
+        revision: computedRevision,
+        uploadedBy: actor,
+        uploadedAt: new Date().toISOString(),
+        status: 'Uploaded' as const,
+        remarks: undefined,
+        reviewedBy: undefined,
+        reviewedAt: undefined,
+      };
+
+      const updatedSpecialists = exists
+        ? list.map((s) => (s.type === type ? { ...s, ...updatedItem } : s))
+        : [...list, updatedItem];
+
+      return {
+        ...c,
+        specialists: updatedSpecialists,
+      };
+    });
+  };
+
+  const handleApproveSpecialistFile = (
+    _code: string,
+    type: ThirdPartySpecialistType,
+    remarks?: string,
+  ) => {
+    const actor =
+      currentUserRole === 'admin'
+        ? 'System Administrator'
+        : currentUserRole.replace(/_/g, ' ');
+    void patchDisciplineStatus((c) => {
+      const list = c.specialists || [];
+      const exists = list.some((s) => s.type === type);
+      const updatedSpecialists = exists
+        ? list.map((s) =>
+            s.type === type
+              ? {
+                  ...s,
+                  status: 'Approved' as const,
+                  remarks: remarks || s.remarks,
+                  reviewedBy: actor,
+                  reviewedAt: new Date().toISOString(),
+                }
+              : s,
+          )
+        : [
+            ...list,
+            {
+              id: `spec-${project.code}-${type.toLowerCase().replace(/\s+/g, '-')}`,
+              type,
+              status: 'Approved' as const,
+              uploadedAt: new Date().toISOString(),
+              reviewedBy: actor,
+              reviewedAt: new Date().toISOString(),
+            },
+          ];
+
+      return {
+        ...c,
+        specialists: updatedSpecialists,
+      };
+    });
+  };
+
+  const handleRejectSpecialistFile = (
+    _code: string,
+    type: ThirdPartySpecialistType,
+    remarks: string,
+  ) => {
+    const actor =
+      currentUserRole === 'admin'
+        ? 'System Administrator'
+        : currentUserRole.replace(/_/g, ' ');
+    void patchDisciplineStatus((c) => {
+      const list = c.specialists || [];
+      const updatedSpecialists = list.map((s) =>
+        s.type === type
+          ? {
+              ...s,
+              status: 'Rejected' as const,
+              remarks,
+              reviewedBy: actor,
+              reviewedAt: new Date().toISOString(),
+            }
+          : s,
+      );
+
+      return {
+        ...c,
+        specialists: updatedSpecialists,
+      };
+    });
+  };
+
+  const handleRemoveSpecialistFile = (
+    _code: string,
+    type: ThirdPartySpecialistType,
+  ) => {
+    void patchDisciplineStatus((c) => {
+      const list = c.specialists || [];
+      const updatedSpecialists = list.map((s) =>
+        s.type === type
+          ? {
+              id: s.id,
+              type,
+              status: 'Pending' as const,
+            }
+          : s,
+      );
+
+      return {
+        ...c,
+        specialists: updatedSpecialists,
+      };
+    });
+  };
+
   async function handleUpdateMilestones(updated: StageMilestoneDates) {
+    const prev = milestones;
     setMilestones(updated);
-    await updateProjectMilestonesAction(project.code, updated);
+    const res = await updateProjectMilestonesAction(project.code, updated);
+    if (!res.success) {
+      setMilestones(prev);
+      toast.error(res.error || 'Failed to update milestones.');
+    }
   }
 
   return (
@@ -243,6 +518,19 @@ export function NocTrackerClient({
         readiness={currentGateReadiness}
         milestones={milestones}
         onOpenGateDetails={() => setIsGateDrawerOpen(true)}
+      />
+
+      <ProjectDisciplineCard
+        project={currentProject}
+        statusRecord={disciplineStatus}
+        userRole={currentUserRole}
+        hideHeaderAndStepper
+        onUpdateDiscipline={handleUpdateDiscipline}
+        onUpdateAuthorityStage={handleUpdateAuthorityStage}
+        onUploadSpecialistFile={handleUploadSpecialistFile}
+        onApproveSpecialistFile={handleApproveSpecialistFile}
+        onRejectSpecialistFile={handleRejectSpecialistFile}
+        onRemoveSpecialistFile={handleRemoveSpecialistFile}
       />
 
       <NocAlertBanner

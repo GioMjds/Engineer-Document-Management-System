@@ -2,7 +2,43 @@ import type {
   ProjectNocItem,
   AssignedProject,
   SubmittalDelayItem,
+  ProjectDisciplineStatus,
+  ThirdPartySpecialistType,
 } from '@/types/noc';
+
+export const ALL_SPECIALIST_TYPES: ThirdPartySpecialistType[] = [
+  'Vertical Transportation',
+  'Traffic Impact Study',
+  'Green Building',
+  'Topographical',
+  'Geotechnical',
+];
+
+export function emptyDisciplineStatus(projectCode: string): ProjectDisciplineStatus {
+  const base = {
+    status: 'Not Started' as const,
+    updatedBy: 'Unassigned',
+    updatedAt: new Date().toISOString(),
+  };
+  return {
+    projectCode,
+    architecture: { ...base },
+    structure: { ...base },
+    mep: { ...base },
+    authorities: {
+      designStage: 'Not Started',
+      constructionStage: 'Not Started',
+      revisionStage: 'Not Started',
+      updatedBy: 'Unassigned',
+      updatedAt: new Date().toISOString(),
+    },
+    specialists: ALL_SPECIALIST_TYPES.map((type, idx) => ({
+      id: `spec-${projectCode}-${idx + 1}`,
+      type,
+      status: 'Pending' as const,
+    })),
+  };
+}
 
 export function calculateSubmittalDelays(
   allNocs: ProjectNocItem[],
@@ -79,7 +115,7 @@ export function canUserEditDiscipline(
   role: string,
   discipline: 'architecture' | 'structure' | 'mep' | 'authorities',
 ): boolean {
-  const normalized = role.toLowerCase().replace(/[\s-]/g, '_');
+  const normalized = (role || '').toLowerCase().replace(/[\s-]/g, '_');
 
   if (normalized === 'admin') return true;
 
@@ -87,10 +123,41 @@ export function canUserEditDiscipline(
     case 'architecture':
     case 'structure':
     case 'mep':
-      return normalized === 'engineer' || normalized === 'resident_engineer' || normalized === 'area_manager';
+      return (
+        normalized === 'engineer' ||
+        normalized === 'resident_engineer' ||
+        normalized === 'area_manager' ||
+        normalized === 'architect' ||
+        normalized === 'structure' ||
+        normalized === 'mep' ||
+        normalized === 'civil' ||
+        normalized.endsWith('_engineer')
+      );
     case 'authorities':
-      return normalized === 'authority_engineer' || normalized === 'dc';
+      return (
+        normalized === 'authority_engineer' ||
+        normalized === 'dc' ||
+        normalized === 'resident_engineer' ||
+        normalized === 'area_manager'
+      );
     default:
       return false;
   }
+}
+
+// Verify if the current user role has authority to approve or reject specialist technical studies.
+export function canUserReviewSpecialist(role?: string): boolean {
+  const normalized = (role || '').toLowerCase().replace(/[\s-]/g, '_');
+  return (
+    normalized === 'admin' ||
+    normalized === 'area_manager' ||
+    normalized === 'resident_engineer'
+  );
+}
+
+// Verify if the current user role can upload reports or submit revisions for specialist scopes.
+export function canUserUploadSpecialist(role?: string): boolean {
+  const normalized = (role || '').toLowerCase().replace(/[\s-]/g, '_');
+  if (normalized === 'ceo') return false;
+  return true;
 }
