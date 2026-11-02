@@ -349,6 +349,7 @@ function SidebarContent({
                     alt="CVTEC Logo"
                     width={28}
                     height={28}
+                    className="h-7 w-auto object-contain"
                     quality={100}
                     loading="lazy"
                   />
@@ -369,8 +370,9 @@ function SidebarContent({
           <Image
             src="/cvtec-logo.svg"
             alt="CVTEC Logo"
-            width={34}
-            height={34}
+            width={32}
+            height={32}
+            className="h-8 w-auto object-contain"
             quality={100}
             loading="lazy"
           />

@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { ThirdPartySpecialistRecord, ThirdPartySpecialistType } from '@/types/noc';
-import { FileText, Upload, CheckCircle2, Clock, Paperclip, FolderOpen } from 'lucide-react';
+import { FileText, Upload, CheckCircle2, Paperclip, FolderOpen } from 'lucide-react';
 
 interface ThirdPartySpecialistDrawerProps {
   isOpen: boolean;
@@ -26,13 +26,13 @@ interface ThirdPartySpecialistDrawerProps {
   onApproveSpecialistFile: (type: ThirdPartySpecialistType) => void;
 }
 
-const ALL_SPECIALIST_TYPES: ThirdPartySpecialistType[] = [
+const ALL_SPECIALIST_TYPES = [
   'Vertical Transportation',
   'Traffic Impact Study',
   'Green Building',
   'Topographical',
   'Geotechnical',
-];
+] satisfies ThirdPartySpecialistType[];
 
 export function ThirdPartySpecialistDrawer({
   isOpen,
@@ -57,6 +57,8 @@ export function ThirdPartySpecialistDrawer({
   };
 
   const handleSimulateUpload = (type: ThirdPartySpecialistType) => {
+    // Simulate file upload with a default file name for each specialist type
+    // In a real application, you would replace this with actual file upload logic.
     const defaultFileNames: Record<ThirdPartySpecialistType, string> = {
       'Vertical Transportation': 'VT-LIFT-TRAFFIC-ANALYSIS-R01.pdf',
       'Traffic Impact Study': 'TIS-REPORT-RTA-SUBMISSION.pdf',

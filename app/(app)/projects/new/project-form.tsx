@@ -12,10 +12,13 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Calendar,
   Check,
   ChevronsUpDown,
   HardHat,
+  Loader2,
   ShieldCheck,
+  Sparkles,
   Users,
 } from 'lucide-react';
 import { cn } from 'cn';
@@ -57,7 +60,11 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { createProject } from '@/app/actions/admin';
+import {
+  createProject,
+  getNextProjectCode,
+  checkProjectCodeAvailability,
+} from '@/app/actions/admin';
 import type { MasterAuthorityRecord } from '@/types/noc';
 import type { ProfileItem } from '@/components/projects/project-team-dialog';
 import { useProjectModal } from '@/components/projects/project-dialog-modal';
@@ -91,6 +98,10 @@ const projectSchema = z.object({
   client_consultant_amount: z
     .number({ error: 'Enter a valid amount.' })
     .min(0, 'Amount cannot be negative.'),
+  design_commencement_date: z.string().optional(),
+  design_completion_date: z.string().optional(),
+  supervision_commencement_date: z.string().optional(),
+  supervision_completion_date: z.string().optional(),
 });
 
 type ProjectFormValues = z.infer<typeof projectSchema>;
@@ -248,12 +259,19 @@ export function ProjectRegistrationForm({
   const [structId, setStructId] = useState<string>('unassigned');
   const [mepId, setMepId] = useState<string>('unassigned');
   const [civilId, setCivilId] = useState<string>('unassigned');
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [codeAvailability, setCodeAvailability] = useState<{
+    checked: boolean;
+    available?: boolean;
+    message?: string;
+  }>({ checked: false });
 
   const {
     register,
     handleSubmit,
     control,
     trigger,
+    setValue,
     formState: { errors, isDirty },
   } = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
@@ -268,6 +286,10 @@ export function ProjectRegistrationForm({
       contractor_emails: '',
       client_contractor_amount: 0,
       client_consultant_amount: 0,
+      design_commencement_date: '',
+      design_completion_date: '',
+      supervision_commencement_date: '',
+      supervision_completion_date: '',
     },
   });
 
@@ -316,6 +338,60 @@ export function ProjectRegistrationForm({
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isFormDirty, pending, isSubmitted]);
+
+  const handleAutoGenerateCode = async () => {
+    setIsGeneratingCode(true);
+    try {
+      const res = await getNextProjectCode();
+      if (res.ok && res.code) {
+        setValue('code', res.code, { shouldValidate: true, shouldDirty: true });
+        setCodeAvailability({
+          checked: true,
+          available: true,
+          message: `Auto-generated code #${res.code} is available.`,
+        });
+        toast.success(`Generated next project code: ${res.code}`);
+      } else {
+        toast.error(res.error || 'Failed to auto-generate code');
+      }
+    } finally {
+      setIsGeneratingCode(false);
+    }
+  };
+
+  const handleCheckCodeAvailability = async (codeToTest: string) => {
+    const trimmed = codeToTest.trim();
+    if (!trimmed) {
+      setCodeAvailability({ checked: false });
+      return;
+    }
+    const res = await checkProjectCodeAvailability(trimmed);
+    if (res.ok) {
+      setCodeAvailability({
+        checked: true,
+        available: res.available,
+        message: res.available
+          ? `Code #${trimmed} is available`
+          : `Code #${trimmed} is already assigned to an existing project`,
+      });
+    }
+  };
+
+  // Pre-populate next sequential code if blank on mount
+  useEffect(() => {
+    if (!projectCode) {
+      getNextProjectCode().then((res) => {
+        if (res.ok && res.code) {
+          setValue('code', res.code, { shouldValidate: true });
+          setCodeAvailability({
+            checked: true,
+            available: true,
+            message: `Next available sequential code: #${res.code}`,
+          });
+        }
+      });
+    }
+  }, [projectCode, setValue]);
 
   const handleCancel = () => {
     if (modalContext) {
@@ -389,6 +465,10 @@ export function ProjectRegistrationForm({
         client_contractor_amount: values.client_contractor_amount,
         client_consultant_amount: values.client_consultant_amount,
         master_authority_id: values.master_authority_id,
+        design_commencement_date: values.design_commencement_date,
+        design_completion_date: values.design_completion_date,
+        supervision_commencement_date: values.supervision_commencement_date,
+        supervision_completion_date: values.supervision_completion_date,
         description: values.name,
         members,
       });
@@ -481,16 +561,46 @@ export function ProjectRegistrationForm({
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="code">Project Code</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="code">Project Code</Label>
+                    <button
+                      type="button"
+                      onClick={handleAutoGenerateCode}
+                      disabled={isGeneratingCode || pending}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-(--site-cyan) hover:underline disabled:opacity-50"
+                      title="Auto-calculate next sequential code for current year"
+                    >
+                      {isGeneratingCode ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="size-3" />
+                      )}
+                      <span>{isGeneratingCode ? 'Generating...' : 'Auto-Generate'}</span>
+                    </button>
+                  </div>
                   <Input
                     id="code"
-                    placeholder="e.g. 23017"
+                    placeholder="e.g. 26004"
                     aria-invalid={!!errors.code}
-                    {...register('code')}
+                    {...register('code', {
+                      onBlur: (e) => handleCheckCodeAvailability(e.target.value),
+                    })}
                   />
                   {errors.code && (
                     <p className="text-xs text-destructive">
                       {errors.code.message}
+                    </p>
+                  )}
+                  {!errors.code && codeAvailability.checked && (
+                    <p
+                      className={cn(
+                        'text-[10px]',
+                        codeAvailability.available
+                          ? 'text-emerald-600 dark:text-emerald-400 font-medium'
+                          : 'text-destructive font-medium',
+                      )}
+                    >
+                      {codeAvailability.message}
                     </p>
                   )}
                 </div>
@@ -704,6 +814,77 @@ export function ProjectRegistrationForm({
                       Restricted to Admin, CEO, and Area Manager.
                     </p>
                   )}
+                </div>
+              </div>
+
+              {/* Separate Contract Dates for Design and Supervision */}
+              <div className="pt-3 border-t border-border space-y-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="size-4 text-(--site-cyan)" />
+                  <span className="text-xs font-semibold text-foreground">
+                    Contract Schedules & Target Dates (Optional)
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
+                    <p className="text-[11px] font-semibold text-foreground">
+                      Design Contract Dates
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="designStart" className="text-[10px]">
+                          Commencement
+                        </Label>
+                        <Input
+                          id="designStart"
+                          type="date"
+                          className="h-8 text-xs"
+                          {...register('design_commencement_date')}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="designEnd" className="text-[10px]">
+                          Completion
+                        </Label>
+                        <Input
+                          id="designEnd"
+                          type="date"
+                          className="h-8 text-xs"
+                          {...register('design_completion_date')}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
+                    <p className="text-[11px] font-semibold text-foreground">
+                      Supervision Contract Dates
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="supervisionStart" className="text-[10px]">
+                          Commencement
+                        </Label>
+                        <Input
+                          id="supervisionStart"
+                          type="date"
+                          className="h-8 text-xs"
+                          {...register('supervision_commencement_date')}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="supervisionEnd" className="text-[10px]">
+                          Target Completion
+                        </Label>
+                        <Input
+                          id="supervisionEnd"
+                          type="date"
+                          className="h-8 text-xs"
+                          {...register('supervision_completion_date')}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>

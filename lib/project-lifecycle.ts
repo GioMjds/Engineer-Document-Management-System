@@ -10,37 +10,20 @@ import type {
 } from '@/types/noc';
 
 export const INITIAL_PROJECT_MILESTONES: Record<string, StageMilestoneDates> = {
-  '23015': {
+  '26001': {
     preConstruction: {
-      kickoffDate: '2026-03-01',
-      surveyCompletionDate: '2026-04-15',
-      conceptApprovalDate: '2026-05-10',
-      commencementDate: '2026-06-01',
-      plannedCompletionDate: '2026-11-15',
+      kickoffDate: '2026-10-01',
+      surveyCompletionDate: '2026-10-15',
+      conceptApprovalDate: '2026-10-25',
+      commencementDate: '2026-11-01',
+      plannedCompletionDate: '2027-02-15',
     },
     construction: {
-      commencementDate: '2026-12-01',
-      targetCompletionDate: '2027-12-15',
+      commencementDate: '2027-03-01',
+      targetCompletionDate: '2028-06-30',
     },
     handover: {
-      targetCompletionDate: '2028-03-30',
-    },
-  },
-  '23016': {
-    preConstruction: {
-      kickoffDate: '2026-01-10',
-      surveyCompletionDate: '2026-02-28',
-      conceptApprovalDate: '2026-04-05',
-      commencementDate: '2026-04-15',
-      plannedCompletionDate: '2026-08-10',
-      buildingPermitDate: '2026-08-15',
-    },
-    construction: {
-      commencementDate: '2026-09-01',
-      targetCompletionDate: '2027-12-30',
-    },
-    handover: {
-      commissioningDate: '2028-01-15',
+      targetCompletionDate: '2028-12-15',
     },
   },
   '26002': {

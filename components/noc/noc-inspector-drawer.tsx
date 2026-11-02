@@ -1236,7 +1236,7 @@ export function NocInspectorDrawer({
                       id="resubmit_file"
                       value={resubmitFileName}
                       onChange={(e) => setResubmitFileName(e.target.value)}
-                      placeholder="e.g. DWG-23016-DCD-R01.pdf"
+                      placeholder="e.g. DWG-26002-DCD-R01.pdf"
                       className="bg-zinc-800 border-zinc-700 text-white text-xs h-8 mt-1"
                     />
                   </div>

@@ -22,7 +22,7 @@ export function matchesUrgentFilter(
 ): boolean {
   switch (filter) {
     case 'expiring':
-      return isExpiringSoon(item.expiryDate) && item.status !== 'Approved';
+      return isExpiringSoon(item.expiryDate) && item.status !== 'Expired';
     case 'rejected':
       return item.status === 'Rejected';
     case 'pending-payment':

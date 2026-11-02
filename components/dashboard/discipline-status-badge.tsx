@@ -21,7 +21,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import type { DisciplineDetail, DisciplineStageStatus } from '@/types/noc';
 import { canUserEditDiscipline } from '@/lib/project-status';
-import { ShieldAlert, CheckCircle2, Clock, Edit3 } from 'lucide-react';
+import { ShieldAlert, Clock, Edit3 } from 'lucide-react';
 
 interface DisciplineStatusBadgeProps {
   discipline: 'architecture' | 'structure' | 'mep';

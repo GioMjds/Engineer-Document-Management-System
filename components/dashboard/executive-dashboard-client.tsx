@@ -245,8 +245,7 @@ export function ExecutiveDashboardClient({
       projectName: p.name,
       stage: p.lifecycleStage || 'Pre-Construction',
       contractorAmount: p.clientContractorAmount || 0,
-      consultantAmount:
-        p.code === '23015' ? 3200000 : p.code === '23016' ? 8500000 : 0,
+      consultantAmount: p.clientConsultantAmount || 0,
     }));
 
     return {

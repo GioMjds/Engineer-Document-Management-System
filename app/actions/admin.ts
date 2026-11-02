@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { type AppRole } from '@/lib/permissions';
 import { sendUserInviteEmail } from '@/lib/email/notifications';
+import { INITIAL_NOCS_PROJECT_26001, SEED_PROJECTS } from '@/lib/noc-tracker';
+import type { Json } from '@/types/database';
 
 const roleSchema = z.enum([
   'admin',
@@ -52,6 +54,10 @@ const createProjectSchema = z.object({
   client_contractor_amount: z.number().nonnegative().default(0),
   client_consultant_amount: z.number().nonnegative().default(0),
   master_authority_id: z.number().int().default(1),
+  design_commencement_date: z.string().optional(),
+  design_completion_date: z.string().optional(),
+  supervision_commencement_date: z.string().optional(),
+  supervision_completion_date: z.string().optional(),
   members: z
     .array(
       z.object({
@@ -541,7 +547,31 @@ export async function createProject(
 
   // Insert project
   let project: { id: string } | null = null;
+  const initialMilestones: Record<string, unknown> = {};
+  if (
+    parsed.data.design_commencement_date ||
+    parsed.data.design_completion_date
+  ) {
+    initialMilestones.preConstruction = {
+      commencementDate: parsed.data.design_commencement_date || undefined,
+      plannedCompletionDate: parsed.data.design_completion_date || undefined,
+    };
+  }
+  if (
+    parsed.data.supervision_commencement_date ||
+    parsed.data.supervision_completion_date
+  ) {
+    initialMilestones.construction = {
+      commencementDate: parsed.data.supervision_commencement_date || undefined,
+      targetCompletionDate:
+        parsed.data.supervision_completion_date || undefined,
+    };
+  }
+
   const fullPayload = {
+    milestones: (Object.keys(initialMilestones).length > 0
+      ? initialMilestones
+      : {}) as Json,
     description: parsed.data.name,
     code: parsed.data.code,
     stage: parsed.data.stage,
@@ -684,6 +714,68 @@ export async function createProject(
           if (reqInsertError) {
             console.error('Failed to clone project_noc_requirements:', reqInsertError);
           }
+        }
+      }
+    }
+  } else {
+    // Statutory baseline instantiation fallback for unseeded authorities
+    const revAuthMap: Record<string, number> = {
+      Trakhees: 1,
+      Nakheel: 2,
+      DEWA: 3,
+      Empower: 4,
+      RTA: 5,
+      EHS: 6,
+      DCAA: 7,
+      DM: 8,
+      DU: 9,
+      Etisalat: 10,
+      'Green Building': 11,
+      'Third Party': 12,
+      DCD: 13,
+      DDA: 14,
+    };
+    const stageMap: Record<
+      string,
+      'design' | 'information' | 'construction' | 'handover'
+    > = {
+      'Design NOC': 'design',
+      'Information NOC': 'information',
+      'Construction NOC': 'construction',
+      'Handover NOC': 'handover',
+    };
+
+    for (const seedNoc of INITIAL_NOCS_PROJECT_26001) {
+      const stageCode = stageMap[seedNoc.stage] || 'design';
+      const revAuthId = revAuthMap[seedNoc.reviewingAuthority] || 1;
+
+      const { data: insertedNoc } = await adminClient
+        .from('project_nocs')
+        .insert({
+          project_id: project.id,
+          sequence_no: seedNoc.sequenceNumber,
+          stage: stageCode,
+          reviewing_authority_id: revAuthId,
+          description: seedNoc.description,
+          submitted_by: 'consultant',
+          status_code: 'not_started',
+          payment_fee: seedNoc.paymentFee || 0,
+          is_paid: false,
+          blocking_sequence_no: seedNoc.blockingSequenceNumber,
+          current_revision: 'R00',
+        })
+        .select('id')
+        .single();
+
+      if (insertedNoc) {
+        instantiatedNocsCount++;
+        if (seedNoc.requirements && seedNoc.requirements.length > 0) {
+          const reqInserts = seedNoc.requirements.map((r) => ({
+            project_noc_id: insertedNoc.id,
+            title: r.title,
+            is_satisfied: false,
+          }));
+          await adminClient.from('project_noc_requirements').insert(reqInserts);
         }
       }
     }
@@ -851,4 +943,87 @@ export async function purgeDocument(
 
   revalidatePath('/archive');
   return { ok: true };
+}
+
+/**
+ * Computes next sequential project code for the current year (e.g. 26004).
+ */
+export async function getNextProjectCode(): Promise<{
+  ok: boolean;
+  code?: string;
+  error?: string;
+}> {
+  try {
+    const supabase = await createClient();
+    const { data: dbProjects } = await supabase
+      .from('projects')
+      .select('code')
+      .is('archived_at', null);
+
+    const yearPrefix = new Date().getFullYear().toString().slice(-2);
+    const existingCodes = new Set<string>();
+
+    if (dbProjects) {
+      for (const p of dbProjects) {
+        if (p.code) existingCodes.add(p.code.trim());
+      }
+    }
+
+    for (const sp of SEED_PROJECTS) {
+      existingCodes.add(sp.code.trim());
+    }
+
+    let maxSeq = 0;
+    const yearRegex = new RegExp(`^${yearPrefix}(\\d{3})$`);
+    for (const code of existingCodes) {
+      const match = code.match(yearRegex);
+      if (match && match[1]) {
+        const seq = parseInt(match[1], 10);
+        if (seq > maxSeq) {
+          maxSeq = seq;
+        }
+      }
+    }
+
+    const nextSeq = maxSeq + 1;
+    const nextCode = `${yearPrefix}${String(nextSeq).padStart(3, '0')}`;
+
+    return { ok: true, code: nextCode };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to generate code';
+    return { ok: false, error: message };
+  }
+}
+
+/**
+ * Checks whether a proposed project code is available (not already taken).
+ */
+export async function checkProjectCodeAvailability(
+  code: string,
+): Promise<{ ok: boolean; available: boolean; error?: string }> {
+  const trimmed = code.trim();
+  if (!trimmed) {
+    return { ok: true, available: false };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: existing } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('code', trimmed)
+      .maybeSingle();
+
+    if (existing) {
+      return { ok: true, available: false };
+    }
+
+    const inSeed = SEED_PROJECTS.some(
+      (sp) => sp.code.toLowerCase() === trimmed.toLowerCase(),
+    );
+    return { ok: true, available: !inSeed };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to verify code';
+    return { ok: false, available: false, error: message };
+  }
 }

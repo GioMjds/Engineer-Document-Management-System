@@ -1,9 +1,8 @@
 import { getAuthorityName } from '@/lib/noc-matrix';
 import {
-  INITIAL_NOCS_PROJECT_23015,
-  INITIAL_NOCS_PROJECT_23016,
   INITIAL_NOCS_PROJECT_26001,
   SEED_PROJECTS,
+  isLapsed,
 } from '@/lib/noc-tracker';
 import { createClient } from '@/lib/supabase/server';
 import type {
@@ -274,7 +273,11 @@ function mapDbNocToItem(
       'Consultant',
     referenceNumber: row.reference_no || '',
     status:
-      statusMap[row.status_code as keyof typeof statusMap] || 'Not Started',
+      (statusMap[row.status_code as keyof typeof statusMap] === 'Approved' &&
+      row.expiry_date &&
+      isLapsed(row.expiry_date))
+        ? 'Expired'
+        : (statusMap[row.status_code as keyof typeof statusMap] || 'Not Started'),
     paymentFee: Number(row.payment_fee) || 0,
     isPaid: Boolean(row.is_paid),
     payerType: (row.payer_type as NocPayerType) || undefined,
@@ -300,8 +303,6 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
     projects: SEED_PROJECTS,
     nocs: [
       ...INITIAL_NOCS_PROJECT_26001,
-      ...INITIAL_NOCS_PROJECT_23016,
-      ...INITIAL_NOCS_PROJECT_23015,
     ],
     isLive: false,
   };
@@ -455,8 +456,11 @@ export async function getNocTrackerData(): Promise<NocTrackerData> {
 
     const seedNocsMap: Record<string, ProjectNocItem[]> = {
       '26001': INITIAL_NOCS_PROJECT_26001,
-      '23016': INITIAL_NOCS_PROJECT_23016,
-      '23015': INITIAL_NOCS_PROJECT_23015,
+      '26002': INITIAL_NOCS_PROJECT_26001.map((item) => ({
+        ...item,
+        id: item.id.replace('26001', '26002'),
+        projectCode: '26002',
+      })),
     };
 
     // 5. Map NOC records from database

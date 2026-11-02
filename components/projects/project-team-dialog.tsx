@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useCallback, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Users, ShieldCheck, HardHat, Loader2 } from 'lucide-react';
@@ -176,84 +176,87 @@ export function ProjectTeamDialog({
     });
   };
 
-  const getRoleOptions = (
-    primaryRole: string,
-    disciplineKeyword?: 'architect' | 'structur' | 'mep' | 'civil',
-  ) => {
-    const isSuggested = (p: ProfileItem) => {
-      if (disciplineKeyword) {
-        if (p.role !== 'engineer') return false;
-        const nameLower = (p.full_name || '').toLowerCase();
-        return nameLower.includes(disciplineKeyword);
-      }
-      if (primaryRole === 'dc') {
-        return p.role === 'dc' || p.role === 'doc_controller';
-      }
-      return p.role === primaryRole;
-    };
-
-    const suggested: RoleOption[] = [];
-    const others: RoleOption[] = [];
-
-    for (const p of teamProfiles) {
-      const item: RoleOption = {
-        id: p.id,
-        label: getCleanProfileName(p),
-        roleBadge: formatRoleBadge(p.role),
-        suggested: isSuggested(p),
+  const getRoleOptions = useCallback(
+    (
+      primaryRole: string,
+      disciplineKeyword?: 'architect' | 'structur' | 'mep' | 'civil',
+    ) => {
+      const isSuggested = (p: ProfileItem) => {
+        if (disciplineKeyword) {
+          if (p.role !== 'engineer') return false;
+          const nameLower = (p.full_name || '').toLowerCase();
+          return nameLower.includes(disciplineKeyword);
+        }
+        if (primaryRole === 'dc') {
+          return p.role === 'dc' || p.role === 'doc_controller';
+        }
+        return p.role === primaryRole;
       };
-      if (item.suggested) {
-        suggested.push(item);
-      } else {
-        others.push(item);
+
+      const suggested: RoleOption[] = [];
+      const others: RoleOption[] = [];
+
+      for (const p of teamProfiles) {
+        const item: RoleOption = {
+          id: p.id,
+          label: getCleanProfileName(p),
+          roleBadge: formatRoleBadge(p.role),
+          suggested: isSuggested(p),
+        };
+        if (item.suggested) {
+          suggested.push(item);
+        } else {
+          others.push(item);
+        }
       }
-    }
 
-    const unassignedOption: RoleOption = {
-      id: 'unassigned',
-      label: '— Unassigned —',
-      roleBadge: '',
-      suggested: false,
-    };
+      const unassignedOption = {
+        id: 'unassigned',
+        label: '— Unassigned —',
+        roleBadge: '',
+        suggested: false,
+      } satisfies RoleOption;
 
-    return {
-      suggested,
-      others,
-      all: [unassignedOption, ...suggested, ...others],
-    };
-  };
+      return {
+        suggested,
+        others,
+        all: [unassignedOption, ...suggested, ...others],
+      };
+    },
+    [teamProfiles],
+  );
 
   const reOptions = useMemo(
     () => getRoleOptions('resident_engineer'),
-    [teamProfiles],
+    [getRoleOptions],
   );
   const amOptions = useMemo(
     () => getRoleOptions('area_manager'),
-    [teamProfiles],
+    [getRoleOptions],
   );
   const aeOptions = useMemo(
     () => getRoleOptions('authority_engineer'),
-    [teamProfiles],
+    [getRoleOptions],
   );
   const dcOptions = useMemo(
     () => getRoleOptions('dc'),
-    [teamProfiles],
+    [getRoleOptions],
   );
   const archOptions = useMemo(
     () => getRoleOptions('engineer', 'architect'),
-    [teamProfiles],
+    [getRoleOptions],
   );
   const structOptions = useMemo(
     () => getRoleOptions('engineer', 'structur'),
-    [teamProfiles],
+    [getRoleOptions],
   );
   const mepOptions = useMemo(
     () => getRoleOptions('engineer', 'mep'),
-    [teamProfiles],
+    [getRoleOptions],
   );
   const civilOptions = useMemo(
     () => getRoleOptions('engineer', 'civil'),
-    [teamProfiles],
+    [getRoleOptions],
   );
 
   const renderRoleSelect = (

@@ -1,8 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import {
   SEED_PROJECTS,
-  INITIAL_NOCS_PROJECT_23016,
-  INITIAL_NOCS_PROJECT_23015,
+  INITIAL_NOCS_PROJECT_26001,
   calculateDaysRemaining,
 } from '@/lib/noc-tracker';
 
@@ -25,12 +24,12 @@ export interface ExecutiveKpiSummary {
 
 // Default fallback seed financials for development/offline mode
 const SEED_FINANCIALS: Record<string, { contractor: number; consultant: number }> = {
-  '23015': { contractor: 48500000, consultant: 3200000 },
-  '23016': { contractor: 125000000, consultant: 8500000 },
+  '26001': { contractor: 45000000, consultant: 3200000 },
+  '26002': { contractor: 28000000, consultant: 2100000 },
 };
 
 function computeSeedSummary(): ExecutiveKpiSummary {
-  const allNocs = [...INITIAL_NOCS_PROJECT_23016, ...INITIAL_NOCS_PROJECT_23015];
+  const allNocs = [...INITIAL_NOCS_PROJECT_26001];
   const totalNocs = allNocs.length;
   const approvedNocs = allNocs.filter((n) => n.status === 'Approved').length;
   const today = new Date().toISOString().split('T')[0];
@@ -52,7 +51,7 @@ function computeSeedSummary(): ExecutiveKpiSummary {
       projectName: p.name,
       stage: p.lifecycleStage || 'Pre-Construction',
       contractorAmount: p.clientContractorAmount || fin.contractor,
-      consultantAmount: fin.consultant,
+      consultantAmount: p.clientConsultantAmount || fin.consultant,
     };
   });
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Search, Filter, Download, Inbox } from 'lucide-react';
+import { Search, Download, Inbox } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,12 +21,15 @@ import { EscalationBadge } from './escalation-badge';
 import { getDownloadUrl } from '@/app/actions/documents';
 import { toast } from 'sonner';
 
-const DISCIPLINE_COLORS: Record<string, string> = {
+const DISCIPLINE_COLORS = {
   mep: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
-  architect: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800',
-  structure: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800',
-  civil: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
-};
+  architect:
+    'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800',
+  structure:
+    'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800',
+  civil:
+    'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
+} satisfies Record<string, string>;
 
 export function ReviewQueueTable({
   documents,
@@ -148,23 +151,42 @@ export function ReviewQueueTable({
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
-              <TableHead className="w-[120px] text-xs font-semibold">Project</TableHead>
-              <TableHead className="w-[140px] text-xs font-semibold">Sheet Number</TableHead>
+              <TableHead className="w-30 text-xs font-semibold">
+                Project
+              </TableHead>
+              <TableHead className="w-35 text-xs font-semibold">
+                Sheet Number
+              </TableHead>
               <TableHead className="text-xs font-semibold">Title</TableHead>
-              <TableHead className="w-[110px] text-xs font-semibold">Discipline</TableHead>
-              <TableHead className="w-[130px] text-xs font-semibold">Author</TableHead>
-              <TableHead className="w-[120px] text-xs font-semibold">Submission Date</TableHead>
-              <TableHead className="w-[70px] text-xs font-semibold">Rev</TableHead>
-              <TableHead className="w-[120px] text-right text-xs font-semibold">Actions</TableHead>
+              <TableHead className="w-27.5 text-xs font-semibold">
+                Discipline
+              </TableHead>
+              <TableHead className="w-32.5 text-xs font-semibold">
+                Author
+              </TableHead>
+              <TableHead className="w-30 text-xs font-semibold">
+                Submission Date
+              </TableHead>
+              <TableHead className="w-17.5 text-xs font-semibold">
+                Rev
+              </TableHead>
+              <TableHead className="w-30 text-right text-xs font-semibold">
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length > 0 ? (
               filtered.map((doc) => (
-                <TableRow key={doc.id} className="hover:bg-muted/30 transition-colors">
+                <TableRow
+                  key={doc.id}
+                  className="hover:bg-muted/30 transition-colors"
+                >
                   <TableCell className="text-xs font-medium text-foreground">
-                    <span className="font-semibold block">{doc.projectCode || '-'}</span>
-                    <span className="text-[10px] text-muted-foreground truncate block max-w-[110px]">
+                    <span className="font-semibold block">
+                      {doc.projectCode || '-'}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground truncate block max-w-27.5">
                       {doc.projectName || ''}
                     </span>
                   </TableCell>
@@ -172,7 +194,9 @@ export function ReviewQueueTable({
                     {doc.doc_number}
                   </TableCell>
                   <TableCell>
-                    <div className="text-xs font-medium text-foreground">{doc.title}</div>
+                    <div className="text-xs font-medium text-foreground">
+                      {doc.title}
+                    </div>
                     {doc.description && (
                       <div className="text-[11px] text-muted-foreground truncate max-w-xs">
                         {doc.description}
@@ -238,12 +262,15 @@ export function ReviewQueueTable({
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Inbox className="h-8 w-8 text-muted-foreground/50" />
                     <p className="text-sm font-medium text-foreground">
-                      {search || disciplineFilter !== 'all' || projectFilter !== 'all'
+                      {search ||
+                      disciplineFilter !== 'all' ||
+                      projectFilter !== 'all'
                         ? 'No submitted drawings match the selected filters.'
                         : 'No drawings currently waiting for review in assigned projects.'}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Drawings submitted by Engineers and Document Controllers will appear here.
+                      Drawings submitted by Engineers and Document Controllers
+                      will appear here.
                     </p>
                   </div>
                 </TableCell>

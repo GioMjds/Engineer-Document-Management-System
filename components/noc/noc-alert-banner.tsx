@@ -16,7 +16,7 @@ export function NocAlertBanner({
   onSelectFilter,
 }: NocAlertBannerProps) {
   const expiringCount = items.filter(
-    (i) => isExpiringSoon(i.expiryDate) && i.status !== 'Approved',
+    (i) => isExpiringSoon(i.expiryDate) && i.status !== 'Expired',
   ).length;
   const rejectedCount = items.filter((i) => i.status === 'Rejected').length;
   const pendingPaymentCount = items.filter(
@@ -89,7 +89,7 @@ export function NocAlertBanner({
             }`}
           >
             <Clock className="h-3.5 w-3.5" />
-            <span>{expiringCount} Expiring in 7 Days</span>
+            <span>{expiringCount} Expiring in 14 Days</span>
           </button>
         )}
 

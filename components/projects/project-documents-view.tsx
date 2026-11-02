@@ -179,7 +179,14 @@ export function ProjectDocumentsView({
         toast.error(res.error || 'Failed to download document');
         return;
       }
-      window.location.href = res.url;
+      const a = document.createElement('a');
+      a.href = res.url;
+      a.download = doc.file_name || `${doc.doc_number}.pdf`;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     } catch {
       toast.error('Network error during file download request');
     } finally {

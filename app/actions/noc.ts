@@ -82,8 +82,14 @@ export async function submitNocApplication(
     const supabase = await createClient();
     const now = new Date().toISOString();
 
-    if (UUID_REGEX.test(nocId)) {
-      const { data: currentNoc, error: fetchErr } = await supabase
+    if (!UUID_REGEX.test(nocId)) {
+      return {
+        success: false,
+        error: 'Statutory submission requires a persisted database NOC. Please select an active project.',
+      };
+    }
+
+    const { data: currentNoc, error: fetchErr } = await supabase
         .from('project_nocs')
         .select('id, project_id, blocking_sequence_no, override_reason')
         .eq('id', nocId)
@@ -164,7 +170,6 @@ export async function submitNocApplication(
           pendingRequirementsCount: pendingReqs.length,
         },
       });
-    }
 
     revalidatePath('/noc-tracker');
     revalidatePath('/');
@@ -198,8 +203,14 @@ export async function recordAuthorityDecision(
     const supabase = await createClient();
     const now = new Date().toISOString();
 
-    if (UUID_REGEX.test(nocId)) {
-      const { data: currentNoc } = await supabase
+    if (!UUID_REGEX.test(nocId)) {
+      return {
+        success: false,
+        error: 'Recording authority decision requires a persisted database NOC. Please select an active project.',
+      };
+    }
+
+    const { data: currentNoc } = await supabase
         .from('project_nocs')
         .select('id, current_revision')
         .eq('id', nocId)
@@ -277,7 +288,6 @@ export async function recordAuthorityDecision(
           metadata: { decision, rejectionReason, nextRevision },
         });
       }
-    }
 
     revalidatePath('/noc-tracker');
     revalidatePath('/');
@@ -311,23 +321,28 @@ export async function recordNocFeePayment(
     const supabase = await createClient();
     const now = new Date().toISOString();
 
-    if (UUID_REGEX.test(nocId)) {
-      const { error } = await supabase
-        .from('project_nocs')
-        .update({
-          payment_fee: amount,
-          is_paid: true,
-          payer_type: payer,
-          receipt_file_url: receiptFileUrl || null,
-          remarks: `Receipt #${receiptNumber}`,
-          updated_at: now,
-          updated_by: user.id,
-        })
-        .eq('id', nocId);
+    if (!UUID_REGEX.test(nocId)) {
+      return {
+        success: false,
+        error: 'Recording fee payments requires a persisted database NOC. Please select an active project.',
+      };
+    }
 
-      if (error) {
-        return { success: false, error: error.message };
-      }
+    const { error } = await supabase
+      .from('project_nocs')
+      .update({
+        payment_fee: amount,
+        is_paid: true,
+        payer_type: payer,
+        receipt_file_url: receiptFileUrl || null,
+        remarks: `Receipt #${receiptNumber}`,
+        updated_at: now,
+        updated_by: user.id,
+      })
+      .eq('id', nocId);
+
+    if (error) {
+      return { success: false, error: error.message };
     }
 
     revalidatePath('/noc-tracker');

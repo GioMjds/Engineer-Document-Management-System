@@ -106,6 +106,31 @@ export async function uploadDocument(
     return { success: false, error: 'Document number already exists.' };
   }
 
+
+
+  const validDiscipline = ['mep', 'architect', 'structure', 'civil'].includes(
+    discipline ?? '',
+  )
+    ? (discipline as 'mep' | 'architect' | 'structure' | 'civil')
+    : null;
+
+  // Enforce engineer discipline scope check: engineers can only submit drawings matching assigned discipline
+  if (user.role === 'engineer') {
+    const { data: member } = await supabase
+      .from('project_members')
+      .select('discipline')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (member?.discipline && validDiscipline && member.discipline !== validDiscipline) {
+      return {
+        success: false,
+        error: `Upload rejected: Engineers can only upload drawings for their assigned discipline (${member.discipline.toUpperCase()}).`,
+      };
+    }
+  }
+
   const filePath = `${user.id}/${crypto.randomUUID()}-${sanitizeFileName(file.name)}`;
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
@@ -120,11 +145,7 @@ export async function uploadDocument(
     return { success: false, error: `Upload failed: ${uploadError.message}` };
   }
 
-  const validDiscipline = ['mep', 'architect', 'structure', 'civil'].includes(
-    discipline ?? '',
-  )
-    ? (discipline as 'mep' | 'architect' | 'structure' | 'civil')
-    : null;
+
 
   const { data: insertedDoc, error: insertError } = await supabase
     .from('documents')

@@ -94,7 +94,7 @@ export function NocDataTable({
             const isOverridden = Boolean(item.overrideReason);
             const daysRemaining = calculateDaysRemaining(item.expiryDate);
             const expiring =
-              isExpiringSoon(item.expiryDate) && item.status !== 'Approved';
+              isExpiringSoon(item.expiryDate) && item.status !== 'Expired';
             const isSelected = selectedNocId === item.id;
 
             return (

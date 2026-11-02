@@ -1093,3 +1093,67 @@
   - Verification:
     - `npx tsc --noEmit` passed with 0 errors.
     - `pnpm build` passed compiling all 24 static and dynamic routes cleanly.
+
+
+- Implemented High-Density Zero-CLS Loading Skeletons with React Loading Skeleton:
+  - Background & Objective: Implement accessible, zero-CLS `loading.tsx` skeletons across `app/(app)/account`, `app/(app)/audit-logs`, `app/(app)/archive`, and `app/(app)/review` using `react-loading-skeleton` and UI/UX Pro Max design intelligence.
+  - Implementation:
+    - Designed [app/(app)/account/loading.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/account/loading.tsx) matching Account Profile & Settings layout with user identity card, personal details inputs, password/security form, and project assignment chips.
+    - Designed [app/(app)/audit-logs/loading.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/audit-logs/loading.tsx) matching AuditLogsWorkspace layout with header export action, 4 metric KPI tiles, search & category pill filters, and 6-column compliance ledger table.
+    - Designed [app/(app)/archive/loading.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/archive/loading.tsx) matching Archive document table with document numbers, titles, projects, previous status badges, archiver metadata, and download/restore/purge actions.
+    - Designed [app/(app)/review/loading.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/review/loading.tsx) matching ReviewQueueTable layout with pending count badge, search toolbar, discipline & project filters, and technical review table with escalation indicators.
+    - Integrated `SkeletonTheme` using `var(--skeleton-base)` and `var(--skeleton-highlight)` for light/dark mode adaptation.
+    - Enforced accessibility with `role="status"`, `aria-busy="true"`, `aria-live="polite"`, `<span className="sr-only">`, and `aria-hidden="true"`.
+  - Verification:
+    - `pnpm build` verified 24/24 static and dynamic routes compiled with zero errors.
+
+
+## Session 2026-11-02
+
+- Resolved Phase 1 Gaps, Redundancies & Post-MVP Enhancements:
+  - Background & Objective: Audit and resolve gaps, technical debt, and redundant mock patterns identified in Phase 1 scope following the MVP presentation.
+  - Implementation:
+    - Project Code Auto-Generation & Availability Verification:
+      - Implemented [getNextProjectCode](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/admin.ts) and [checkProjectCodeAvailability](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/admin.ts) to calculate the next sequential project code for the current year (`YY` + 3 digits, e.g. `26004`) across database records and seed projects.
+      - Updated [project-form.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/new/project-form.tsx) adding auto-fill on mount, an **Auto-Generate** button (`Sparkles` icon), and on-blur code availability status messages.
+    - Contract Schedules & Baseline Dates in Project Registration:
+      - Added optional Contract Schedules section in Step 1 of [project-form.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/new/project-form.tsx) with separate date fields for Design (commencement and completion) and Supervision (commencement and target completion).
+      - Updated [createProject](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/admin.ts) to populate contract schedules into `projects.milestones` during project initialization.
+    - Statutory Baseline NOC Instantiation Fallback:
+      - Updated [createProject](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/admin.ts) to clone statutory baseline NOC items and deliverable checklists from canonical templates when registered under authorities with unseeded matrix templates.
+    - Discipline Ownership Enforcement on Drawing Upload:
+      - Hardened [uploadDocument](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/documents.ts) to verify that an engineer user's assigned discipline on `project_members.discipline` matches the submittal discipline, preventing unauthorized cross-discipline uploads.
+    - Fixed 14-Day Expiry Logic Inversion & Status Evaluation:
+      - Corrected inverted `status !== 'Approved'` check in [lib/noc-summary.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/noc-summary.ts), [noc-alert-banner.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-alert-banner.tsx), and [noc-data-table.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-data-table.tsx) to `status !== 'Expired'`, ensuring approved permits within 14 days of expiry display alert badges and trigger banner filtering.
+      - Updated alert banner button label from "Expiring in 7 Days" to "Expiring in 14 Days" per statutory spec.
+      - Added dynamic expired status evaluation in [lib/server/noc-data.ts](file:///D:/giomj/Projects/engineer-docs-collab/lib/server/noc-data.ts) when `isLapsed(row.expiry_date)` is true.
+    - Removed Silent Mock Mutation Blackhole:
+      - Updated [app/actions/noc.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/noc.ts) across `submitNocApplication`, `recordAuthorityDecision`, and `recordNocFeePayment` to return explicit error messages on non-UUID sample IDs instead of silently reporting success without persisting.
+    - Cleaned Linter Warnings & Next.js Runtime Violations:
+      - Fixed React Compiler `react-hooks/immutability` error in [project-documents-view.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-documents-view.tsx) using programmatic anchor element downloads.
+      - Restored `width={28} height={28}` and `width={32} height={32}` with responsive classes on `<Image>` in [app-shell.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/app-shell.tsx).
+      - Removed unused imports and added `useCallback` to `getRoleOptions` in [project-team-dialog.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-team-dialog.tsx).
+  - Verification:
+    - `pnpm lint` passed with 0 errors and 0 warnings.
+    - `npx tsc --noEmit` passed with 0 errors.
+    - `pnpm build` passed compiling all 24 static and dynamic routes cleanly.
+
+- Implemented Loading Fallbacks, Impeccable Critique Remediation & Account Profile Page:
+  - Background & Objective: Implement route-specific loading states using `react-loading-skeleton` across `/account`, `/audit-logs`, `/archive`, and `/review`. Evaluate via UX heuristic critique and remediate all identified P0, P1, and P2 defects.
+  - Implementation:
+    - Account Route Implementation ([account/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/account/page.tsx), [account-workspace.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/account/account-workspace.tsx), [account/loading.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/account/loading.tsx)):
+      - Implemented full self-service account profile and credentials interface matching the 3-column skeleton layout (resolving P0 phantom UI layout collapse).
+      - Added server actions in [account.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/account.ts) for `updateAccountProfile` and `updateAccountPassword` with compliance audit logging (`USER_UPDATE`, `USER_PASSWORD_CHANGE`).
+      - Rendered user avatar badge, identity card, role and site office credentials, and assigned projects grid.
+    - Outdoor High-Glare Contrast Remediation ([app/globals.css](file:///D:/giomj/Projects/engineer-docs-collab/app/globals.css)):
+      - Raised light-mode `--skeleton-base` to `#cbd5e1` and `--skeleton-highlight` to `#e2e8f0` to meet WCAG 3:1 graphical element contrast under direct Dubai sunlight.
+    - Accessible Landmark Preservation ([audit-logs/loading.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/audit-logs/loading.tsx)):
+      - Replaced `<main aria-hidden="true">` with `<div aria-hidden="true">` to preserve top-level `<main>` landmark discoverability for screen reader users during hydration.
+      - Removed unreferenced `date` and `time` properties from mock `ROWS` structure.
+    - Review Queue Spacing & Token Alignment ([review/loading.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/review/loading.tsx)):
+      - Nested toolbar and review table in `<div className="space-y-4">` to match `ReviewQueueTable`, eliminating 8px layout reflow upon mount.
+      - Updated review count badge skeleton radius to 4px (`r={4}`) conforming to `DESIGN.md` status badge tokens.
+    - Archive Action Button Consistency ([archive/loading.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/archive/loading.tsx)):
+      - Set `hasPurge: true` uniformly across all row skeletons, avoiding flickering action slots during data loading.
+  - Verification:
+    - Executed `pnpm build`: all 24 routes compiled cleanly with 0 TypeScript or layout errors.
