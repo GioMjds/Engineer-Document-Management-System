@@ -7,10 +7,11 @@
   - Implementation:
     - Updated [docs/manual-mvp-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/manual-mvp-workflow.md):
       - Added Section 1: Executive Presentation Strategy & Priority Order (Value, privacy, and statutory compliance first before mechanics).
-      - Added Section 2: Business Rules & Jaylene Decision Matrix (Mapping verified requirements Rules 1-8 directly to codebase capabilities).
+      - Added Section 2: Business Rules & Jaylene Decision Matrix (Mapping verified requirements Rules 1-8 directly to codebase capabilities, with Tagalog/Taglish cue cards).
       - Added Section 3: Architecture, Authentication & Data Flow (Documenting inputs, server actions, database tables, and outputs across 6 core subsystems).
-      - Added Section 4: Nearest Dates & Sample Data Cheat Sheet (Standardized on simulated date `2026-10-22`, universal password `cvtec123`, and Project `26004`).
-      - Updated Section 6: Step-by-Step Manual Click Guide & Presenter Script with explicit "Presenter Talking Points for Ma'am Jaylene" on every step.
+      - Added Section 4: Nearest Dates & Sample Data Cheat Sheet (Standardized on simulated date `2026-10-22`, universal password `cvtec123`, and Project `26004`, with dual English/Taglish spoken cues).
+      - Added Global Productivity deck hotkeys (`Ctrl+K`, `Ctrl+B`) with verbal Taglish cues.
+      - Updated Section 6: Step-by-Step Manual Click Guide & Presenter Script with bilingual (English + Tagalog/Taglish) presenter script cues, spoken talking points, and expected screen outcomes on all 10 demo steps.
   - Verification:
     - Documentation formatting verified; all file links and code references checked against active codebase.
 
