@@ -1,32 +1,101 @@
 # CVTEC EDMS – Manual Click-by-Click MVP Presentation Guide
 
 > **Document Path**: `docs/manual-mvp-workflow.md`  
-> **Target Audience**: Presenter, Evaluator, Demo Lead  
-> **Test Project Code**: `26004` (or any fresh 5-digit number, e.g., `26005`)  
+> **Target Audience**: Presenter, Evaluator, Demo Lead, Client Evaluator (Ma'am Jaylene)  
+> **Test Project Code**: `26004` (or any fresh sequential 5-digit number, e.g., `26005`)  
 > **Baseline Reference**: [CVTEC_EDMS.md](file:///D:/giomj/Projects/engineer-docs-collab/CVTEC_EDMS.md)  
 > **Simulated System Date**: **22 Oct 2026**  
-> **Universal Password**: `cvtec123`
+> **Universal Test Password**: `cvtec123`
 
 ---
 
-## 1. Overview & Demo Path
+## 1. Executive Presentation Strategy & Priority Order
 
-This manual guide takes you step-by-step through the live user interface:
+When presenting the MVP to Ma'am Jaylene, prioritize business control, compliance confidence, and commercial security before walking through operational mechanics.
 
-1. **Global Navigation & Command Deck**: Use `Ctrl+K` for global search/actions and `Ctrl+B` for sidebar rail collapse.
-2. **Admin**: Manually register project `26004` using sequential auto-code generation, contract schedules, and searchable 2-phase consultant staffing.
-3. **Projects Workspace & Team Management**: Review registered project cards, modify team assignments post-registration, and inspect deliverables.
-4. **Discipline Engineer**: Upload drawing `R00` and demonstrate discipline ownership enforcement (e.g. Architectural cannot upload MEP).
-5. **Resident Engineer**: Review `R00` drawing and approve directly to `ready_for_authority`.
-6. **Area Manager**: Review escalated submittals and audit confidential consultant fees.
-7. **Authority Engineer**: Submit NOC, record payment receipt, toggle permanent clearances vs 14-day expiry radar, and execute dispatched resubmissions.
-8. **Document Controller**: Upload revisions, archive obsolete files, and execute 1-click restore from archive.
-9. **Stage Progression**: Advance across all four lifecycle stages: **Pre-Construction** $\rightarrow$ **Construction** $\rightarrow$ **Handover** $\rightarrow$ **Completed**!
-10. **CEO**: Verify executive KPIs, financial margin separation, 14-day expiry radar (ignoring permanent/completed clearances), and read-only lockdown.
+```mermaid
+flowchart TD
+    P1["1. Executive Problem & Margin Separation<br/>(CEO & Admin Oversight)"] --> P2["2. Project Registry & Sequential Governance<br/>(Admin: Project 26004)"]
+    P2 --> P3["3. Discipline Scope Enforcement<br/>(Architect blocked from MEP; Upload-only)"]
+    P3 --> P4["4. Two-Tier Engineering Review<br/>(RE Level-1 & AM Level-2 Escalation)"]
+    P4 --> P5["5. Statutory NOC Tracking & Expiry Radar<br/>(Auth Eng: Fees, 14-day alert, Permanent NOCs)"]
+    P5 --> P6["6. Document Governance & Recovery<br/>(DC: Upload R01, Archive, 1-Click Restore)"]
+    P6 --> P7["7. Full 4-Stage Lifecycle Progression<br/>(Pre-Construction to Completed)"]
+    P7 --> P8["8. CEO Verification & Read-Only Lockdown<br/>(Financial Margins & Zero Tampering)"]
+```
+
+### Why This Order Matters to the Client
+
+1. **Financial and Legal Protection First**: Proves confidential consultant fees (`AED 1,800,000`) are strictly concealed from site engineers and contractors, eliminating leaks.
+2. **Elimination of Folder Chaos**: Shows automated project numbering (`#26004`) replacing ad-hoc Windows/SharePoint folder creation.
+3. **Strict Accountability**: Shows engineers cannot tamper with files once submitted; only Document Controllers handle revisions and archiving.
+4. **Statutory Risk Elimination**: Demonstrates automatic 14-day alerts before municipal permits expire, preventing costly site stop-work orders while filtering out permanent clearances to prevent alert fatigue.
 
 ---
 
-## 2. Nearest Dates Cheat Sheet (Keep Handy While Typing)
+## 2. Business Rules & Jaylene Decision Matrix
+
+Every feature in the MVP maps directly to verified business requirements from Ma'am Jaylene (`CVTEC_EDMS.md`):
+
+| Rule        | Baseline Requirement                                                          | MVP Implementation & Enforcement                                                                                                                                                                       | Presenter Talking Point                                                                                                                       |
+| :---------- | :---------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Rule #1** | Client and contractor staff never log in.                                     | No external login accounts; client and contractor email fields exist strictly for transmittal notifications.                                                                                           | _"External developers and contractors never enter our internal EDMS. They receive verified email notifications and formal transmittals."_     |
+| **Rule #2** | Admin can approve drawings and edit NOC Matrix.                               | Admin possesses universal permissions across [`lib/permissions.ts`](file:///D:/giomj/Projects/engineer-docs-collab/lib/permissions.ts), including drawing review and sequence override.                | _"The Admin serves as the operational safety valve, able to clear bottlenecks or adjust statutory matrices when authorities update rules."_   |
+| **Rule #3** | Engineers cannot edit or delete their uploads.                                | Discipline Engineers have `document.upload` only; `document.edit` and `document.archive` are restricted to Document Controllers.                                                                       | _"Drawings are official records. Once Liam uploads R00, he cannot silently overwrite it. Any correction requires formal DC revision R01."_    |
+| **Rule #4** | CEO sees all projects in read-only mode.                                      | CEO dashboard provides global KPIs, financials, and NOC radars with zero creation, editing, or approval buttons.                                                                                       | _"Executive leadership gets complete visibility into delays, margins, and permit health without any risk of accidental operational edits."_   |
+| **Rule #5** | CVTEC lifecycle stages (Pre-Construction, Construction, Handover, Completed). | 4-stage lifecycle engine with automated stage gate prerequisites and readiness recalculation in [`lib/project-lifecycle.ts`](file:///D:/giomj/Projects/engineer-docs-collab/lib/project-lifecycle.ts). | _"Projects cannot advance blindly. Every stage requires verified technical approvals, specialist studies, and statutory NOCs."_               |
+| **Rule #6** | Only Admin registers new projects.                                            | `project.create` capability is locked strictly to `admin` in [`lib/permissions.ts`](file:///D:/giomj/Projects/engineer-docs-collab/lib/permissions.ts).                                                | _"Centralized registration prevents duplicate project codes and guarantees uniform consultant team staffing from day one."_                   |
+| **Rule #7** | Two-tier review hierarchy; RE cannot see consultant fee.                      | RE executes Level-1 technical review; flags high-risk drawings to AM; `amount.consultant.view` is hidden from RE.                                                                                      | _"Site engineers focus purely on technical compliance. Commercial consultancy agreements remain confidential between management and client."_ |
+| **Rule #8** | Strict fee recording roles.                                                   | Only Authority Engineer, Document Controller, and Admin can record NOC fee receipts; Area Manager is view-only for fees.                                                                               | _"Financial fee accounting is restricted to permitting specialists and controllers to prevent unauthorized payment logging."_                 |
+| **Radar**   | Smart Statutory Expiry Radar.                                                 | Permits expiring within 14 days trigger amber warnings; permanent clearances and completed projects are excluded.                                                                                      | _"Engineers never suffer alert fatigue. Permanent permits like Concept Approval never trigger false renewal alarms."_                         |
+
+---
+
+## 3. Architecture, Authentication & Data Flow
+
+### A. Authentication & Role Permissions
+
+- **Auth Engine**: Supabase Auth with secure HTTP-only cookies managed via [`@supabase/ssr`](file:///D:/giomj/Projects/engineer-docs-collab/package.json#L15) and [`lib/auth.ts`](file:///D:/giomj/Projects/engineer-docs-collab/lib/auth.ts).
+- **Canonical Roles**: `admin`, `ceo`, `area_manager`, `resident_engineer`, `authority_engineer`, `engineer`, `dc`.
+- **Discipline Matching**: Server actions verify the user's assigned discipline (`architect`, `structure`, `mep`, `civil`) against the target submittal scope.
+
+### B. Subsystem Data Flows (Input, Process, Output)
+
+```text
+1. Project Registration
+   - Input: Project Code (#26004), Master Authority, Contract Sums, Contract Dates, 8 Assigned Team Staff.
+   - Process: Server action createProjectAction (app/actions/admin.ts) inserts records into projects, project_members, and project_confidential.
+   - Output: Initialized project workspace at /projects/[code] with bound discipline permissions.
+
+2. Discipline Drawing Submission
+   - Input: PDF/DWG file, Document Number (26004-ARC-001), Title, Discipline, Revision (R00).
+   - Process: Server action uploadDocumentAction (app/actions/documents.ts) verifies canUploadDiscipline, writes bytes to Supabase storage documents bucket, inserts row into documents table.
+   - Output: Listed drawing row in /documents with status 'submitted'; triggers entry in RE Review Queue.
+
+3. Two-Tier Engineering Review
+   - Input: Review decision (Approve Direct / Escalate to AM / Reject with Comments).
+   - Process: Server action reviewDocumentAction (app/actions/reviews.ts) updates document status; logs review note and reviewer identity in document_reviews table.
+   - Output: Status becomes 'ready_for_authority', routes to AM queue, or returns to uploader as rejected for R01.
+
+4. Statutory Permitting & Fee Tracking
+   - Input: Authority Tracking Ref, Fee Amount (AED 12,000), Payer, Receipt Number, Expiry Date or Permanent Flag.
+   - Process: Server action updateNocStatusAction (app/actions/noc.ts) records receipt in project_nocs; calculates validity window against baseline date (2026-10-22).
+   - Output: Green 'Paid' receipt badge; Amber 'Expiring in 14 Days' alert or Green 'Permanent' badge; updates CEO radar.
+
+5. Stage Gate Prerequisite Engine
+   - Input: Milestone dates, uploaded specialist studies (Soil, Topo), approved authority NOCs.
+   - Process: evaluateStageGateReadiness (lib/project-lifecycle.ts) verifies mandatory prerequisites; advanceProjectStageAction (app/actions/admin.ts) updates projects.lifecycle_stage.
+   - Output: Stage stepper advances; unlocks next phase operational scope; Completed stage archives site radars.
+
+6. Governance, Archive & Recovery
+   - Input: Document Controller clicks Archive Document on row 26004-ARC-099.
+   - Process: archiveDocumentAction (app/actions/documents.ts) sets archived_at timestamp; restoreDocumentAction resets timestamp to null.
+   - Output: File is unlisted from active /documents; instantly recoverable via 1-click restore in /archive with full audit history.
+```
+
+---
+
+## 4. Nearest Dates & Sample Data Cheat Sheet
 
 All dates align with `CVTEC_EDMS.md` (Oct 14–22, 2026 baseline):
 
@@ -41,7 +110,7 @@ All dates align with `CVTEC_EDMS.md` (Oct 14–22, 2026 baseline):
 | **Concept Approval**                  | `2026-10-18` | Milestone drawer: Satisfies `gate-concept`                  |
 | **Design Commencement**               | `2026-10-19` | Milestone drawer: Design phase start                        |
 | **Planned Completion**                | `2026-10-21` | Milestone drawer: Design completion                         |
-| **Building Permit Issuance**          | `2026-10-22` | Milestone drawer: Satisfies `gate-permit` (Today's date)    |
+| **Building Permit Issuance**          | `2026-10-22` | Milestone drawer: Satisfies `gate-permit` (Simulated Today) |
 | **Site Commencement**                 | `2026-10-22` | Milestone drawer: Construction start date                   |
 | **Target Substantial Completion**     | `2026-11-15` | Milestone drawer: Construction target milestone             |
 | **Testing & Commissioning**           | `2026-11-20` | Milestone drawer: Handover milestone                        |
@@ -51,7 +120,7 @@ All dates align with `CVTEC_EDMS.md` (Oct 14–22, 2026 baseline):
 
 ---
 
-## 3. Global Productivity & Command Deck Features
+## 5. Global Productivity & Command Deck Features
 
 Before starting the project lifecycle demo, showcase the high-productivity shell features:
 
@@ -67,11 +136,12 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
 
 ---
 
-## 4. Step-by-Step Manual Click Guide
+## 6. Step-by-Step Manual Click Guide & Presenter Script
 
 ### Step 1: Register New Project Manually
 
-- **Login as**: `admin@test.com`
+- **Login as**: `admin@test.com` (System Administrator)
+- **Password**: `cvtec123`
 - **URL**: [localhost:3000/projects/new](http://localhost:3000/projects/new) (or open via `Ctrl+K` $\rightarrow$ **Register New Project**)
 
 #### Phase 1: Scope, Commercials & Contract Schedules
@@ -88,18 +158,16 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
 8. **Contractor Notification Emails**: Type `project@alfuttaim.com`.
 9. **Client–Contractor Contract Sum (AED)**: Type `25000000` (AED 25,000,000).
 10. **Client–Consultant Sum (AED) [Confidential]**: Type `1800000` (AED 1,800,000).
-    - _Point out_: Restricted to Admin, CEO, and Area Manager.
-11. **Contract Schedules & Target Dates (Optional)**:
+    - _Presenter Talking Point_: _"Notice this field is explicitly tagged as Confidential. It is saved to a restricted database table accessible only to Admin, CEO, and Area Manager. Site engineers will never see this number."_
+11. **Contract Schedules & Target Dates**:
     - **Design Contract**: Commencement `2026-10-14`, Completion `2026-10-21`.
     - **Supervision Contract**: Commencement `2026-10-22`, Target Completion `2026-11-30`.
-12. **Submission Options**:
-    - **Option A (Quick Register)**: Click **Quick Register (Skip Staffing)** to save immediately without assigning a team.
-    - **Option B (2-Phase Wizard)**: Click **Next: Assign Team $\rightarrow$** (bottom right).
+12. Click **Next: Assign Team $\rightarrow$** (bottom right).
 
-#### Phase 2: Consultant Team Staffing (Optional)
+#### Phase 2: Consultant Team Staffing
 
 1. **Searchable Staff Popover**:
-   - Each slot features a searchable popover (`StaffSelect`) grouping users into **Suggested for this role** (matching system roles first) and **Other staff**.
+   - Each slot features a searchable popover grouping users into **Suggested for this role** (matching system roles first) and **Other staff**.
 2. **Management & Permitting Oversight**:
    - **Resident Engineer (RE)**: Select `Resident Engineer Lead (re@test.com)`.
    - **Area Manager (AM)**: Select `Hassan Al-Maktoum (am3@test.com)`.
@@ -111,8 +179,8 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
    - **MEP Lead**: Select `Omar Farooq (mep@test.com)`.
    - **Civil Lead**: Select `Aisha Al-Nuaimi (civil@test.com)`.
 4. Click button **Register Project (8 Assigned)**.
-   - _Outcome_: Toast confirms `Project 26004 created with 8 team members.` You are redirected directly to the interactive project view at `/projects/[projectId]`.
-   - _Dirty State Guard_: If you try to cancel with unsaved data, the system opens a **Discard Unsaved Project?** confirmation modal to prevent accidental data loss.
+   - _Outcome_: Toast confirms `Project 26004 created with 8 team members.` You are redirected directly to the interactive project view at `/projects/26004`.
+   - _Presenter Talking Point_: _"In one single workflow, we have bound all 8 key engineering roles to this project. Security permissions are automatically configured."_
 
 ---
 
@@ -130,14 +198,14 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
 3. **View Documents**:
    - Click button **View Documents** to open the `ProjectDocumentsView` modal.
    - View deliverables and test programmatic file downloads.
-4. Click **NOC Tracker** button to transition directly into `/noc-tracker/[projectId]`.
+4. Click **NOC Tracker** button to transition directly into `/noc-tracker/26004`.
 
 ---
 
 ### Step 3: Milestone Baseline Setup & Custom Gate Prerequisites
 
 - **Login as**: `admin@test.com`, `am3@test.com`, or `re@test.com`
-- **URL**: [localhost:3000/noc-tracker](http://localhost:3000/noc-tracker)
+- **URL**: [localhost:3000/noc-tracker/26004](http://localhost:3000/noc-tracker/26004)
 
 1. Select Project **26004** from the top project picker.
 2. In the top right header, click **Inspect Gate Checklist**.
@@ -155,22 +223,7 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
      - **Target Substantial Completion**: `2026-11-15`
    - Click **Save Milestone Dates**.
    - _Outcome_: Checklist recalculates immediately. `gate-concept` and `gate-permit` update to green `Satisfied` badges.
-5. **Default Stage Gate Prerequisites & Role Satisfaction Matrix**:
-   - **Pre-Construction -> Construction**:
-     - `gate-topo` (**Topographical Affection Survey Completed**): Survey Specialist / Lead Engineer approves survey in Third-Party Studies drawer or sets `surveyCompletionDate` in Milestone Dates.
-     - `gate-geotech` (**Geotechnical Soil Investigation Approved**): Geotechnical Specialist / Area Manager / Lead Engineer uploads borehole report and clicks **Approve** in the Third-Party Studies drawer or uploads approved geotech document.
-     - `gate-concept` (**Concept Master Plan & Affection Sign-Off**): Project Manager / Area Manager records `conceptApprovalDate` under Milestone Dates Reference.
-     - `gate-noc-*` (**Statutory Authority NOCs - Design/Information**): Authority Liaison / Discipline Engineer marks NOC `Approved` or `Not Needed` (Exempt) in the NOC tracker table.
-     - `gate-permit` (**Official Building Permit Issuance**): Project Manager / Area Manager records `buildingPermitDate` under Milestone Dates Reference.
-   - **Construction -> Handover**:
-     - `gate-noc-*` (**Statutory Construction NOCs**): Authority Liaison / Site Engineer marks Construction NOC `Approved` or `Not Needed`.
-     - `gate-superstructure` (**Core & Structural Superstructure Inspection**): Lead Structural Engineer marks Structure discipline `Approved` in the Discipline Progress card or uploads an approved structural inspection document.
-     - `gate-mep-submittal` (**MEP Riser & Chilled Water Commissioning Sign-off**): Lead MEP Engineer marks MEP discipline `Approved` in the Discipline Progress card or uploads an approved MEP drawing.
-   - **Handover -> Completed**:
-     - `gate-noc-*` (**Statutory Handover NOCs**): Authority Liaison / QA-QC Engineer marks Handover NOC `Approved` or `Not Needed`.
-     - `gate-dcd` (**Civil Defence Fire & Life Safety Clearance**): Authority Liaison marks DCD NOC `Approved` or manager enters `civilDefenceInspectionDate`.
-     - `gate-bcc` (**Building Completion Certificate (BCC)**): Project Manager / Area Manager enters `bccIssuanceDate` in Milestone Dates Reference.
-6. **Custom Stage Gate Prerequisites**:
+5. **Custom Stage Gate Prerequisites**:
    - In the drawer, click button **+ Add Gate**.
    - Title: `Client Special Aesthetic Clearance`.
    - Category: Select `Discipline Technical Approval`.
@@ -178,48 +231,33 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
    - Action Hint: `Obtain written sign-off from Client Project Director`.
    - Click **Save Gate Prerequisite**.
    - _Outcome_: Custom prerequisite attaches to the stage gate checklist with an interactive toggle switch and delete button for authorized managers.
+   - _Presenter Talking Point_: _"Every project has unique client requirements. The system allows adding mandatory stage gates on the fly without database migrations."_
 
 ---
 
-### Step 3B: Operational Discipline Progress & Specialist Clearances (/noc-tracker vs /dashboard)
+### Step 4: Operational Discipline Progress & Specialist Clearances (/noc-tracker vs /dashboard)
 
 - **Dedicated Operational Workspace**: [localhost:3000/noc-tracker/26004](http://localhost:3000/noc-tracker/26004)
 - **Executive Read-Only Overview**: [localhost:3000/dashboard](http://localhost:3000/dashboard)
 
-1. **Clear Separation of Operational Execution vs Executive Analytics**:
-   - **NOC Tracker (`/noc-tracker/[projectID]`)**: Dedicated operational workspace where authorized roles (Discipline Engineers, Resident Engineers, Area Managers) update discipline milestones, manage authority review stages, and submit/manage third-party specialist studies and files.
-   - **Executive Dashboard (`/dashboard`)**: Pure read-only analytics and KPI oversight across the portfolio. Discipline cards display read-only badges ("Analytics View") and direct users with "Open in NOC Tracker" buttons to prevent operational submission confusion on executive summary views.
-2. **Integrated Discipline Progress Tracking on NOC Tracker**:
-   - Displays progress across core engineering disciplines:
-     - **Architectural**: Concept, Schematic, Detail Design, Tender / IFC.
-     - **Structural**: Calculations, Foundation Drawings, Superstructure, Peer Review.
-     - **MEP**: HVAC Load, Electrical Schematic, Plumbing / Drainage, Firefighting.
-     - **Authority Approvals**: Design Stage, Construction Stage, Revision Stage.
-     - **Third-Party Specialists**: Soil Investigation, Traffic Impact Study, Acoustic, Environmental, Waste Management, Wind Tunnel.
-3. **Discipline Updates & Real-time Sync**:
-   - Resident Engineers, Area Managers, and authorized Discipline Engineers click discipline status badges or "Manage Studies & Files" on `/noc-tracker/[projectID]` to update status (In Progress, Under Review, Approved, Rejected) or upload specialist clearance files.
-   - Updates persist to `projects.milestones.disciplineStatus` and broadcast in real time across the application.
-4. **Specialist Studies Submittal, Review & Revision Workflow**:
-   - **Dynamic File Attachment (No Static/Simulated Mock Files)**:
-     - Specialist consultants and engineers click **Attach Report**, **Replace**, or **Upload Revision** to directly open their device's native file picker (`.pdf`, `.dwg`, `.docx`, etc.).
-     - The system dynamically parses actual file names and calculates exact byte sizes (KB/MB) instead of populating static hardcoded values.
-     - Uploaders and managers can click the trash icon button to remove an erroneous file submission, returning that scope to `Pending Submission`.
-   - **View & Download Submittals**:
-     - Any authorized project user can click the **Download** button on any scope with an uploaded file.
-     - Automatically generates and downloads technical transmittal document containing project metadata, file name, revision tag, and authority clearance stamps.
-   - **Technical Review (Approve / Reject with Remarks)**:
-     - Reviewers (`resident_engineer`, `area_manager`, `admin`) see action buttons for pending submittals.
-     - **Approve**: Marks the study `Approved Study` (satisfying downstream stage gate prerequisites).
-     - **Reject**: Opens an inline review remarks prompt. Reviewer inputs specific statutory deficiencies (e.g. `Borehole depth insufficient for high-rise loads`). Marks status `Rejected (Revise & Resubmit)` and logs reviewer attribution.
-   - **Revision Resubmittal**:
-     - Lead Engineers and Specialist Consultants see the prominent **Upload Revision** button on rejected scopes.
-     - Re-uploading automatically increments the revision index (e.g. `R00` -> `R01`), resets status to `Uploaded / Under Review`, and clears prior rejection blocks for re-inspection.
+1. **Operational Separation**:
+   - Point out that `/dashboard` is purely read-only analytics to prevent accidental changes.
+   - Operational file uploads and discipline status updates occur strictly inside `/noc-tracker/[projectID]`.
+2. **Specialist Studies Submittal, Review & Revision Workflow**:
+   - In the **Third-Party Specialist Studies** card on `/noc-tracker/26004`, locate **Geotechnical Soil Investigation**.
+   - Click **Attach Report** to open the native device file picker. Select any sample PDF (e.g., `borehole-report.pdf`).
+   - Notice the system dynamically calculates the exact file size and displays the real file name.
+3. **Technical Review & Approval**:
+   - Logged in as `re@test.com` or `admin@test.com`, click **Approve** on the uploaded study.
+   - Status changes to green badge **Approved Study**.
+   - _Outcome_: Re-open **Inspect Gate Checklist**; observe that `gate-geotech` is now 100% **Satisfied**!
 
 ---
 
-### Step 4: Discipline Engineer Drawing Upload & Scope Enforcement
+### Step 5: Discipline Engineer Drawing Upload & Scope Enforcement
 
 - **Login as**: `architect@test.com` (Liam Thorne – Architectural Lead)
+- **Password**: `cvtec123`
 - **URL**: [localhost:3000/documents](http://localhost:3000/documents)
 
 1. Click button **+ Upload Document** (top right).
@@ -231,6 +269,7 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
    - Attach any sample file and click **Upload & Submit**.
    - _Outcome_: The server action rejects the submittal with:  
      `Upload rejected: Engineers can only upload drawings for their assigned discipline (ARCHITECT).`
+   - _Presenter Talking Point_: _"Ma'am Jaylene, notice that even if an architect accidentally tries to submit MEP drawings, the system blocks it on the server. Scope discipline integrity is strictly guaranteed."_
 3. **Correct Architectural Upload**:
    - Switch Discipline to: `Architectural`.
    - Document Number: `26004-ARC-001`.
@@ -238,73 +277,76 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
    - Revision: `R00`.
    - Attach file $\rightarrow$ Click **Upload & Submit**.
    - _Outcome_: Drawing appears in the documents list with a blue **Submitted** badge.
-4. _Key Presenter Talking Point_: Point out that Liam **cannot edit or delete** his upload. Under CVTEC policy (Jaylene Answer #3), engineers only upload; adjustments and archiving require the Document Controller.
+4. **Demonstrate Upload-Only Guardrail (Jaylene Rule #3)**:
+   - Point out that Liam **cannot edit or delete** his upload.
+   - _Presenter Talking Point_: _"Per CVTEC policy, engineers upload drawings but cannot alter or delete them. If Liam made a mistake, he must notify the Document Controller to upload revision R01."_
 
 ---
 
-### Step 5: Resident Engineer Level-1 Technical Review
+### Step 6: Resident Engineer Level-1 Technical Review
 
 - **Login as**: `re@test.com` (Resident Engineer Lead)
+- **Password**: `cvtec123`
 - **URL**: [localhost:3000/review](http://localhost:3000/review)
 
 1. In the Review Queue, filter or locate `26004-ARC-001`.
 2. Click **Review** on the row.
 3. The `DrawingReviewModal` opens:
-   - Show the 3 decision buttons:
-     - `Reject + Comment` (routes back to Liam for R01).
-     - `Escalate to Area Manager` (second-level managerial sign-off).
-     - `Approve (Direct)`.
+   - Point out the 3 decision pathways:
+     - `Reject + Comment`: Demands remarks and routes back to Liam for `R01`.
+     - `Escalate to Area Manager`: Flags drawing for managerial second-level review (e.g., major design deviation).
+     - `Approve (Direct)`: Standard Level-1 technical sign-off.
 4. Click **Approve (Direct)**.
-5. _Outcome_: Drawing status updates to green badge **Ready for Authority**. Submittal leaves review queue.
+5. _Outcome_: Drawing status updates to green badge **Ready for Authority**. Submittal clears from the pending review queue.
 
 ---
 
-### Step 6: Authority Engineer Permitting, Permanent Clearances & Expiry Radar
+### Step 7: Authority Engineer Permitting, Permanent Clearances & Expiry Radar
 
-- **Login as**: `ae3@test.com` (Zayed Al-Hashimi)
-- **URL**: [localhost:3000/noc-tracker](http://localhost:3000/noc-tracker)
+- **Login as**: `ae3@test.com` (Zayed Al-Hashimi – Authority Engineer)
+- **Password**: `cvtec123`
+- **URL**: [localhost:3000/noc-tracker/26004](http://localhost:3000/noc-tracker/26004)
 
 1. Select Project **26004**.
 2. Click on the first NOC row: `DEWA Substation & Electrical Load NOC`.
 3. **Statutory Requirements & Custom Deliverables**:
    - Under **Statutory Checklist Requirements**, verify items are satisfied.
-   - Point out the **+ Add Requirement** input to add custom project deliverables, or the delete button to remove obsolete requirements.
+   - Point out the **+ Add Requirement** input to add custom project deliverables.
    - Click button **Submit Application**.
    - Input Authority Tracking Ref: `DEWA-2026-004`, Date: `2026-10-22`.
    - Click **Confirm Submission**. Status changes to **Submitted** (`applied`).
-4. **Authority Fee Settlement**:
+4. **Authority Fee Settlement (Jaylene Rule #8)**:
    - In Drawer, scroll to **Record Fee Payment**:
    - Payer: Select `Contractor` (or `Consultant Advance` / `Client`).
    - Amount: `12000`.
    - Receipt Number: `RCP-DEWA-004`.
    - Click **Record Payment**. Green `Paid` badge displays with payer classification.
+   - _Presenter Talking Point_: _"Notice that only the Authority Engineer, Document Controller, or Admin can record fee receipts. This prevents untracked municipal cash advances."_
 5. **Authority Decision Recording: Temporary vs Permanent Clearances**:
    - Click button **Record Decision**:
    - **Scenario A: Temporary Permit (14-Day Expiry Radar)**:
      - Decision: `Approved / Obtained`.
      - Certificate Ref: `CERT-DEWA-004`.
-     - Expiry Date: **`2026-11-04`** (13 days from today).
+     - Expiry Date: **`2026-11-04`** (13 days from simulated date 22 Oct 2026).
      - Click **Confirm Obtained**. NOC status updates to **Approved**.
      - _Outcome_: Amber `Expiring in 14 Days` badge displays in the alert banner and CEO radar.
-   - **Scenario B: Permanent Milestone Clearance (No False Alarms)**:
+   - **Scenario B: Permanent Milestone Clearance (Zero False Alarms)**:
      - Click **Update Validity** on the approved NOC.
      - Check the checkbox: **Permanent Clearance / Milestone NOC**.
      - Notice the Expiry Date field clears and disables with helper text: `This clearance is permanent and will not trigger renewal alerts.`
      - Click **Confirm Obtained**.
-     - _Outcome_: Table displays green **Permanent** badge in Expiry Date column. Zero false alerts on dashboard!
+     - _Outcome_: Table displays green **Permanent** badge in Expiry Date column. No false alerts generated!
 6. **Dispatched Drawing Resubmission Flow**:
-   - If a NOC is **Rejected** or **Expired**, the drawer unlocks **Resubmit Rejected Drawings** / **Resubmit for Revalidation**.
-   - Enter revised file name (e.g. `DWG-26004-DCD-R01.pdf`) and click **Confirm & Dispatch**.
-   - The submittal directly updates to **Submitted** (`applied`) with today's dispatch date as revision `R01`.
-7. **Two-Tier Expiry Radar (Upcoming vs Lapsed)**:
-   - **14-Day Amber Warning**: Permits expiring within 14 days trigger an amber alert button.
-   - **Permit Expired Red Alert**: Lapsed validity dates raise a prominent red `Permit Expired` alert button with relative lapsed day counts.
+   - If an authority rejects or requires modifications, the drawer unlocks **Resubmit Rejected Drawings**.
+   - Enter revised file name (`DWG-26004-DCD-R01.pdf`) and click **Confirm & Dispatch**.
+   - Submittal resets to **Submitted** (`applied`) as revision `R01`.
 
 ---
 
-### Step 7: Document Controller Governance & Restore
+### Step 8: Document Controller Governance & 1-Click Restore
 
 - **Login as**: `dc@test.com` (Principal Document Controller)
+- **Password**: `cvtec123`
 - **URL**: [localhost:3000/documents](http://localhost:3000/documents)
 
 1. Select Project `26004`.
@@ -320,23 +362,21 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
    - Click **Archive** in the left sidebar ([localhost:3000/archive](http://localhost:3000/archive)).
    - Locate `26004-ARC-099`.
    - Click button **Restore**.
-   - _Outcome_: Document safely restores back to active directory with audit log intact.
+   - _Outcome_: Document safely restores back to the active directory with audit log intact.
+   - _Presenter Talking Point_: _"In CVTEC EDMS, no drawing is ever permanently destroyed by accident. Everything is restorable with a full audit log."_
 
 ---
 
-### Step 8: Complete Full 4-Stage Lifecycle ($\rightarrow$ Handover $\rightarrow$ Completed!)
+### Step 9: Complete Full 4-Stage Lifecycle Progression
 
 - **Login as**: `admin@test.com` or `am3@test.com`
-- **URL**: [localhost:3000/noc-tracker](http://localhost:3000/noc-tracker)
+- **URL**: [localhost:3000/noc-tracker/26004](http://localhost:3000/noc-tracker/26004)
 
 1. **Advance Pre-Construction $\rightarrow$ Construction**:
    - Open `/noc-tracker` for Project `26004`.
    - Click **Inspect Gate Checklist**.
-   - In the drawer footer, click:
-     - **Advance to Construction** (if all gates satisfied) OR
-     - **Advance to Construction (Advisory Override)** (amber button if specialist survey is still pending).
+   - In the drawer footer, click **Advance to Construction** (or amber **Advance to Construction (Advisory Override)** if third-party studies are pending).
    - _Outcome_: Project stage changes to **Construction**! Stepper marks Construction active.
-
 2. **Advance Construction $\rightarrow$ Handover**:
    - In **Construction**, click **Inspect Gate Checklist** again.
    - Click **Edit Dates** under Milestone Dates Reference:
@@ -344,44 +384,42 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
      - Civil Defence Inspection: `2026-11-25`
      - Building Completion Certificate (BCC): `2026-11-30`
      - Click **Save Milestone Dates**.
-   - In the drawer footer, click:
-     - **Advance to Handover (Advisory Override)** or **Advance to Handover**!
+   - In the drawer footer, click **Advance to Handover**!
    - _Outcome_: Project stage changes to **Handover**! Stepper marks Handover active.
-
 3. **Advance Handover $\rightarrow$ Completed (Full Project Completion)**:
    - With Project `26004` now in **Handover**, click **Inspect Gate Checklist** once more.
    - Notice the terminal gate evaluation checks BCC and permanent clearances.
-   - In the drawer footer, click:
-     - **Complete Project Lifecycle** (or amber **Complete Project Lifecycle (Advisory Override)**).
+   - In the drawer footer, click **Complete Project Lifecycle**.
    - _Outcome_: Project stage changes to **Completed**! Stepper marks terminal completion badge.
-   - _Completed projects have no active site permits and are automatically excluded from urgent renewal radars._
+   - _Key Point_: Completed projects have no active site operations and are automatically excluded from urgent renewal radars.
 
 ---
 
-### Step 9: CEO Executive Health & Financial Margin Audit
+### Step 10: CEO Executive Health & Financial Margin Audit
 
-- **Login as**: `ceo@test.com`
+- **Login as**: `ceo@test.com` (Chief Executive Officer)
+- **Password**: `cvtec123`
 - **URL**: [localhost:3000/dashboard](http://localhost:3000/dashboard)
 
-1. **Verify Financial Separation**:
+1. **Verify Financial Separation (Jaylene Rule #7)**:
    - CEO sees **Contractor Contract Sum (AED 25,000,000)**.
    - CEO sees **Confidential Consultant Fee (AED 1,800,000)** and calculates gross margin.
-   - (Point out that Resident Engineer and Discipline Engineers are blocked from seeing the AED 1.8M consultant fee).
+   - _Presenter Talking Point_: _"Notice that as CEO, I have full visibility into our consultancy fees and margins. The Resident Engineer and Liam cannot see this AED 1.8M figure."_
 2. **Verify Lifecycle Progression**:
-   - CEO sees Project `26004` in **Handover** or **Completed** stage.
+   - CEO sees Project `26004` listed in **Handover** or **Completed** stage.
 3. **Verify Smart Expiry Radar**:
    - Look at **Upcoming Expiries Panel**.
    - Permanent clearances and completed projects never appear as false renewal alarms.
    - Only active temporary permits expiring within 14 days display in amber.
-4. **Verify Tamper-Proof Safeguards**:
+4. **Verify Tamper-Proof Safeguards (Jaylene Rule #4)**:
    - Observe that the CEO dashboard contains **zero upload, edit, or approval buttons**. Complete read-only executive oversight.
 
 ---
 
-## 5. Resetting or Creating Another Project Anytime
+## 7. Resetting or Creating Another Project Anytime
 
-If you want to run the manual demo again with a completely blank canvas:
+If you want to run the presentation demo again with a completely blank canvas:
 
-- Press `Ctrl + K` and select **Register New Project**, or go to `/projects/new`.
-- Click **Auto-Generate** to get the next clean sequential code (e.g. `26005`).
-- Follow Steps 1 through 9 above.
+1. Press `Ctrl + K` and select **Register New Project**, or navigate directly to `/projects/new`.
+2. Click the **Auto-Generate** (`#` icon) button to obtain the next sequential code (e.g., `26005`).
+3. Follow Steps 1 through 10 above.

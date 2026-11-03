@@ -1,5 +1,19 @@
 # Activity Log
 
+## Session 2026-11-03
+
+- Updated and Expanded Manual MVP Presentation Workflow for Client Presentation (Ma'am Jaylene):
+  - Background & Objective: Structured a client-focused presentation guide and prioritized roadmap for presenting the CVTEC EDMS MVP to evaluator Ma'am Jaylene.
+  - Implementation:
+    - Updated [docs/manual-mvp-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/manual-mvp-workflow.md):
+      - Added Section 1: Executive Presentation Strategy & Priority Order (Value, privacy, and statutory compliance first before mechanics).
+      - Added Section 2: Business Rules & Jaylene Decision Matrix (Mapping verified requirements Rules 1-8 directly to codebase capabilities).
+      - Added Section 3: Architecture, Authentication & Data Flow (Documenting inputs, server actions, database tables, and outputs across 6 core subsystems).
+      - Added Section 4: Nearest Dates & Sample Data Cheat Sheet (Standardized on simulated date `2026-10-22`, universal password `cvtec123`, and Project `26004`).
+      - Updated Section 6: Step-by-Step Manual Click Guide & Presenter Script with explicit "Presenter Talking Points for Ma'am Jaylene" on every step.
+  - Verification:
+    - Documentation formatting verified; all file links and code references checked against active codebase.
+
 ## Session 2026-11-02
 
 - Implemented Safe Project Deletion and Archiving with Safety Code Guards for Admin:
