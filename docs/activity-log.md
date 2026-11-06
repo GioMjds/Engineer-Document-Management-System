@@ -1,6 +1,51 @@
 # Activity Log
 
+## Session 2026-11-06
+
+- Fixed Hidden Bugs in Project Registration Across Supabase RLS and Next.js Navigation:
+  - Background & Objective: Diagnosed and resolved blocking issues preventing project registration, including missing RLS policies for admin on `public.projects`, user-scoped client usage in server action, code collision in availability checks, and intercepted route collision in Next.js navigation.
+  - Implementation:
+    - Created [supabase/migrations/20261106000000_admin_projects_rls.sql](file:///D:/giomj/Projects/engineer-docs-collab/supabase/migrations/20261106000000_admin_projects_rls.sql): Enabled full CRUD RLS policy (`admin_projects_all`) on `public.projects` for users with role `'admin'`.
+    - Updated [app/actions/admin.ts](file:///D:/giomj/Projects/engineer-docs-collab/app/actions/admin.ts):
+      - Migrated `createProject`, `getNextProjectCode`, and `checkProjectCodeAvailability` to use service role `adminClient`, avoiding RLS rejection and false-positive code availability checks.
+      - Aligned `createProjectSchema` field lengths (`min(1)`) and trimmed string inputs to match client-side form validation.
+      - Handled empty date strings cleanly to prevent invalid date payloads.
+      - Added explicit error inspection on `project_members.insert`.
+    - Updated [app/(app)/@modal/(.)projects/[code]/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/@modal/(.)projects/[code]/page.tsx): Added route guard redirecting `code === 'new'` to `/projects?create=true` to prevent 404 collisions with deleted modal route.
+    - Updated navigation references in [components/layout/command-menu.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/command-menu.tsx) and [components/noc/noc-project-picker.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-project-picker.tsx) to `/projects?create=true`.
+  - Verification:
+    - `pnpm typegen`: Route types generated successfully.
+    - `npx tsc --noEmit`: 0 type errors.
+    - `npx eslint`: 0 errors.
+
+- Refactored Projects Workspace Client for Code Quality and Removed Lengthy Branching:
+  - Background & Objective: Resolves code bloat and nested if-else ladders in `components/projects/projects-workspace-client.tsx`, streamlining role filter matching, user assignment detection, metric accumulation, and card rendering.
+  - Implementation:
+    - Updated [components/projects/projects-workspace-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/projects-workspace-client.tsx):
+      - Created `PROJECT_ROLE_DEFINITIONS` metadata structure and `ROLE_FILTER_TO_FIELD_MAP` lookup dictionary, replacing 10 repetitive `else if` filter branches and 8 sequential assignment checks with declarative lookups.
+      - Converted `stageTone` switch statement into lookup record `STAGE_TONES`.
+      - Optimized portfolio KPI summary calculation into a single O(N) loop instead of 4 separate array filtering passes.
+      - Replaced 75 lines of redundant KPI card JSX with mapped `summaryCards` array.
+      - Replaced 48 lines of repeated discipline role tiles in `ProjectGridCard` with `PROJECT_ROLE_DEFINITIONS.map()`.
+      - Optimized text search with short-circuit evaluation (`||`) and null-safe role search.
+      - Centralized `handleDeleteProject` handler and hoisted static `DEFAULT_ASSIGNED_ROLES`.
+  - Verification:
+    - `npx tsc --noEmit`: 0 type errors.
+    - `npx eslint components/projects/projects-workspace-client.tsx`: 0 errors, 0 warnings.
+    - `npm run build`: Compiled all 24 routes cleanly.
+
 ## Session 2026-11-03
+
+- Expanded Step 3 & Step 4 in Manual MVP Presentation Workflow for NOC Tracker & Technical Coordination:
+  - Background & Objective: Enriched presentation guide for `/noc-tracker/[projectID]` to thoroughly cover discipline progress (Architecture, Structure, MEP), cross-discipline coordination, authorities stages, and third-party specialist studies/files before evaluating stage gates.
+  - Implementation:
+    - Updated [docs/manual-mvp-workflow.md](file:///D:/giomj/Projects/engineer-docs-collab/docs/manual-mvp-workflow.md):
+      - Expanded Section 3.B: Added dedicated Subsystem Data Flow #2 covering Discipline Progress, Technical Coordination & Specialist Studies.
+      - Restructured Step 3: "Operational Command Center: Discipline Progress, Technical Coordination & Specialist Studies (/noc-tracker/26004)". Documented Phase A (Discipline progress tracking, remarks, user audit stamps, permissions), Phase B (Authorities stages synchronization), Phase C (5 specialist scopes, file attachment, R00 -> R01 revisioning, RE approval/rejection with mandatory comments, downloads/transmittals), and Phase D (Executive vs operational separation).
+      - Structured Step 4: "Milestone Baseline Setup & Dynamic Stage Gate Prerequisites (/noc-tracker/26004)". Documented baseline dates reference, dynamic gate evaluation (linking approved Geotech study to gate-geotech), custom gate creation, and stage advancement gating.
+      - Enriched both steps with dual English talking points and Tagalog/Taglish spoken scripts.
+  - Verification:
+    - Documentation formatting, file references, and permission rules verified against active codebase.
 
 - Updated and Expanded Manual MVP Presentation Workflow for Client Presentation (Ma'am Jaylene):
   - Background & Objective: Structured a client-focused presentation guide and prioritized roadmap for presenting the CVTEC EDMS MVP to evaluator Ma'am Jaylene.
@@ -1555,3 +1600,27 @@
     - pnpm exec tsc --noEmit passed with 0 errors.
     - pnpm exec eslint passed on modified files with 0 warnings.
     - Production build compiled all 24 routes cleanly.
+
+- Replaced Intercepted Route Project Registration with Client-Side UI Modal:
+  - Background & Objective: Removed fragile Next.js parallel/intercepting route `app/(app)/@modal/(.)projects/new` to prevent production routing, browser history, and cache issues, replacing it with a clean client-side UI modal on the `/projects` workspace.
+  - Implementation:
+    - [app/(app)/@modal/(.)projects/new](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/@modal/(.)projects/new):
+      - Deleted the intercepted route directory and its page component.
+    - [components/projects/project-dialog-modal.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/project-dialog-modal.tsx):
+      - Refactored component to accept controlled `open` and `onOpenChange` props.
+      - Removed reliance on `router.back()` so modal close and discard operations operate purely in local UI state without disturbing browser navigation history.
+      - Maintained unsaved changes safeguard with discard confirmation dialog.
+    - [app/(app)/projects/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/page.tsx):
+      - Added `searchParams` inspection for `create=true` or `new=true` deep link opening.
+      - Fetched master authorities via `getMasterAuthorities()` and passed them directly to `ProjectsWorkspaceClient`.
+    - [components/projects/projects-workspace-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/projects/projects-workspace-client.tsx):
+      - Converted "Register Project" button from Next.js `<Link>` to interactive button triggering `isCreateModalOpen`.
+      - Mounted `ProjectDialogModal` alongside other project action modals (`ProjectTeamDialog`, `DeleteProjectDialog`).
+      - Cleaned up `create=true` search parameter on modal dismissal using `router.replace`.
+    - [app/(app)/projects/new/page.tsx](file:///D:/giomj/Projects/engineer-docs-collab/app/(app)/projects/new/page.tsx):
+      - Converted direct access route into a clean redirect to `/projects?create=true` for backwards compatibility.
+    - [components/dashboard/executive-dashboard-client.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/dashboard/executive-dashboard-client.tsx), [components/noc/noc-project-picker.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/noc/noc-project-picker.tsx), and [components/layout/command-menu.tsx](file:///D:/giomj/Projects/engineer-docs-collab/components/layout/command-menu.tsx):
+      - Updated project registration links and command menu shortcuts to target `/projects?create=true`.
+  - Verification:
+    - Executed `pnpm run build` with Turbopack, confirming zero errors and clean route table without `/(.)projects/new`.
+    - Executed `pnpm run lint` with ESLint, confirming zero errors or warnings.

@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
@@ -13,6 +13,10 @@ export default async function InterceptedProjectPage({
   params,
 }: PageProps<'/projects/[code]'>) {
   const { code } = await params;
+  if (code === 'new') {
+    redirect('/projects?create=true');
+  }
+
   const user = await requireUser();
   const canDeleteProject = can(user.role, 'project.delete');
 

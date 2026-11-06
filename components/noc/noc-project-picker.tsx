@@ -197,7 +197,7 @@ export function NocProjectPicker({ cards, canCreate }: NocProjectPickerProps) {
         </p>
         {canCreate && (
           <Link
-            href="/projects/new"
+            href="/projects?create=true"
             className={cn(buttonVariants(), 'gap-1.5')}
           >
             <FolderPlus className="size-4" aria-hidden />
@@ -222,7 +222,7 @@ export function NocProjectPicker({ cards, canCreate }: NocProjectPickerProps) {
         </div>
         {canCreate && (
           <Link
-            href="/projects/new"
+            href="/projects?create=true"
             className={cn(
               buttonVariants(),
               'h-10 gap-1.5 self-start sm:self-auto',

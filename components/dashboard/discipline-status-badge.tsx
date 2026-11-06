@@ -53,7 +53,9 @@ export function DisciplineStatusBadge({
   onUpdate,
 }: DisciplineStatusBadgeProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState<DisciplineStageStatus>(detail.status);
+  const [selectedStatus, setSelectedStatus] = useState<DisciplineStageStatus>(
+    detail.status,
+  );
   const [remarks, setRemarks] = useState(detail.remarks || '');
 
   const canEdit = !isReadOnly && canUserEditDiscipline(userRole, discipline);
@@ -112,7 +114,7 @@ export function DisciplineStatusBadge({
         >
           {detail.status}
         </Badge>
-        <span className="line-clamp-1 text-[11px] text-slate-400 dark:text-slate-500">
+        <span className="line-clamp-1 capitalize text-[11px] text-slate-400 dark:text-slate-500">
           By {detail.updatedBy}
         </span>
       </button>
@@ -136,8 +138,8 @@ export function DisciplineStatusBadge({
               {isReadOnly
                 ? `Viewing ${label} engineering status overview. Stage updates are performed in NOC Tracker.`
                 : canEdit
-                ? `Update the current engineering progress stage and remarks for ${label}.`
-                : `Viewing latest ${label} sign-off and milestone history.`}
+                  ? `Update the current engineering progress stage and remarks for ${label}.`
+                  : `Viewing latest ${label} sign-off and milestone history.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -193,7 +195,8 @@ export function DisciplineStatusBadge({
                     <div>
                       <p className="font-semibold">Analytics View</p>
                       <p className="mt-0.5 text-[11px]">
-                        Discipline progress updates and submittals are managed directly in the project NOC Tracker.
+                        Discipline progress updates and submittals are managed
+                        directly in the project NOC Tracker.
                       </p>
                     </div>
                   </div>
@@ -205,7 +208,8 @@ export function DisciplineStatusBadge({
                     <div>
                       <p className="font-semibold">Permission Restricted</p>
                       <p className="mt-0.5 text-[11px]">
-                        Only assigned {label} Engineers and Administrators are authorized to update {label} status.
+                        Only assigned {label} Engineers and Administrators are
+                        authorized to update {label} status.
                       </p>
                     </div>
                   </div>
@@ -215,13 +219,18 @@ export function DisciplineStatusBadge({
               <div className="space-y-2 rounded-md border p-3 text-xs">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Current Stage:</span>
-                  <Badge variant="outline" className={getStatusColor(detail.status)}>
+                  <Badge
+                    variant="outline"
+                    className={getStatusColor(detail.status)}
+                  >
                     {detail.status}
                   </Badge>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Updated By:</span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">{detail.updatedBy}</span>
+                  <span className="font-medium text-slate-900 dark:text-slate-100">
+                    {detail.updatedBy}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Timestamp:</span>
@@ -229,7 +238,9 @@ export function DisciplineStatusBadge({
                 </div>
                 {detail.remarks && (
                   <div className="pt-2 border-t text-slate-600 dark:text-slate-400">
-                    <span className="font-medium text-slate-800 dark:text-slate-200">Notes: </span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">
+                      Notes:{' '}
+                    </span>
                     {detail.remarks}
                   </div>
                 )}
@@ -238,7 +249,11 @@ export function DisciplineStatusBadge({
           )}
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => setIsOpen(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOpen(false)}
+            >
               Close
             </Button>
             {isReadOnly && projectCode && (

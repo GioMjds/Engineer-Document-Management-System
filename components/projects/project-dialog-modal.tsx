@@ -25,29 +25,33 @@ export function useProjectModal() {
   return useContext(ProjectModalContext);
 }
 
-export function ProjectDialogModal({
-  children,
-}: {
+export interface ProjectDialogModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
-}) {
+}
+
+export function ProjectDialogModal({
+  open,
+  onOpenChange,
+  children,
+}: ProjectDialogModalProps) {
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   const handleConfirmedClose = useCallback(() => {
     setShowExitConfirm(false);
-    setIsOpen(false);
-    router.back();
-  }, [router]);
+    setIsDirty(false);
+    onOpenChange(false);
+  }, [onOpenChange]);
 
   const closeModal = useCallback(() => {
     setIsDirty(false);
     setShowExitConfirm(false);
-    setIsOpen(false);
-    router.back();
+    onOpenChange(false);
     router.refresh();
-  }, [router]);
+  }, [onOpenChange, router]);
 
   const requestClose = useCallback(() => {
     if (isDirty) {
@@ -74,19 +78,17 @@ export function ProjectDialogModal({
         }
 
         handleConfirmedClose();
+      } else {
+        onOpenChange(true);
       }
     },
-    [isDirty, handleConfirmedClose],
+    [isDirty, handleConfirmedClose, onOpenChange],
   );
-
-  if (!isOpen) {
-    return null;
-  }
 
   return (
     <ProjectModalContext.Provider value={{ setIsDirty, requestClose, closeModal }}>
       <Dialog
-        open={isOpen}
+        open={open}
         disablePointerDismissal
         onOpenChange={handleOpenChange}
       >
@@ -107,8 +109,8 @@ export function ProjectDialogModal({
       <Dialog
         open={showExitConfirm}
         disablePointerDismissal
-        onOpenChange={(open) => {
-          if (!open) setShowExitConfirm(false);
+        onOpenChange={(confirmOpen) => {
+          if (!confirmOpen) setShowExitConfirm(false);
         }}
       >
         <DialogContent

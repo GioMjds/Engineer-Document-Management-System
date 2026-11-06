@@ -190,7 +190,7 @@ export function CommandMenu({
             {canCreateProject && (
               <CommandItem
                 value="New Project Create Register Scope"
-                onSelect={() => runCommand(() => router.push('/projects/new'))}
+                onSelect={() => runCommand(() => router.push('/projects?create=true'))}
               >
                 <FolderPlus className="mr-2 size-4 text-emerald-600 dark:text-emerald-400" />
                 <div className="flex flex-col">

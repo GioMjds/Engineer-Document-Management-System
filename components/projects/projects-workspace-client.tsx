@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Route } from 'next';
 import {
   Building2,
@@ -30,9 +31,11 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { formatCurrencyAED } from '@/utils/formatters';
-import type { AssignedProject, ProjectLifecycleStage } from '@/types/noc';
+import type { AssignedProject, ProjectLifecycleStage, MasterAuthorityRecord } from '@/types/noc';
 import { ProjectTeamDialog, type ProfileItem } from './project-team-dialog';
 import { DeleteProjectDialog } from './delete-project-dialog';
+import { ProjectDialogModal } from './project-dialog-modal';
+import { ProjectRegistrationForm } from '@/app/(app)/projects/new/project-form';
 
 interface ProjectsWorkspaceClientProps {
   projects: AssignedProject[];
@@ -42,11 +45,78 @@ interface ProjectsWorkspaceClientProps {
     name?: string | null;
   };
   teamProfiles: ProfileItem[];
+  authorities?: MasterAuthorityRecord[];
   canCreateProject: boolean;
   canDeleteProject?: boolean;
   canManageMembers: boolean;
   canViewConsultantAmount: boolean;
+  initialOpenCreate?: boolean;
 }
+
+type RoleFieldKey = keyof AssignedProject['assignedRoles'];
+
+interface RoleDefinition {
+  field: RoleFieldKey;
+  filterKey: string;
+  label: string;
+  shortLabel: string;
+}
+
+// Canonical definition of engineering discipline roles.
+const PROJECT_ROLE_DEFINITIONS = [
+  {
+    field: 'residentEngineer',
+    filterKey: 'resident_engineer',
+    label: 'Resident Engineer',
+    shortLabel: 'Resident Eng',
+  },
+  {
+    field: 'areaManager',
+    filterKey: 'area_manager',
+    label: 'Area Manager',
+    shortLabel: 'Area Manager',
+  },
+  {
+    field: 'authorityEngineer',
+    filterKey: 'authority_engineer',
+    label: 'Authority Engineer',
+    shortLabel: 'Auth Engineer',
+  },
+  {
+    field: 'docController',
+    filterKey: 'dc',
+    label: 'Document Controller',
+    shortLabel: 'Doc Controller',
+  },
+  {
+    field: 'architectEngineer',
+    filterKey: 'architect_engineer',
+    label: 'Architectural Engineer',
+    shortLabel: 'Architectural',
+  },
+  {
+    field: 'structureEngineer',
+    filterKey: 'structure_engineer',
+    label: 'Structural Engineer',
+    shortLabel: 'Structural',
+  },
+  {
+    field: 'mepEngineer',
+    filterKey: 'mep_engineer',
+    label: 'MEP Engineer',
+    shortLabel: 'MEP Engineer',
+  },
+  {
+    field: 'civilEngineer',
+    filterKey: 'civil_engineer',
+    label: 'Civil Engineer',
+    shortLabel: 'Civil Engineer',
+  },
+] satisfies RoleDefinition[];
+
+const ROLE_FILTER_TO_FIELD_MAP = Object.fromEntries(
+  PROJECT_ROLE_DEFINITIONS.map((def) => [def.filterKey, def.field]),
+) as Record<string, RoleFieldKey>;
 
 const STAGE_FILTERS = [
   { value: 'all', label: 'All Lifecycle Stages' },
@@ -69,30 +139,45 @@ const ROLE_FILTERS = [
   { value: 'civil_engineer', label: 'Civil Engineer' },
 ] as const;
 
-function stageTone(stage: ProjectLifecycleStage) {
-  switch (stage) {
-    case 'Pre-Construction':
-      return 'border-sky-500/30 text-sky-700 dark:text-sky-400 bg-sky-500/10';
-    case 'Construction':
-      return 'border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10';
-    case 'Handover':
-      return 'border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10';
-    case 'Completed':
-      return 'border-purple-500/30 text-purple-700 dark:text-purple-400 bg-purple-500/10';
-    default:
-      return 'border-muted text-muted-foreground bg-muted/40';
-  }
+const STAGE_TONES = {
+  'Pre-Construction':
+    'border-sky-500/30 text-sky-700 dark:text-sky-400 bg-sky-500/10',
+  Construction:
+    'border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10',
+  Handover:
+    'border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10',
+  Completed:
+    'border-purple-500/30 text-purple-700 dark:text-purple-400 bg-purple-500/10',
+} satisfies Record<ProjectLifecycleStage, string>;
+
+const DEFAULT_ASSIGNED_ROLES = {
+  residentEngineer: 'Unassigned',
+  areaManager: 'Unassigned',
+  authorityEngineer: 'Unassigned',
+  docController: 'Unassigned',
+  architectEngineer: 'Unassigned',
+  structureEngineer: 'Unassigned',
+  mepEngineer: 'Unassigned',
+  civilEngineer: 'Unassigned',
+} satisfies AssignedProject['assignedRoles'];
+
+function stageTone(stage: ProjectLifecycleStage): string {
+  return STAGE_TONES[stage] ?? 'border-muted text-muted-foreground bg-muted/40';
 }
 
 export function ProjectsWorkspaceClient({
   projects,
   currentUser,
   teamProfiles,
+  authorities = [],
   canCreateProject,
   canDeleteProject = false,
   canManageMembers,
   canViewConsultantAmount,
+  initialOpenCreate = false,
 }: ProjectsWorkspaceClientProps) {
+  const router = useRouter();
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(initialOpenCreate);
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -109,33 +194,37 @@ export function ProjectsWorkspaceClient({
   const currentUserName = currentUser.name?.toLowerCase() || '';
   const isAdmin = currentUser.role === 'admin';
 
-  // Metrics summary
+  // Compute portfolio stage and staffing metrics in a single pass.
   const metrics = useMemo(() => {
-    const total = projects.length;
-    const preConstruction = projects.filter(
-      (p) => p.lifecycleStage === 'Pre-Construction',
-    ).length;
-    const construction = projects.filter(
-      (p) => p.lifecycleStage === 'Construction',
-    ).length;
-    const handover = projects.filter(
-      (p) => p.lifecycleStage === 'Handover',
-    ).length;
+    let preConstruction = 0;
+    let construction = 0;
+    let handover = 0;
+    let fullyStaffed = 0;
 
-    // Projects staffed with resident engineer and team members
-    const fullyStaffed = projects.filter((p) => {
+    for (const p of projects) {
+      if (p.lifecycleStage === 'Pre-Construction') preConstruction++;
+      else if (p.lifecycleStage === 'Construction') construction++;
+      else if (p.lifecycleStage === 'Handover') handover++;
+
       const r = p.assignedRoles;
-      if (!r) return false;
-      const assignedCount = Object.values(r).filter(
-        (name) => name && name !== 'Unassigned',
-      ).length;
-      return assignedCount > 0 && r.residentEngineer !== 'Unassigned';
-    }).length;
+      if (r && r.residentEngineer && r.residentEngineer !== 'Unassigned') {
+        const hasStaff = Object.values(r).some(
+          (name) => name && name !== 'Unassigned',
+        );
+        if (hasStaff) fullyStaffed++;
+      }
+    }
 
-    return { total, preConstruction, construction, handover, fullyStaffed };
+    return {
+      total: projects.length,
+      preConstruction,
+      construction,
+      handover,
+      fullyStaffed,
+    };
   }, [projects]);
 
-  // Filtering logic
+  // Filter projects by stage, role, and text query.
   const filteredProjects = useMemo(() => {
     const q = query.trim().toLowerCase();
 
@@ -147,53 +236,46 @@ export function ProjectsWorkspaceClient({
 
       // Role filter
       if (roleFilter !== 'all') {
+        if (roleFilter === 'admin') {
+          return true;
+        }
+
         const roles = p.assignedRoles;
+        if (!roles) return false;
+
         if (roleFilter === 'my_assigned') {
-          if (isAdmin) {
-            // Admin is overseer of all projects
-            return true;
-          }
+          if (isAdmin) return true;
           if (!currentUserName) return false;
-          const assignedNames = Object.values(roles || {}).map((n) =>
-            n.toLowerCase(),
-          );
-          if (!assignedNames.some((n) => n.includes(currentUserName))) {
+          const assignedNames = Object.values(roles);
+          if (
+            !assignedNames.some((n) =>
+              n?.toLowerCase().includes(currentUserName),
+            )
+          ) {
             return false;
           }
-        } else if (roleFilter === 'admin') {
-          // Admin has oversight on all projects
-          return true;
-        } else if (roleFilter === 'resident_engineer') {
-          if (!roles || roles.residentEngineer === 'Unassigned') return false;
-        } else if (roleFilter === 'area_manager') {
-          if (!roles || roles.areaManager === 'Unassigned') return false;
-        } else if (roleFilter === 'authority_engineer') {
-          if (!roles || roles.authorityEngineer === 'Unassigned') return false;
-        } else if (roleFilter === 'dc') {
-          if (!roles || roles.docController === 'Unassigned') return false;
-        } else if (roleFilter === 'architect_engineer') {
-          if (!roles || roles.architectEngineer === 'Unassigned') return false;
-        } else if (roleFilter === 'structure_engineer') {
-          if (!roles || roles.structureEngineer === 'Unassigned') return false;
-        } else if (roleFilter === 'mep_engineer') {
-          if (!roles || roles.mepEngineer === 'Unassigned') return false;
-        } else if (roleFilter === 'civil_engineer') {
-          if (!roles || roles.civilEngineer === 'Unassigned') return false;
+        } else {
+          const roleKey = ROLE_FILTER_TO_FIELD_MAP[roleFilter];
+          if (roleKey) {
+            const assignee = roles[roleKey];
+            if (!assignee || assignee === 'Unassigned') return false;
+          }
         }
       }
 
-      // Search query
+      // Search query short-circuit check.
       if (q) {
-        const assignedNames = Object.values(p.assignedRoles || {}).join(' ');
-        const matchesQuery = [
-          p.code,
-          p.name,
-          p.location,
-          p.masterAuthority,
-          p.contractorName || '',
-          p.projectType,
-          assignedNames,
-        ].some((text) => text.toLowerCase().includes(q));
+        const matchesQuery =
+          p.code.toLowerCase().includes(q) ||
+          p.name.toLowerCase().includes(q) ||
+          p.location.toLowerCase().includes(q) ||
+          p.masterAuthority.toLowerCase().includes(q) ||
+          Boolean(p.contractorName?.toLowerCase().includes(q)) ||
+          p.projectType.toLowerCase().includes(q) ||
+          (p.assignedRoles &&
+            Object.values(p.assignedRoles).some((name) =>
+              name?.toLowerCase().includes(q),
+            ));
 
         if (!matchesQuery) return false;
       }
@@ -202,31 +284,56 @@ export function ProjectsWorkspaceClient({
     });
   }, [projects, query, stageFilter, roleFilter, isAdmin, currentUserName]);
 
-  // Check user assignment on a given project
-  const getUserAssignment = (p: AssignedProject) => {
-    if (isAdmin) {
-      return 'Admin System Oversight';
-    }
+  // Determine active user assignment label for a project.
+  const getUserAssignment = (p: AssignedProject): string | null => {
+    if (isAdmin) return 'Admin';
     if (!currentUserName || !p.assignedRoles) return null;
-    const r = p.assignedRoles;
-    if (r.residentEngineer.toLowerCase().includes(currentUserName))
-      return 'Resident Engineer';
-    if (r.areaManager.toLowerCase().includes(currentUserName))
-      return 'Area Manager';
-    if (r.authorityEngineer.toLowerCase().includes(currentUserName))
-      return 'Authority Engineer';
-    if (r.docController.toLowerCase().includes(currentUserName))
-      return 'Document Controller';
-    if (r.architectEngineer.toLowerCase().includes(currentUserName))
-      return 'Architectural Engineer';
-    if (r.structureEngineer.toLowerCase().includes(currentUserName))
-      return 'Structural Engineer';
-    if (r.mepEngineer.toLowerCase().includes(currentUserName))
-      return 'MEP Engineer';
-    if (r.civilEngineer.toLowerCase().includes(currentUserName))
-      return 'Civil Engineer';
-    return null;
+
+    const matchedRole = PROJECT_ROLE_DEFINITIONS.find((def) =>
+      p.assignedRoles[def.field]?.toLowerCase().includes(currentUserName),
+    );
+
+    return matchedRole ? matchedRole.label : null;
   };
+
+  const handleDeleteProject = (p: AssignedProject) => {
+    setDeletingProject({
+      id: p.id || '',
+      code: p.code,
+      name: p.name,
+    });
+  };
+
+  const summaryCards = [
+    {
+      title: 'Total Projects',
+      value: metrics.total,
+      caption: 'in scope',
+      icon: Building2,
+      colorClass: 'bg-muted text-muted-foreground',
+    },
+    {
+      title: 'Pre-Construction',
+      value: metrics.preConstruction,
+      caption: 'design & NOC',
+      icon: Layers,
+      colorClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+    },
+    {
+      title: 'Construction Stage',
+      value: metrics.construction,
+      caption: 'supervision',
+      icon: HardHat,
+      colorClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    },
+    {
+      title: 'Staffed Projects',
+      value: metrics.fullyStaffed,
+      caption: `of ${metrics.total} complete`,
+      icon: UserCheck,
+      colorClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -242,21 +349,20 @@ export function ProjectsWorkspaceClient({
             </h1>
           </div>
           <p className="text-xs text-muted-foreground sm:text-sm">
-            Check projects and multidisciplinary team role assignments across all active sites.
+            Check projects and multidisciplinary team role assignments across
+            all active sites.
           </p>
         </div>
 
         {canCreateProject && (
-          <Link
-            href="/projects/new"
-            className={cn(
-              buttonVariants(),
-              'h-9 gap-1.5 self-start bg-primary text-primary-foreground hover:bg-primary/90 sm:self-auto',
-            )}
+          <Button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="h-9 gap-1.5 self-start bg-primary text-primary-foreground hover:bg-primary/90 sm:self-auto"
           >
             <FolderPlus className="size-4" aria-hidden />
             Register Project
-          </Link>
+          </Button>
         )}
       </header>
 
@@ -265,75 +371,37 @@ export function ProjectsWorkspaceClient({
         aria-label="Projects directory summary metrics"
         className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4"
       >
-        <div className="rounded-lg border border-border bg-card p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">
-              Total Projects
-            </span>
-            <span className="flex size-7 items-center justify-center rounded-md bg-muted text-muted-foreground">
-              <Building2 className="size-3.5" />
-            </span>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="font-mono text-2xl font-bold tracking-tight text-foreground">
-              {metrics.total}
-            </span>
-            <span className="text-xs text-muted-foreground">in scope</span>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-border bg-card p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">
-              Pre-Construction
-            </span>
-            <span className="flex size-7 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400">
-              <Layers className="size-3.5" />
-            </span>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="font-mono text-2xl font-bold tracking-tight text-foreground">
-              {metrics.preConstruction}
-            </span>
-            <span className="text-xs text-muted-foreground">design & NOC</span>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-border bg-card p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">
-              Construction Stage
-            </span>
-            <span className="flex size-7 items-center justify-center rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400">
-              <HardHat className="size-3.5" />
-            </span>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="font-mono text-2xl font-bold tracking-tight text-foreground">
-              {metrics.construction}
-            </span>
-            <span className="text-xs text-muted-foreground">supervision</span>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-border bg-card p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">
-              Staffed Projects
-            </span>
-            <span className="flex size-7 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <UserCheck className="size-3.5" />
-            </span>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="font-mono text-2xl font-bold tracking-tight text-foreground">
-              {metrics.fullyStaffed}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              of {metrics.total} complete
-            </span>
-          </div>
-        </div>
+        {summaryCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div
+              key={card.title}
+              className="rounded-lg border border-border bg-card p-4 shadow-xs"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {card.title}
+                </span>
+                <span
+                  className={cn(
+                    'flex size-7 items-center justify-center rounded-md',
+                    card.colorClass,
+                  )}
+                >
+                  <Icon className="size-3.5" />
+                </span>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="font-mono text-2xl font-bold tracking-tight text-foreground">
+                  {card.value}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {card.caption}
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </section>
 
       {/* Filter and Search Bar */}
@@ -407,8 +475,11 @@ export function ProjectsWorkspaceClient({
 
         <div className="flex items-center justify-between gap-3 sm:justify-end">
           <p className="text-xs text-muted-foreground" aria-live="polite">
-            Showing <strong className="text-foreground">{filteredProjects.length}</strong> of{' '}
-            {projects.length}
+            Showing{' '}
+            <strong className="text-foreground">
+              {filteredProjects.length}
+            </strong>{' '}
+            of {projects.length}
           </p>
 
           <div
@@ -456,7 +527,8 @@ export function ProjectsWorkspaceClient({
           <Building2 className="mx-auto size-10 text-muted-foreground/60" />
           <h2 className="mt-3 text-base font-semibold">No Projects Found</h2>
           <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
-            No projects match the selected filters or assigned roles. Adjust your search criteria or clear the filters.
+            No projects match the selected filters or assigned roles. Adjust
+            your search criteria or clear the filters.
           </p>
           <Button
             variant="outline"
@@ -473,28 +545,19 @@ export function ProjectsWorkspaceClient({
         </div>
       ) : viewMode === 'grid' ? (
         <ul className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {filteredProjects.map((p) => {
-            const userAssignment = getUserAssignment(p);
-            return (
-              <ProjectGridCard
-                key={p.code}
-                project={p}
-                userAssignment={userAssignment}
-                canManageMembers={canManageMembers}
-                canDeleteProject={canDeleteProject}
-                canViewConsultantAmount={canViewConsultantAmount}
-                highlightedRole={roleFilter}
-                onManageMembers={() => setEditingProject(p)}
-                onDeleteProject={() =>
-                  setDeletingProject({
-                    id: p.id || '',
-                    code: p.code,
-                    name: p.name,
-                  })
-                }
-              />
-            );
-          })}
+          {filteredProjects.map((p) => (
+            <ProjectGridCard
+              key={p.code}
+              project={p}
+              userAssignment={getUserAssignment(p)}
+              canManageMembers={canManageMembers}
+              canDeleteProject={canDeleteProject}
+              canViewConsultantAmount={canViewConsultantAmount}
+              highlightedRole={roleFilter}
+              onManageMembers={() => setEditingProject(p)}
+              onDeleteProject={() => handleDeleteProject(p)}
+            />
+          ))}
         </ul>
       ) : (
         <ProjectsTableView
@@ -503,13 +566,7 @@ export function ProjectsWorkspaceClient({
           canDeleteProject={canDeleteProject}
           canViewConsultantAmount={canViewConsultantAmount}
           onManageMembers={(p) => setEditingProject(p)}
-          onDeleteProject={(p) =>
-            setDeletingProject({
-              id: p.id || '',
-              code: p.code,
-              name: p.name,
-            })
-          }
+          onDeleteProject={handleDeleteProject}
         />
       )}
 
@@ -533,6 +590,26 @@ export function ProjectsWorkspaceClient({
           project={deletingProject}
         />
       )}
+
+      {/* Admin Register Project Modal */}
+      {canCreateProject && (
+        <ProjectDialogModal
+          open={isCreateModalOpen}
+          onOpenChange={(open) => {
+            setIsCreateModalOpen(open);
+            if (!open && typeof window !== 'undefined' && window.location.search.includes('create=true')) {
+              router.replace('/projects', { scroll: false });
+            }
+          }}
+        >
+          {isCreateModalOpen && (
+            <ProjectRegistrationForm
+              authorities={authorities}
+              teamProfiles={teamProfiles}
+            />
+          )}
+        </ProjectDialogModal>
+      )}
     </div>
   );
 }
@@ -540,6 +617,17 @@ export function ProjectsWorkspaceClient({
 // ---------------------------------------------------------------------------
 // Project Card (Grid View)
 // ---------------------------------------------------------------------------
+
+interface ProjectGridCardProps {
+  project: AssignedProject;
+  userAssignment: string | null;
+  canManageMembers: boolean;
+  canDeleteProject?: boolean;
+  canViewConsultantAmount: boolean;
+  highlightedRole: string;
+  onManageMembers: () => void;
+  onDeleteProject?: () => void;
+}
 
 function ProjectGridCard({
   project,
@@ -550,45 +638,23 @@ function ProjectGridCard({
   highlightedRole,
   onManageMembers,
   onDeleteProject,
-}: {
-  project: AssignedProject;
-  userAssignment: string | null;
-  canManageMembers: boolean;
-  canDeleteProject?: boolean;
-  canViewConsultantAmount: boolean;
-  highlightedRole: string;
-  onManageMembers: () => void;
-  onDeleteProject?: () => void;
-}) {
-  const roles = project.assignedRoles || {
-    residentEngineer: 'Unassigned',
-    areaManager: 'Unassigned',
-    authorityEngineer: 'Unassigned',
-    docController: 'Unassigned',
-    architectEngineer: 'Unassigned',
-    structureEngineer: 'Unassigned',
-    mepEngineer: 'Unassigned',
-    civilEngineer: 'Unassigned',
-  };
-
-  const isRoleHighlighted = (roleKey: string) => {
-    return highlightedRole === roleKey;
-  };
+}: ProjectGridCardProps) {
+  const roles = project.assignedRoles || DEFAULT_ASSIGNED_ROLES;
 
   return (
     <li className="flex flex-col rounded-lg border border-border bg-card p-5 shadow-xs transition-colors hover:border-ring/50">
       {/* Top Banner */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Link
-            href={`/projects/${project.code}` as Route}
-            className="rounded bg-(--site-navy) px-2.5 py-0.5 font-mono text-xs font-bold text-white transition-opacity hover:opacity-90 dark:bg-[#0e1c30] dark:text-(--site-cyan)"
-          >
+          <h1 className="rounded bg-(--site-navy) px-2.5 py-0.5 font-mono text-xs font-bold text-white transition-opacity hover:opacity-90 dark:bg-[#0e1c30] dark:text-(--site-cyan)">
             {project.code}
-          </Link>
+          </h1>
           <Badge
             variant="outline"
-            className={cn('text-xs font-medium', stageTone(project.lifecycleStage))}
+            className={cn(
+              'text-xs font-medium',
+              stageTone(project.lifecycleStage),
+            )}
           >
             {project.lifecycleStage}
           </Badge>
@@ -608,12 +674,7 @@ function ProjectGridCard({
       {/* Project Title and Metadata */}
       <div className="mt-3 space-y-1.5">
         <h2 className="text-base font-bold tracking-tight text-foreground">
-          <Link
-            href={`/projects/${project.code}` as Route}
-            className="hover:underline"
-          >
-            {project.name}
-          </Link>
+          {project.name}
         </h2>
         <div className="grid grid-cols-1 gap-1 text-xs text-muted-foreground sm:grid-cols-2">
           <p className="flex items-center gap-1.5 truncate">
@@ -628,7 +689,9 @@ function ProjectGridCard({
         {project.contractorName && (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground truncate">
             <HardHat className="size-3.5 shrink-0 text-muted-foreground/80" />
-            <span className="truncate">General Contractor: {project.contractorName}</span>
+            <span className="truncate">
+              General Contractor: {project.contractorName}
+            </span>
           </p>
         )}
       </div>
@@ -636,14 +699,18 @@ function ProjectGridCard({
       {/* Commercial Values */}
       <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-md border border-border/80 bg-muted/20 p-2.5 text-xs">
         <div>
-          <span className="text-[11px] text-muted-foreground">Contractor Contract</span>
+          <span className="text-[11px] text-muted-foreground">
+            Contractor Contract
+          </span>
           <p className="font-mono font-semibold text-foreground">
             {formatCurrencyAED(project.clientContractorAmount)}
           </p>
         </div>
         {canViewConsultantAmount && (
           <div>
-            <span className="text-[11px] text-muted-foreground">Consultant Contract</span>
+            <span className="text-[11px] text-muted-foreground">
+              Consultant Contract
+            </span>
             <p className="font-mono font-semibold text-foreground">
               {formatCurrencyAED(project.clientConsultantAmount)}
             </p>
@@ -663,54 +730,14 @@ function ProjectGridCard({
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs">
-          {/* Resident Engineer */}
-          <RoleItemTile
-            title="Resident Eng"
-            name={roles.residentEngineer}
-            highlight={isRoleHighlighted('resident_engineer')}
-          />
-          {/* Area Manager */}
-          <RoleItemTile
-            title="Area Manager"
-            name={roles.areaManager}
-            highlight={isRoleHighlighted('area_manager')}
-          />
-          {/* Authority Engineer */}
-          <RoleItemTile
-            title="Auth Engineer"
-            name={roles.authorityEngineer}
-            highlight={isRoleHighlighted('authority_engineer')}
-          />
-          {/* Document Controller */}
-          <RoleItemTile
-            title="Doc Controller"
-            name={roles.docController}
-            highlight={isRoleHighlighted('dc')}
-          />
-          {/* Architectural */}
-          <RoleItemTile
-            title="Architectural"
-            name={roles.architectEngineer}
-            highlight={isRoleHighlighted('architect_engineer')}
-          />
-          {/* Structural */}
-          <RoleItemTile
-            title="Structural"
-            name={roles.structureEngineer}
-            highlight={isRoleHighlighted('structure_engineer')}
-          />
-          {/* MEP */}
-          <RoleItemTile
-            title="MEP Engineer"
-            name={roles.mepEngineer}
-            highlight={isRoleHighlighted('mep_engineer')}
-          />
-          {/* Civil */}
-          <RoleItemTile
-            title="Civil Engineer"
-            name={roles.civilEngineer}
-            highlight={isRoleHighlighted('civil_engineer')}
-          />
+          {PROJECT_ROLE_DEFINITIONS.map((def) => (
+            <RoleItemTile
+              key={def.field}
+              title={def.shortLabel}
+              name={roles[def.field]}
+              highlight={highlightedRole === def.filterKey}
+            />
+          ))}
         </div>
       </div>
 
@@ -777,7 +804,7 @@ function RoleItemTile({
   highlight,
 }: {
   title: string;
-  name: string;
+  name?: string;
   highlight?: boolean;
 }) {
   const isUnassigned = !name || name === 'Unassigned';
@@ -797,9 +824,7 @@ function RoleItemTile({
       <span
         className={cn(
           'mt-0.5 block truncate text-xs font-medium',
-          isUnassigned
-            ? 'text-muted-foreground/60 italic'
-            : 'text-foreground',
+          isUnassigned ? 'text-muted-foreground/60 italic' : 'text-foreground',
         )}
         title={name}
       >
@@ -813,6 +838,15 @@ function RoleItemTile({
 // Projects Table View
 // ---------------------------------------------------------------------------
 
+interface ProjectsTableViewProps {
+  projects: AssignedProject[];
+  canManageMembers: boolean;
+  canDeleteProject?: boolean;
+  canViewConsultantAmount: boolean;
+  onManageMembers: (p: AssignedProject) => void;
+  onDeleteProject?: (p: AssignedProject) => void;
+}
+
 function ProjectsTableView({
   projects,
   canManageMembers,
@@ -820,19 +854,14 @@ function ProjectsTableView({
   canViewConsultantAmount,
   onManageMembers,
   onDeleteProject,
-}: {
-  projects: AssignedProject[];
-  canManageMembers: boolean;
-  canDeleteProject?: boolean;
-  canViewConsultantAmount: boolean;
-  onManageMembers: (p: AssignedProject) => void;
-  onDeleteProject?: (p: AssignedProject) => void;
-}) {
+}: ProjectsTableViewProps) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-xs">
       <div className="overflow-x-auto">
         <table className="w-full min-w-220 text-left text-xs">
-          <caption className="sr-only">List of assigned projects and roles</caption>
+          <caption className="sr-only">
+            List of assigned projects and roles
+          </caption>
           <thead className="border-b border-border bg-muted/40 font-semibold uppercase tracking-wider text-muted-foreground">
             <tr>
               <th scope="col" className="px-3 py-2.5">
@@ -869,7 +898,7 @@ function ProjectsTableView({
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border">
+          <tbody className="divide-y border-border">
             {projects.map((p) => {
               const r = p.assignedRoles;
               return (
@@ -912,23 +941,29 @@ function ProjectsTableView({
                     {p.masterAuthority}
                   </td>
                   <td className="px-3 py-2.5">
-                    <span className="block truncate">RE: {r?.residentEngineer || '—'}</span>
+                    <span className="block truncate">
+                      RE: {r?.residentEngineer || '—'}
+                    </span>
                     <span className="block truncate text-muted-foreground">
                       AM: {r?.areaManager || '—'}
                     </span>
                   </td>
                   <td className="px-3 py-2.5">
-                    <span className="block truncate">AE: {r?.authorityEngineer || '—'}</span>
+                    <span className="block truncate">
+                      AE: {r?.authorityEngineer || '—'}
+                    </span>
                     <span className="block truncate text-muted-foreground">
                       DC: {r?.docController || '—'}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-[11px] text-muted-foreground">
                     <span className="block truncate">
-                      Arch: {r?.architectEngineer || '—'} · Struct: {r?.structureEngineer || '—'}
+                      Arch: {r?.architectEngineer || '—'} · Struct:{' '}
+                      {r?.structureEngineer || '—'}
                     </span>
                     <span className="block truncate">
-                      MEP: {r?.mepEngineer || '—'} · Civil: {r?.civilEngineer || '—'}
+                      MEP: {r?.mepEngineer || '—'} · Civil:{' '}
+                      {r?.civilEngineer || '—'}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 font-mono">

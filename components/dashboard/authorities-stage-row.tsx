@@ -31,17 +31,20 @@ interface AuthoritiesStageRowProps {
   userRole: string;
   isReadOnly?: boolean;
   projectCode?: string;
-  onUpdate?: (stageKey: 'designStage' | 'constructionStage' | 'revisionStage', newStatus: DisciplineStageStatus) => void;
+  onUpdate?: (
+    stageKey: 'designStage' | 'constructionStage' | 'revisionStage',
+    newStatus: DisciplineStageStatus,
+  ) => void;
 }
 
-const STAGE_OPTIONS: DisciplineStageStatus[] = [
+const STAGE_OPTIONS = [
   'Not Started',
   'In Progress',
   'Under Review',
   'Client Approval',
   'Approved',
   'On Hold',
-];
+] satisfies DisciplineStageStatus[];
 
 export function AuthoritiesStageRow({
   designStage,
@@ -53,8 +56,11 @@ export function AuthoritiesStageRow({
   projectCode,
   onUpdate,
 }: AuthoritiesStageRowProps) {
-  const [activeDialog, setActiveDialog] = useState<'designStage' | 'constructionStage' | 'revisionStage' | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<DisciplineStageStatus>('Not Started');
+  const [activeDialog, setActiveDialog] = useState<
+    'designStage' | 'constructionStage' | 'revisionStage' | null
+  >(null);
+  const [selectedStatus, setSelectedStatus] =
+    useState<DisciplineStageStatus>('Not Started');
 
   const canEdit = !isReadOnly && canUserEditDiscipline(userRole, 'authorities');
 
@@ -75,8 +81,15 @@ export function AuthoritiesStageRow({
     }
   };
 
-  const handleOpen = (stageKey: 'designStage' | 'constructionStage' | 'revisionStage') => {
-    const current = stageKey === 'designStage' ? designStage : stageKey === 'constructionStage' ? constructionStage : revisionStage;
+  const handleOpen = (
+    stageKey: 'designStage' | 'constructionStage' | 'revisionStage',
+  ) => {
+    const current =
+      stageKey === 'designStage'
+        ? designStage
+        : stageKey === 'constructionStage'
+          ? constructionStage
+          : revisionStage;
     setSelectedStatus(current);
     setActiveDialog(stageKey);
   };
@@ -119,9 +132,14 @@ export function AuthoritiesStageRow({
         >
           <div className="flex w-full items-center justify-between">
             <span className="text-[11px] text-slate-500">Design</span>
-            {!isReadOnly && <Edit3 className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 text-slate-400" />}
+            {!isReadOnly && (
+              <Edit3 className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 text-slate-400" />
+            )}
           </div>
-          <Badge variant="outline" className={`px-1.5 py-0 text-[10px] ${getStageColor(designStage)}`}>
+          <Badge
+            variant="outline"
+            className={`px-1.5 py-0 text-[10px] ${getStageColor(designStage)}`}
+          >
             {designStage}
           </Badge>
         </button>
@@ -133,9 +151,14 @@ export function AuthoritiesStageRow({
         >
           <div className="flex w-full items-center justify-between">
             <span className="text-[11px] text-slate-500">Construction</span>
-            {!isReadOnly && <Edit3 className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 text-slate-400" />}
+            {!isReadOnly && (
+              <Edit3 className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 text-slate-400" />
+            )}
           </div>
-          <Badge variant="outline" className={`px-1.5 py-0 text-[10px] ${getStageColor(constructionStage)}`}>
+          <Badge
+            variant="outline"
+            className={`px-1.5 py-0 text-[10px] ${getStageColor(constructionStage)}`}
+          >
             {constructionStage}
           </Badge>
         </button>
@@ -147,15 +170,23 @@ export function AuthoritiesStageRow({
         >
           <div className="flex w-full items-center justify-between">
             <span className="text-[11px] text-slate-500">Revision</span>
-            {!isReadOnly && <Edit3 className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 text-slate-400" />}
+            {!isReadOnly && (
+              <Edit3 className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 text-slate-400" />
+            )}
           </div>
-          <Badge variant="outline" className={`px-1.5 py-0 text-[10px] ${getStageColor(revisionStage)}`}>
+          <Badge
+            variant="outline"
+            className={`px-1.5 py-0 text-[10px] ${getStageColor(revisionStage)}`}
+          >
             {revisionStage}
           </Badge>
         </button>
       </div>
 
-      <Dialog open={activeDialog !== null} onOpenChange={(open) => !open && setActiveDialog(null)}>
+      <Dialog
+        open={activeDialog !== null}
+        onOpenChange={(open) => !open && setActiveDialog(null)}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -170,8 +201,8 @@ export function AuthoritiesStageRow({
               {isReadOnly
                 ? 'Viewing authority submission milestone progress. Stage transitions are managed in NOC Tracker.'
                 : canEdit
-                ? 'Update the authority submission milestone progress for this stage.'
-                : 'Viewing authority progress milestone history.'}
+                  ? 'Update the authority submission milestone progress for this stage.'
+                  : 'Viewing authority progress milestone history.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -209,7 +240,8 @@ export function AuthoritiesStageRow({
                     <div>
                       <p className="font-semibold">Analytics View</p>
                       <p className="mt-0.5 text-[11px]">
-                        Authority review stage transitions and updates are managed directly in the project NOC Tracker.
+                        Authority review stage transitions and updates are
+                        managed directly in the project NOC Tracker.
                       </p>
                     </div>
                   </div>
@@ -221,7 +253,8 @@ export function AuthoritiesStageRow({
                     <div>
                       <p className="font-semibold">Permission Restricted</p>
                       <p className="mt-0.5 text-[11px]">
-                        Only assigned Authority Engineers and Administrators can update Authority Stages.
+                        Only assigned Authority Engineers and Administrators can
+                        update Authority Stages.
                       </p>
                     </div>
                   </div>
@@ -231,7 +264,11 @@ export function AuthoritiesStageRow({
           )}
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => setActiveDialog(null)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setActiveDialog(null)}
+            >
               Close
             </Button>
             {isReadOnly && projectCode && (

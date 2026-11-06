@@ -416,7 +416,7 @@ export function ExecutiveDashboardClient({
 
           {currentRole === 'admin' && (
             <Link
-              href="/projects/new"
+              href="/projects?create=true"
               className={cn(
                 buttonVariants({ size: 'default' }),
                 'h-10 gap-1.5',

@@ -5,6 +5,8 @@ import { getNocTrackerData } from '@/lib/server/noc-data';
 import { can } from '@/lib/permissions';
 import { ProjectsWorkspaceClient } from '@/components/projects/projects-workspace-client';
 import type { ProfileItem } from '@/components/projects/project-team-dialog';
+import { getMasterAuthorities } from '@/app/(app)/noc-matrix/actions';
+import type { MasterAuthorityRecord } from '@/types/noc';
 
 export const metadata: Metadata = {
   title: 'Projects Directory',
@@ -12,12 +14,24 @@ export const metadata: Metadata = {
     'Multidisciplinary engineering projects portfolio, lifecycle stages, and team role assignments',
 };
 
-export default async function ProjectsPage() {
-  const user = await requireUser();
+interface ProjectsPageProps {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function ProjectsPage({ searchParams }: ProjectsPageProps) {
+  const [user, sp] = await Promise.all([
+    requireUser(),
+    searchParams ? searchParams : Promise.resolve(undefined),
+  ]);
   const { projects } = await getNocTrackerData();
 
+  const canCreateProject = can(user.role, 'project.create');
+  const canDeleteProject = can(user.role, 'project.delete');
+  const canManageMembers = can(user.role, 'users.manage');
+  const canViewConsultantAmount = can(user.role, 'amount.consultant.view');
+
   let teamProfiles: ProfileItem[] = [];
-  if (can(user.role, 'users.manage')) {
+  if (canManageMembers || canCreateProject) {
     const supabase = await createClient();
     const { data } = await supabase
       .from('profiles')
@@ -35,10 +49,15 @@ export default async function ProjectsPage() {
     }
   }
 
-  const canCreateProject = can(user.role, 'project.create');
-  const canDeleteProject = can(user.role, 'project.delete');
-  const canManageMembers = can(user.role, 'users.manage');
-  const canViewConsultantAmount = can(user.role, 'amount.consultant.view');
+  let authorities: MasterAuthorityRecord[] = [];
+  if (canCreateProject) {
+    const authRes = await getMasterAuthorities();
+    if (authRes.ok && authRes.data) {
+      authorities = authRes.data;
+    }
+  }
+
+  const initialOpenCreate = sp?.create === 'true' || sp?.new === 'true';
 
   return (
     <div className="py-2">
@@ -50,10 +69,12 @@ export default async function ProjectsPage() {
           name: user.full_name || user.email,
         }}
         teamProfiles={teamProfiles}
+        authorities={authorities}
         canCreateProject={canCreateProject}
         canDeleteProject={canDeleteProject}
         canManageMembers={canManageMembers}
         canViewConsultantAmount={canViewConsultantAmount}
+        initialOpenCreate={initialOpenCreate}
       />
     </div>
   );

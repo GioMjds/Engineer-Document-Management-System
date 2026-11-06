@@ -40,14 +40,14 @@ const updateRoleSchema = z.object({
 });
 
 const createProjectSchema = z.object({
-  name: z.string().min(2, 'Project name is required.'),
-  code: z.string().min(2, 'Project code is required.'),
+  name: z.string().trim().min(1, 'Project name is required.'),
+  code: z.string().trim().min(1, 'Project code is required.'),
   description: z.string().default(''),
   stage: z
     .enum(['planning', 'design', 'construction', 'handover', 'completed'])
     .default('planning'),
-  client_name: z.string().min(2, 'Client name is required.'),
-  contractor_name: z.string().min(2, 'Contractor name is required.'),
+  client_name: z.string().trim().min(1, 'Client name is required.'),
+  contractor_name: z.string().trim().min(1, 'Contractor name is required.'),
   client_emails: z.array(z.email()).default([]),
   contractor_emails: z.array(z.email()).default([]),
   client_contractor_amount: z.number().nonnegative().default(0),
@@ -541,29 +541,28 @@ export async function createProject(
     };
   }
 
-  const supabase = await createClient();
   const adminClient = createAdminClient();
 
   // Insert project
   let project: { id: string } | null = null;
   const initialMilestones: Record<string, unknown> = {};
   if (
-    parsed.data.design_commencement_date ||
-    parsed.data.design_completion_date
+    parsed.data.design_commencement_date?.trim() ||
+    parsed.data.design_completion_date?.trim()
   ) {
     initialMilestones.preConstruction = {
-      commencementDate: parsed.data.design_commencement_date || undefined,
-      plannedCompletionDate: parsed.data.design_completion_date || undefined,
+      commencementDate: parsed.data.design_commencement_date?.trim() || undefined,
+      plannedCompletionDate: parsed.data.design_completion_date?.trim() || undefined,
     };
   }
   if (
-    parsed.data.supervision_commencement_date ||
-    parsed.data.supervision_completion_date
+    parsed.data.supervision_commencement_date?.trim() ||
+    parsed.data.supervision_completion_date?.trim()
   ) {
     initialMilestones.construction = {
-      commencementDate: parsed.data.supervision_commencement_date || undefined,
+      commencementDate: parsed.data.supervision_commencement_date?.trim() || undefined,
       targetCompletionDate:
-        parsed.data.supervision_completion_date || undefined,
+        parsed.data.supervision_completion_date?.trim() || undefined,
     };
   }
 
@@ -583,7 +582,7 @@ export async function createProject(
     master_authority_id: parsed.data.master_authority_id,
   };
 
-  const { data: fullProj, error: fullProjError } = await supabase
+  const { data: fullProj, error: fullProjError } = await adminClient
     .from('projects')
     .insert(fullPayload)
     .select('id')
@@ -597,7 +596,7 @@ export async function createProject(
       fullProjError.message.includes('column'))
   ) {
     // Retry with core columns if augmented columns are not migrated yet
-    const { data: coreProj, error: coreProjError } = await supabase
+    const { data: coreProj, error: coreProjError } = await adminClient
       .from('projects')
       .insert({
         description: parsed.data.name,
@@ -625,7 +624,7 @@ export async function createProject(
   }
 
   // Insert confidential consultant amount
-  const { error: confError } = await supabase
+  const { error: confError } = await adminClient
     .from('project_confidential')
     .insert({
       project_id: project.id,
@@ -645,7 +644,12 @@ export async function createProject(
       user_id: m.userId,
       discipline: m.discipline ?? null,
     }));
-    await adminClient.from('project_members').insert(memberRows);
+    const { error: memberError } = await adminClient
+      .from('project_members')
+      .insert(memberRows);
+    if (memberError) {
+      console.error('Failed to insert project team members:', memberError);
+    }
   }
 
   let instantiatedNocsCount = 0;
@@ -891,8 +895,8 @@ export async function getNextProjectCode(): Promise<{
   error?: string;
 }> {
   try {
-    const supabase = await createClient();
-    const { data: dbProjects } = await supabase
+    const adminClient = createAdminClient();
+    const { data: dbProjects } = await adminClient
       .from('projects')
       .select('code')
       .is('archived_at', null);
@@ -940,8 +944,8 @@ export async function checkProjectCodeAvailability(
   }
 
   try {
-    const supabase = await createClient();
-    const { data: existing } = await supabase
+    const adminClient = createAdminClient();
+    const { data: existing } = await adminClient
       .from('projects')
       .select('id')
       .eq('code', trimmed)

@@ -67,27 +67,32 @@ Every feature in the MVP maps directly to verified business requirements from Ma
    - Process: Server action createProjectAction (app/actions/admin.ts) inserts records into projects, project_members, and project_confidential.
    - Output: Initialized project workspace at /projects/[code] with bound discipline permissions.
 
-2. Discipline Drawing Submission
+2. Discipline Progress, Technical Coordination & Specialist Studies
+   - Input: Discipline progress stage (Architecture, Structure, MEP), coordination transmittal remarks, authority stage (Design, Construction, Revision), specialist files (Vertical Transport, TIS, Green Building, Topographical, Geotechnical), revision indexing (R00 -> R01), RE/AM review decision (Approve / Reject with remarks).
+   - Process: Server actions updateProjectDisciplineStatusAction, uploadSpecialistFileAction, removeSpecialistFileAction (app/actions/specialists.ts), and getSpecialistDownloadUrlAction.
+   - Output: Synchronized multi-discipline progress cards; auto-incremented file revisions; generated CVTEC engineering transmittals; dynamic satisfaction of gate-geotech, gate-topo, and gate-specialists in stage gate readiness engine.
+
+3. Discipline Drawing Submission
    - Input: PDF/DWG file, Document Number (26004-ARC-001), Title, Discipline, Revision (R00).
    - Process: Server action uploadDocumentAction (app/actions/documents.ts) verifies canUploadDiscipline, writes bytes to Supabase storage documents bucket, inserts row into documents table.
    - Output: Listed drawing row in /documents with status 'submitted'; triggers entry in RE Review Queue.
 
-3. Two-Tier Engineering Review
+4. Two-Tier Engineering Review
    - Input: Review decision (Approve Direct / Escalate to AM / Reject with Comments).
    - Process: Server action reviewDocumentAction (app/actions/reviews.ts) updates document status; logs review note and reviewer identity in document_reviews table.
    - Output: Status becomes 'ready_for_authority', routes to AM queue, or returns to uploader as rejected for R01.
 
-4. Statutory Permitting & Fee Tracking
+5. Statutory Permitting & Fee Tracking
    - Input: Authority Tracking Ref, Fee Amount (AED 12,000), Payer, Receipt Number, Expiry Date or Permanent Flag.
    - Process: Server action updateNocStatusAction (app/actions/noc.ts) records receipt in project_nocs; calculates validity window against baseline date (2026-10-22).
    - Output: Green 'Paid' receipt badge; Amber 'Expiring in 14 Days' alert or Green 'Permanent' badge; updates CEO radar.
 
-5. Stage Gate Prerequisite Engine
-   - Input: Milestone dates, uploaded specialist studies (Soil, Topo), approved authority NOCs.
+6. Stage Gate Prerequisite Engine
+   - Input: Milestone dates, uploaded specialist studies (Soil, Topo), approved authority NOCs, custom gate prerequisites.
    - Process: evaluateStageGateReadiness (lib/project-lifecycle.ts) verifies mandatory prerequisites; advanceProjectStageAction (app/actions/admin.ts) updates projects.lifecycle_stage.
    - Output: Stage stepper advances; unlocks next phase operational scope; Completed stage archives site radars.
 
-6. Governance, Archive & Recovery
+7. Governance, Archive & Recovery
    - Input: Document Controller clicks Archive Document on row 26004-ARC-099.
    - Process: archiveDocumentAction (app/actions/documents.ts) sets archived_at timestamp; restoreDocumentAction resets timestamp to null.
    - Output: File is unlisted from active /documents; instantly recoverable via 1-click restore in /archive with full audit history.
@@ -214,17 +219,99 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
 
 ---
 
-### Step 3: Milestone Baseline Setup & Custom Gate Prerequisites
+### Step 3: Operational Command Center: Discipline Progress, Technical Coordination & Specialist Studies
+
+- **Dedicated Operational Workspace**: [localhost:3000/noc-tracker/26004](http://localhost:3000/noc-tracker/26004)
+- **Executive Read-Only Overview**: [localhost:3000/dashboard](http://localhost:3000/dashboard)
+- **Login as**: `admin@test.com`, `re@test.com` (Resident Engineer), or `am3@test.com` (Area Manager)
+
+#### Phase A: Discipline Progress Tracking & Cross-Discipline Coordination
+
+1. **Locate Discipline Progress Cards**:
+   - On `/noc-tracker/26004`, directly underneath the lifecycle stepper, locate the card titled **Discipline Progress & Technical Coordination** (`FileCheck2` icon).
+   - Observe the 3 multidisciplinary status cards: **Architecture**, **Structure**, and **MEP**.
+2. **Interactive Coordination Popover**:
+   - Click the **Architecture** card (or Structure / MEP).
+   - The `DisciplineStatusBadge` dialog opens:
+     - **Engineering Stage Selector**: Displays stages (`Not Started`, `In Progress`, `Under Review`, `Client Approval`, `Approved`, `On Hold`). Select `Under Review` (or `Approved`).
+     - **Engineering Remarks / Transmittal Notes**: Type coordination notes (e.g., `Architectural concept coordinated with Structural column grid; ready for MEP clash check`).
+     - **Audit Attribution Stamp**: Notice the automatic indicator `Last updated by [User Name]`.
+   - Click **Save Status & Remarks**.
+   - _Outcome_: Real-time toast confirms `Discipline progress updated for #26004`. The discipline card immediately reflects the new status badge, updated notes, and actor timestamp.
+3. **Discipline Permission Enforcement**:
+   - Demonstrate that only assigned discipline engineers (e.g., Liam Thorne for Architecture), Resident Engineers, Area Managers, and Admins are authorized to update their respective discipline.
+   - If an unauthorized user inspects the badge, the system shows an amber **Permission Restricted** notice preventing unauthorized cross-discipline tampering.
+
+#### Phase B: Technical Coordination Across Statutory Authority Stages
+
+1. **Authorities Stage Row**:
+   - Directly below the discipline cards, locate the **Authorities Stages** row.
+   - Three key statutory stages are tracked:
+     - **Design Stage**: Concept & detailed design authority approvals (Dubai Municipality, Master Developer).
+     - **Construction Stage**: Building permits, shoring, piling, and structural NOCs.
+     - **Revision Stage**: Modifications, tenant fit-out variances, and as-built clearances.
+2. **Synchronize Authority Stage**:
+   - Click **Design Stage** to open the `AuthoritiesStageRow` dialog.
+   - Update stage to `Under Review` or `Approved`.
+   - Click **Save Stage**.
+   - _Outcome_: Synchronizes overall authority readiness across all engineering leads before individual NOCs are lodged.
+
+#### Phase C: Third-Party Specialist Studies & File Management Drawer
+
+1. **Specialist Studies Overview**:
+   - Locate the **Third-Party Specialist Studies** section at the bottom of the discipline card.
+   - Observe the summary badges: e.g., `0 Approved`, `1 In Review`.
+   - Click button **Manage Studies & Files**.
+2. **The 5 Statutory Specialist Scopes**:
+   - The `ThirdPartySpecialistDrawer` modal opens, displaying the 5 mandatory specialist studies required by Dubai authorities:
+     1. **Vertical Transportation**: Elevator and escalator traffic flow analysis.
+     2. **Traffic Impact Study (TIS)**: RTA corridor access, trip generation, and vehicular queueing analysis.
+     3. **Green Building**: Dubai Green Building Regulations / Al Sa'fat energy and water compliance.
+     4. **Topographical Survey**: Boundary coordinates, levels, and benchmark survey.
+     5. **Geotechnical Investigation**: Borehole soil investigation, bearing capacity, and water table analysis.
+3. **File Upload & Automated Revision Indexing**:
+   - Locate **Geotechnical Investigation** (currently `Pending` with an amber badge).
+   - Click **Attach Report** to open the native device file picker.
+   - Select any sample PDF (e.g., `26004-GEO-Soil-Report.pdf`).
+   - Notice the system dynamically calculates the exact file size (e.g., `2.4 MB`) and automatically assigns initial revision `R00` (or auto-increments to `R01`, `R02` if replacing an earlier version).
+   - Status immediately updates to blue badge: `In Review` / `Uploaded`.
+4. **Multi-Role Review Workflow (Approve vs Reject Enforcement)**:
+   - Logged in as `re@test.com` (Resident Engineer Lead) or `admin@test.com`:
+   - **Rejection with Mandatory Comments**:
+     - Click **Reject** on an uploaded study.
+     - Notice the system enforces: _"Rejection remarks are required."_
+     - Enter remarks: `Borehole depth insufficient for marine soil condition; revise to 30m depth`.
+     - Click **Confirm Reject**. Status changes to rose badge: `Revision Required` with remarks visible to all engineers.
+   - **Revision Resubmission**:
+     - Click **Upload Revision**. Select revised report. System automatically tags it as `R01`!
+   - **Official Approval**:
+     - Click **Approve**. Status turns to green badge: `Approved Study`.
+     - Displays audit stamp: `Reviewed by Resident Engineer Lead on [Timestamp]`.
+5. **Direct Download & Transmittal Verification**:
+   - Click **Download** on any attached specialist study.
+   - The system triggers programmatic download of the attached file or generates an official CVTEC Engineering Transmittal text document complete with project code, document name, revision index, reviewer stamp, and Dubai statutory compliance statement.
+6. **Executive Analytics vs Operational Engine Separation**:
+   - Point out that while `/dashboard` provides executive read-only analytics to prevent tampering, `/noc-tracker/[projectID]` serves as the live operational engine where engineering coordination, studies, and file attachments occur.
+
+> **Presenter Talking Points (English)**:  
+> _"In engineering consultancy, projects frequently get delayed not because of drawings, but because third-party specialist studies—like Soil Reports or Traffic Impact Studies—are trapped in email threads or WhatsApp groups. In CVTEC EDMS, all five mandatory specialist scopes are centralized directly inside the project's NOC Tracker. When an engineer uploads a report, the system auto-computes the revision, enforces mandatory remarks on rejections, and once approved by the Resident Engineer, directly feeds into statutory stage gate compliance."_
+>
+> **Presenter Script (Tagalog / Taglish)**:  
+> _"Ma'am Jaylene, dito po sa `/noc-tracker/[projectID]`, ito ang totoong operational engine natin para sa technical coordination. Sa totoong engineering consultancy, madalas nabibinbin ang submission sa munisipyo dahil ang mga third-party specialist studies—tulad ng Soil Investigation, Topo Survey, o Traffic Impact Study—ay nakakalat lang sa email o WhatsApp. Dito sa CVTEC EDMS, centralized ang limang mandatory specialist studies. Kapag nag-upload si engineer, automatic ang revision tracking mula R00 papuntang R01. Kung may mali, kailangang maglagay si RE ng required rejection remarks bago tanggihan. At kapag na-approve ito ni RE, automatic itong magti-trigger sa stage gates na pasado na ang technical studies para makapag-proceed sa construction!"_
+
+---
+
+### Step 4: Milestone Baseline Setup & Dynamic Stage Gate Prerequisites
 
 - **Login as**: `admin@test.com`, `am3@test.com`, or `re@test.com`
 - **URL**: [localhost:3000/noc-tracker/26004](http://localhost:3000/noc-tracker/26004)
 
 1. Select Project **26004** from the top project picker.
-2. In the top right header, click **Inspect Gate Checklist**.
-3. The `StageGateDrawer` opens on the right.
+2. In the top right header, click button **Inspect Gate Checklist**.
+3. The `StageGateDrawer` slides in from the right.
 4. **Enter Baseline Milestone Dates**:
    - Under **Milestone Dates Reference**, click **Edit Dates** (top right of section).
-   - Enter the baseline dates:
+   - Enter baseline dates:
      - **Kickoff**: `2026-10-14`
      - **Survey Completion**: `2026-10-16`
      - **Concept Approval**: `2026-10-18`
@@ -234,8 +321,11 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
      - **Site Commencement**: `2026-10-22`
      - **Target Substantial Completion**: `2026-11-15`
    - Click **Save Milestone Dates**.
-   - _Outcome_: Checklist recalculates immediately. `gate-concept` and `gate-permit` update to green `Satisfied` badges.
-5. **Custom Stage Gate Prerequisites**:
+5. **The Golden Link: Dynamic Stage Gate Recalculation**:
+   - Observe how the gate checklist dynamically recalculates in real-time:
+     - `gate-geotech`: Automatically updated to green `Satisfied` badge because the Geotechnical Soil Investigation was approved in Step 3!
+     - `gate-concept` & `gate-permit`: Automatically updated to green `Satisfied` badges because the Concept Approval and Building Permit baseline dates were recorded!
+6. **Custom Stage Gate Prerequisites On-The-Fly**:
    - In the drawer, click button **+ Add Gate**.
    - Title: `Client Special Aesthetic Clearance`.
    - Category: Select `Discipline Technical Approval`.
@@ -243,31 +333,15 @@ Before starting the project lifecycle demo, showcase the high-productivity shell
    - Action Hint: `Obtain written sign-off from Client Project Director`.
    - Click **Save Gate Prerequisite**.
    - _Outcome_: Custom prerequisite attaches to the stage gate checklist with an interactive toggle switch and delete button for authorized managers.
+7. **Strict Stage Advancement Gatekeeping (Jaylene Rule #5)**:
+   - Point out the **Advance to Construction** button at the bottom of the drawer.
+   - Explain that if any mandatory specialist study, milestone date, or statutory NOC is missing or blocked, the system locks stage advancement, preventing premature site mobilization.
 
+> **Presenter Talking Points (English)**:  
+> _"Notice how the system bridges operational actions directly with project governance. The Geotechnical study we approved earlier instantly turned the Soil Investigation gate green. We didn't have to manually check off a spreadsheet. And when a client has a bespoke requirement, Admin or Area Manager can create a custom mandatory gate in seconds without writing a single line of code."_
+>
 > **Presenter Script (Tagalog / Taglish)**:  
-> _"Dito po sa Gate Checklist, automatic na nagka-kalkula ang system. Noong inilagay natin ang Concept Approval at Building Permit dates, naging green 'Satisfied' agad ang mga gates. At kung may special condition ang client—tulad nitong 'Client Special Aesthetic Clearance'—puwede tayong mag-add ng custom mandatory gate on-the-fly nang hindi kailangan ng developer o database migration."_
-
----
-
-### Step 4: Operational Discipline Progress & Specialist Clearances (/noc-tracker vs /dashboard)
-
-- **Dedicated Operational Workspace**: [localhost:3000/noc-tracker/26004](http://localhost:3000/noc-tracker/26004)
-- **Executive Read-Only Overview**: [localhost:3000/dashboard](http://localhost:3000/dashboard)
-
-1. **Operational Separation**:
-   - Point out that `/dashboard` is purely read-only analytics to prevent accidental changes.
-   - Operational file uploads and discipline status updates occur strictly inside `/noc-tracker/[projectID]`.
-2. **Specialist Studies Submittal, Review & Revision Workflow**:
-   - In the **Third-Party Specialist Studies** card on `/noc-tracker/26004`, locate **Geotechnical Soil Investigation**.
-   - Click **Attach Report** to open the native device file picker. Select any sample PDF (e.g., `borehole-report.pdf`).
-   - Notice the system dynamically calculates the exact file size and displays the real file name.
-3. **Technical Review & Approval**:
-   - Logged in as `re@test.com` or `admin@test.com`, click **Approve** on the uploaded study.
-   - Status changes to green badge **Approved Study**.
-   - _Outcome_: Re-open **Inspect Gate Checklist**; observe that `gate-geotech` is now 100% **Satisfied**!
-
-> **Presenter Script (Tagalog / Taglish)**:  
-> _"Ma'am Jaylene, napakahalaga po ng separation na ito: Ang `/dashboard` ay pure read-only analytics para sa executives para hindi magalaw ang data. Dito naman po sa `/noc-tracker`, ito ang totoong operational engine. Dito nag-a-attach ng tunay na Soil Investigation report at Topo Survey. Kapag in-approve ito ni RE o Admin, automatic na sasagutin ng system ang gate requirement papunta sa Construction stage."_
+> _"Panoorin po natin ang koneksyon nito: Dahil in-approve natin kanina ang Geotechnical Soil Investigation sa Step 3, automatic na naging green 'Satisfied' ang `gate-geotech` sa checklist natin nang hindi na kailangang mag-manual checklist sa Excel! Noong inilagay din natin ang Concept Approval at Building Permit dates, naging green din agad ang mga gates. At kung may special condition ang client—tulad nitong 'Client Special Aesthetic Clearance'—puwede tayong mag-add ng custom mandatory gate on-the-fly nang hindi kailangan ng developer o database migration."_
 
 ---
 
