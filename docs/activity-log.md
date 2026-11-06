@@ -1624,3 +1624,10 @@
   - Verification:
     - Executed `pnpm run build` with Turbopack, confirming zero errors and clean route table without `/(.)projects/new`.
     - Executed `pnpm run lint` with ESLint, confirming zero errors or warnings.
+
+- Replaced Resend with Nodemailer over Brevo SMTP for transactional email.
+  - Root cause: `EMAIL_FROM` unset, so Resend sandbox sender `onboarding@resend.dev` delivered only to the account owner.
+  - [lib/email/client.ts](lib/email/client.ts): SMTP transport and `sendMail`; env `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`.
+  - [lib/email/notifications.ts](lib/email/notifications.ts), [app/actions/admin.ts](app/actions/admin.ts): use `sendMail`; `inviteUser` returns `warning` when the email fails.
+  - [app/(app)/users/invite-user-dialog.tsx](app/(app)/users/invite-user-dialog.tsx): shows warning toast.
+  - Removed `resend`; added `nodemailer`, `@types/nodemailer`. `.env.example` updated.

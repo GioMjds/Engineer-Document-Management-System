@@ -123,7 +123,8 @@ export function InviteUserDialog() {
         toast.error(res.error ?? 'Failed to invite user.');
         return;
       }
-      toast.success(`Invitation sent to ${values.email}.`);
+      if (res.warning) toast.warning(res.warning);
+      else toast.success(`Invitation sent to ${values.email}.`);
       setOpen(false);
       reset();
     });

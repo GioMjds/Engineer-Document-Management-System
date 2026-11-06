@@ -1,4 +1,4 @@
-import { resend, EMAIL_FROM } from './client';
+import { sendMail } from './client';
 import { renderInviteEmail } from './templates/invite-user';
 
 export interface EmailDetailItem {
@@ -19,10 +19,6 @@ export interface EdmsAlertPayload {
 export async function sendEdmsAlert(
   payload: EdmsAlertPayload,
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
-  if (!process.env.RESEND_API_KEY) {
-    return { ok: false, error: 'RESEND_API_KEY is not configured.' };
-  }
-
   const detailsRows = payload.details
     .map(
       (d) => `
@@ -77,23 +73,7 @@ export async function sendEdmsAlert(
 </html>
   `.trim();
 
-  try {
-    const { data, error } = await resend.emails.send({
-      from: EMAIL_FROM,
-      to: payload.to,
-      subject: payload.subject,
-      html,
-    });
-
-    if (error) {
-      return { ok: false, error: error.message };
-    }
-
-    return { ok: true, id: data?.id };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown send error';
-    return { ok: false, error: message };
-  }
+  return sendMail({ to: payload.to, subject: payload.subject, html });
 }
 
 // Send custom account invitation email containing password setup activation link.
@@ -103,10 +83,6 @@ export async function sendUserInviteEmail(params: {
   role: string;
   actionLink: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  if (!process.env.RESEND_API_KEY) {
-    return { ok: false, error: 'RESEND_API_KEY is not configured.' };
-  }
-
   const roleLabels = {
     admin: 'Administrator',
     ceo: 'Executive / CEO',
@@ -123,21 +99,9 @@ export async function sendUserInviteEmail(params: {
     inviteLink: params.actionLink,
   });
 
-  try {
-    const { error } = await resend.emails.send({
-      from: EMAIL_FROM,
-      to: [params.email],
-      subject: 'Invitation to CVTEC Engineering Document System',
-      html,
-    });
-
-    if (error) {
-      return { ok: false, error: error.message };
-    }
-
-    return { ok: true };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown invite email error';
-    return { ok: false, error: message };
-  }
+  return sendMail({
+    to: [params.email],
+    subject: 'Invitation to CVTEC Engineering Document System',
+    html,
+  });
 }

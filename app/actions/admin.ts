@@ -77,6 +77,7 @@ export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 type ActionPromise = {
   ok: boolean;
   error?: string;
+  warning?: string;
   projectId?: string;
 };
 
@@ -156,18 +157,16 @@ export async function inviteUser(input: {
     ? `${siteUrl}/auth/confirm?token_hash=${linkData.properties.hashed_token}&type=invite&next=/set-password`
     : (actionLink ?? `${siteUrl}/set-password`);
 
-  // Send branded invitation email with password activation link via Resend
-  if (process.env.RESEND_API_KEY) {
-    const emailResult = await sendUserInviteEmail({
-      email: parsed.data.email,
-      fullName: parsed.data.full_name,
-      role: parsed.data.role,
-      actionLink: directActivationLink,
-    });
+  // Send branded invitation email with password activation link via SMTP
+  const emailResult = await sendUserInviteEmail({
+    email: parsed.data.email,
+    fullName: parsed.data.full_name,
+    role: parsed.data.role,
+    actionLink: directActivationLink,
+  });
 
-    if (!emailResult.ok) {
-      console.warn('Invite email delivery error via Resend:', emailResult.error);
-    }
+  if (!emailResult.ok) {
+    console.warn('Invite email delivery error:', emailResult.error);
   }
 
   await adminClient.from('audit_log').insert({
@@ -183,7 +182,9 @@ export async function inviteUser(input: {
   });
 
   revalidatePath('/users');
-  return { ok: true };
+  return emailResult.ok
+    ? { ok: true }
+    : { ok: true, warning: 'User created but invite email failed. Use the Resend button.' };
 }
 
 export async function updateUserRole(input: {
@@ -495,20 +496,18 @@ export async function resendUserInvite(email: string): Promise<ActionPromise> {
     ? `${siteUrl}/auth/confirm?token_hash=${linkData.properties.hashed_token}&type=invite&next=/set-password`
     : (linkData.properties?.action_link ?? `${siteUrl}/set-password`);
 
-  if (process.env.RESEND_API_KEY) {
-    const emailResult = await sendUserInviteEmail({
-      email: parsedEmail.data,
-      fullName: targetProfile.full_name,
-      role: targetProfile.role,
-      actionLink: directActivationLink,
-    });
+  const emailResult = await sendUserInviteEmail({
+    email: parsedEmail.data,
+    fullName: targetProfile.full_name,
+    role: targetProfile.role,
+    actionLink: directActivationLink,
+  });
 
-    if (!emailResult.ok) {
-      return {
-        ok: false,
-        error: emailResult.error ?? 'Failed to send invite email.',
-      };
-    }
+  if (!emailResult.ok) {
+    return {
+      ok: false,
+      error: emailResult.error ?? 'Failed to send invite email.',
+    };
   }
 
   await adminClient.from('audit_log').insert({
