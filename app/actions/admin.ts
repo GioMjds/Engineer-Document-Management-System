@@ -97,7 +97,7 @@ export async function inviteUser(input: {
   }
 
   const adminClient = createAdminClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const siteUrl = process.env.SITE_URL || 'http://localhost:3000';
 
   let userId: string | null = null;
   let actionLink: string | null = null;
@@ -131,7 +131,9 @@ export async function inviteUser(input: {
       return {
         ok: false,
         error:
-          linkError?.message ?? inviteError?.message ?? 'Failed to invite user.',
+          linkError?.message ??
+          inviteError?.message ??
+          'Failed to invite user.',
       };
     }
     userId = inviteData.user.id;
@@ -184,7 +186,10 @@ export async function inviteUser(input: {
   revalidatePath('/users');
   return emailResult.ok
     ? { ok: true }
-    : { ok: true, warning: 'User created but invite email failed. Use the Resend button.' };
+    : {
+        ok: true,
+        warning: 'User created but invite email failed. Use the Resend button.',
+      };
 }
 
 export async function updateUserRole(input: {
@@ -255,9 +260,7 @@ export async function updateUserRole(input: {
   return { ok: true };
 }
 
-export async function deactivateUser(
-  userId: string,
-): Promise<ActionPromise> {
+export async function deactivateUser(userId: string): Promise<ActionPromise> {
   const caller = await requireCan('users.manage');
 
   if (userId === caller.id) {
@@ -460,7 +463,7 @@ export async function resendUserInvite(email: string): Promise<ActionPromise> {
   }
 
   const adminClient = createAdminClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const siteUrl = process.env.SITE_URL || 'http://localhost:3000';
 
   const { data: targetProfile } = await adminClient
     .from('profiles')
@@ -550,8 +553,10 @@ export async function createProject(
     parsed.data.design_completion_date?.trim()
   ) {
     initialMilestones.preConstruction = {
-      commencementDate: parsed.data.design_commencement_date?.trim() || undefined,
-      plannedCompletionDate: parsed.data.design_completion_date?.trim() || undefined,
+      commencementDate:
+        parsed.data.design_commencement_date?.trim() || undefined,
+      plannedCompletionDate:
+        parsed.data.design_completion_date?.trim() || undefined,
     };
   }
   if (
@@ -559,7 +564,8 @@ export async function createProject(
     parsed.data.supervision_completion_date?.trim()
   ) {
     initialMilestones.construction = {
-      commencementDate: parsed.data.supervision_commencement_date?.trim() || undefined,
+      commencementDate:
+        parsed.data.supervision_commencement_date?.trim() || undefined,
       targetCompletionDate:
         parsed.data.supervision_completion_date?.trim() || undefined,
     };
@@ -714,7 +720,10 @@ export async function createProject(
             .from('project_noc_requirements')
             .insert(reqInserts);
           if (reqInsertError) {
-            console.error('Failed to clone project_noc_requirements:', reqInsertError);
+            console.error(
+              'Failed to clone project_noc_requirements:',
+              reqInsertError,
+            );
           }
         }
       }
@@ -841,9 +850,7 @@ export async function overrideNocSequence(
 
 // Permanent Purge
 
-export async function purgeDocument(
-  docId: string,
-): Promise<ActionPromise> {
+export async function purgeDocument(docId: string): Promise<ActionPromise> {
   const caller = await requireCan('archive.purge');
 
   const supabase = await createClient();
@@ -926,7 +933,8 @@ export async function getNextProjectCode(): Promise<{
 
     return { ok: true, code: nextCode };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to generate code';
+    const message =
+      err instanceof Error ? err.message : 'Failed to generate code';
     return { ok: false, error: message };
   }
 }
@@ -956,7 +964,8 @@ export async function checkProjectCodeAvailability(
 
     return { ok: true, available: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to verify code';
+    const message =
+      err instanceof Error ? err.message : 'Failed to verify code';
     return { ok: false, available: false, error: message };
   }
 }
@@ -1080,7 +1089,10 @@ export async function deleteProjectAction(
         try {
           await adminClient.storage.from('documents').remove(filePaths);
         } catch (storageErr) {
-          console.error('Failed to remove project document storage files:', storageErr);
+          console.error(
+            'Failed to remove project document storage files:',
+            storageErr,
+          );
         }
       }
 
@@ -1108,12 +1120,21 @@ export async function deleteProjectAction(
         .from('noc_resubmission_history')
         .delete()
         .in('project_noc_id', nocIds);
-      await adminClient.from('project_nocs').delete().eq('project_id', projectId);
+      await adminClient
+        .from('project_nocs')
+        .delete()
+        .eq('project_id', projectId);
     }
 
     // Delete members and confidential amounts.
-    await adminClient.from('project_members').delete().eq('project_id', projectId);
-    await adminClient.from('project_confidential').delete().eq('project_id', projectId);
+    await adminClient
+      .from('project_members')
+      .delete()
+      .eq('project_id', projectId);
+    await adminClient
+      .from('project_confidential')
+      .delete()
+      .eq('project_id', projectId);
 
     // Finally delete project row.
     const { error: delErr } = await adminClient

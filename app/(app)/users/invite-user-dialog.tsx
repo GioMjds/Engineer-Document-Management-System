@@ -82,7 +82,8 @@ export function InviteUserDialog() {
   const selectedRole = useWatch({ control, name: 'role' });
   const rawFullName = useWatch({ control, name: 'fullName' }) || '';
   const selectedSpecialization = useWatch({ control, name: 'specialization' });
-  const customSpecialization = useWatch({ control, name: 'customSpecialization' }) || '';
+  const customSpecialization =
+    useWatch({ control, name: 'customSpecialization' }) || '';
 
   const activeSpecialty =
     selectedRole === 'engineer'
@@ -94,7 +95,9 @@ export function InviteUserDialog() {
       : null;
 
   const previewName =
-    activeSpecialty && rawFullName.trim() && !rawFullName.toLowerCase().includes(activeSpecialty.toLowerCase())
+    activeSpecialty &&
+    rawFullName.trim() &&
+    !rawFullName.toLowerCase().includes(activeSpecialty.toLowerCase())
       ? `${rawFullName.trim()} (${activeSpecialty})`
       : rawFullName.trim();
 
@@ -109,7 +112,10 @@ export function InviteUserDialog() {
             : null
         : null;
 
-    if (specialty && !finalFullName.toLowerCase().includes(specialty.toLowerCase())) {
+    if (
+      specialty &&
+      !finalFullName.toLowerCase().includes(specialty.toLowerCase())
+    ) {
       finalFullName = `${finalFullName} (${specialty})`;
     }
 
@@ -124,7 +130,7 @@ export function InviteUserDialog() {
         return;
       }
       if (res.warning) toast.warning(res.warning);
-      else toast.success(`Invitation sent to ${values.email}.`);
+      else toast.success(`Invitation sent to ${values.fullName}.`);
       setOpen(false);
       reset();
     });
@@ -140,7 +146,10 @@ export function InviteUserDialog() {
     >
       <DialogTrigger
         render={
-          <Button size="sm" className="gap-2 bg-(--site-cyan) hover:bg-(--site-cyan-hover) text-white font-medium">
+          <Button
+            size="sm"
+            className="gap-2 bg-(--site-cyan) hover:bg-(--site-cyan-hover) text-white font-medium"
+          >
             <UserPlus className="h-4 w-4" />
             <span>Invite User</span>
           </Button>
@@ -151,7 +160,8 @@ export function InviteUserDialog() {
           <DialogHeader>
             <DialogTitle>Invite New User</DialogTitle>
             <DialogDescription>
-              Send an invitation email to a new team member and assign their system role.
+              Send an invitation email to a new team member and assign their
+              system role.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -164,7 +174,9 @@ export function InviteUserDialog() {
                 {...register('email')}
               />
               {errors.email && (
-                <p className="text-xs text-destructive">{errors.email.message}</p>
+                <p className="text-xs text-destructive">
+                  {errors.email.message}
+                </p>
               )}
             </div>
             <div className="space-y-1.5">
@@ -176,7 +188,9 @@ export function InviteUserDialog() {
                 {...register('fullName')}
               />
               {errors.fullName && (
-                <p className="text-xs text-destructive">{errors.fullName.message}</p>
+                <p className="text-xs text-destructive">
+                  {errors.fullName.message}
+                </p>
               )}
             </div>
             <div className="space-y-1.5">
@@ -209,7 +223,9 @@ export function InviteUserDialog() {
                 )}
               />
               {errors.role && (
-                <p className="text-xs text-destructive">{errors.role.message}</p>
+                <p className="text-xs text-destructive">
+                  {errors.role.message}
+                </p>
               )}
             </div>
 
@@ -217,10 +233,15 @@ export function InviteUserDialog() {
               <div className="space-y-3 rounded-md border border-(--site-cyan)/30 bg-(--site-cyan)/5 p-3">
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="specialization" className="text-xs font-semibold text-foreground">
+                    <Label
+                      htmlFor="specialization"
+                      className="text-xs font-semibold text-foreground"
+                    >
                       Engineering Specialty
                     </Label>
-                    <span className="text-[10px] text-muted-foreground">Appends to name</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      Appends to name
+                    </span>
                   </div>
                   <Controller
                     name="specialization"
@@ -239,14 +260,23 @@ export function InviteUserDialog() {
                           label: s.label,
                         }))}
                       >
-                        <SelectTrigger id="specialization" className="h-9 text-xs bg-background">
+                        <SelectTrigger
+                          id="specialization"
+                          className="h-9 text-xs bg-background"
+                        >
                           <SelectValue>
-                            {ENGINEER_SPECIALIZATIONS.find((s) => s.value === field.value)?.label ?? field.value}
+                            {ENGINEER_SPECIALIZATIONS.find(
+                              (s) => s.value === field.value,
+                            )?.label ?? field.value}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {ENGINEER_SPECIALIZATIONS.map((s) => (
-                            <SelectItem key={s.value} value={s.value} className="text-xs">
+                            <SelectItem
+                              key={s.value}
+                              value={s.value}
+                              className="text-xs"
+                            >
                               {s.label}
                             </SelectItem>
                           ))}
@@ -274,7 +304,9 @@ export function InviteUserDialog() {
                 {previewName && previewName !== rawFullName.trim() && (
                   <div className="rounded bg-background/80 px-2.5 py-1.5 border border-border text-[11px] text-muted-foreground">
                     <span>Will be saved as: </span>
-                    <strong className="text-foreground font-semibold">{previewName}</strong>
+                    <strong className="text-foreground font-semibold">
+                      {previewName}
+                    </strong>
                   </div>
                 )}
               </div>
