@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  availableProfiles,
   collectMembers,
   createEmptyTeam,
   groupMembersByRole,
@@ -111,4 +112,29 @@ test('groupMembersByRole skips null profiles, unknown disciplines and unmapped r
   ]);
   assert.ok(Object.values(assignedRoles).every((v) => v === 'Unassigned'));
   assert.deepEqual(assignedMembers, {});
+});
+
+const staff = [
+  { id: 'a', role: 'engineer' },
+  { id: 'b', role: 'engineer' },
+  { id: 'c', role: 'resident_engineer' },
+  { id: 'd', role: 'admin' },
+];
+
+test('availableProfiles offers only people whose role fits the slot', () => {
+  assert.deepEqual(
+    availableProfiles(staff, ['engineer'], []).map((p) => p.id),
+    ['a', 'b'],
+  );
+  assert.deepEqual(
+    availableProfiles(staff, ['resident_engineer'], []).map((p) => p.id),
+    ['c'],
+  );
+});
+
+test('availableProfiles hides people already chosen in any slot', () => {
+  assert.deepEqual(
+    availableProfiles(staff, ['engineer'], ['a']).map((p) => p.id),
+    ['b'],
+  );
 });

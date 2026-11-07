@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/command';
 import {
   TEAM_FIELDS,
+  availableProfiles,
   type TeamAssignment,
   type TeamKey,
 } from '@/lib/team-assignment';
@@ -55,6 +56,7 @@ interface StaffMultiSelectProps {
   onChange: (value: string[]) => void;
   profiles: ProfileItem[];
   roles: readonly string[];
+  taken: readonly string[];
 }
 
 // Chips for chosen staff plus a searchable picker that stays open for repeated adds.
@@ -64,6 +66,7 @@ function StaffMultiSelect({
   onChange,
   profiles,
   roles,
+  taken,
 }: StaffMultiSelectProps) {
   const [open, setOpen] = useState(false);
 
@@ -77,9 +80,7 @@ function StaffMultiSelect({
         email: null,
       },
   );
-  const available = profiles.filter((p) => !value.includes(p.id));
-  const suggested = available.filter((p) => roles.includes(p.role));
-  const others = available.filter((p) => !roles.includes(p.role));
+  const available = availableProfiles(profiles, roles, taken);
 
   const renderItem = (p: ProfileItem) => (
     <CommandItem
@@ -137,16 +138,7 @@ function StaffMultiSelect({
               <CommandEmpty className="py-4 text-xs">
                 No staff found.
               </CommandEmpty>
-              {suggested.length > 0 && (
-                <CommandGroup heading="Suggested for this role">
-                  {suggested.map(renderItem)}
-                </CommandGroup>
-              )}
-              {others.length > 0 && (
-                <CommandGroup heading="Other staff">
-                  {others.map(renderItem)}
-                </CommandGroup>
-              )}
+              <CommandGroup>{available.map(renderItem)}</CommandGroup>
             </CommandList>
           </Command>
         </PopoverContent>
@@ -167,6 +159,8 @@ export function TeamAssignmentFields({
   profiles,
   onChange,
 }: TeamAssignmentFieldsProps) {
+  const taken = Object.values(team).flat();
+
   return (
     <div className="space-y-4">
       {GROUPS.map((group, i) => (
@@ -192,6 +186,7 @@ export function TeamAssignmentFields({
                   onChange={(ids) => onChange(f.key, ids)}
                   profiles={profiles}
                   roles={f.roles}
+                  taken={taken}
                 />
               </div>
             ))}

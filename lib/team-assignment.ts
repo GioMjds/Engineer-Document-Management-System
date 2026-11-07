@@ -108,6 +108,17 @@ export function isSameTeam(a: TeamAssignment, b: TeamAssignment) {
   });
 }
 
+// Staff who fit a slot by role and are not already chosen in any slot.
+export function availableProfiles<P extends { id: string; role: string }>(
+  profiles: P[],
+  roles: readonly string[],
+  taken: readonly string[],
+) {
+  return profiles.filter(
+    (p) => roles.includes(p.role) && !taken.includes(p.id),
+  );
+}
+
 interface RawMember {
   user_id?: string;
   discipline?: string | null;
