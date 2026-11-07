@@ -1,5 +1,6 @@
 import { getAuthorityName } from '@/lib/noc-matrix';
 import { isLapsed } from '@/lib/noc-tracker';
+import { groupMembersByRole } from '@/lib/team-assignment';
 import { createClient } from '@/lib/supabase/server';
 import type {
   AssignedProject,
@@ -97,61 +98,9 @@ function mapDbProjectToAssigned(
   masterAuth: MasterAuthority,
   clientConsultantAmount?: number,
 ): AssignedProject {
-  const roles: AssignedProject['assignedRoles'] = {
-    authorityEngineer: 'Unassigned',
-    architectEngineer: 'Unassigned',
-    mepEngineer: 'Unassigned',
-    structureEngineer: 'Unassigned',
-    civilEngineer: 'Unassigned',
-    residentEngineer: 'Unassigned',
-    areaManager: 'Unassigned',
-    docController: 'Unassigned',
-  };
-
-  const memberIds: NonNullable<AssignedProject['assignedMemberIds']> = {};
-
-  if (p.project_members && Array.isArray(p.project_members)) {
-    for (const pm of p.project_members) {
-      const profile = pm.profiles;
-      if (!profile) continue;
-      const name = profile.full_name || 'Staff Member';
-
-      switch (profile.role) {
-        case 'authority_engineer':
-          roles.authorityEngineer = name;
-          memberIds.authorityEngineer = pm.user_id;
-          break;
-        case 'resident_engineer':
-          roles.residentEngineer = name;
-          memberIds.residentEngineer = pm.user_id;
-          break;
-        case 'area_manager':
-          roles.areaManager = name;
-          memberIds.areaManager = pm.user_id;
-          break;
-        case 'dc':
-        case 'doc_controller':
-          roles.docController = name;
-          memberIds.docController = pm.user_id;
-          break;
-        case 'engineer':
-          if (pm.discipline === 'mep') {
-            roles.mepEngineer = name;
-            memberIds.mepEngineer = pm.user_id;
-          } else if (pm.discipline === 'architect') {
-            roles.architectEngineer = name;
-            memberIds.architectEngineer = pm.user_id;
-          } else if (pm.discipline === 'structure') {
-            roles.structureEngineer = name;
-            memberIds.structureEngineer = pm.user_id;
-          } else if (pm.discipline === 'civil') {
-            roles.civilEngineer = name;
-            memberIds.civilEngineer = pm.user_id;
-          }
-          break;
-      }
-    }
-  }
+  const { assignedRoles, assignedMembers } = groupMembersByRole(
+    Array.isArray(p.project_members) ? p.project_members : [],
+  );
 
   const stageMap = {
     planning: 'Pre-Construction',
@@ -183,8 +132,8 @@ function mapDbProjectToAssigned(
       : 'Pre-Construction',
     milestones:
       (p.milestones as StageMilestoneDates) || undefined,
-    assignedRoles: roles,
-    assignedMemberIds: memberIds,
+    assignedRoles,
+    assignedMembers,
   };
 }
 
