@@ -198,6 +198,21 @@ export interface ProjectNocItem {
   updatedAt: string;
 }
 
+export type AssignedRoleKey =
+  | 'authorityEngineer'
+  | 'architectEngineer'
+  | 'mepEngineer'
+  | 'structureEngineer'
+  | 'civilEngineer'
+  | 'residentEngineer'
+  | 'areaManager'
+  | 'docController';
+
+export interface AssignedMember {
+  id: string;
+  name: string;
+}
+
 export interface AssignedProject {
   id?: string;
   code: string;
@@ -212,26 +227,8 @@ export interface AssignedProject {
   currentStage: string;
   lifecycleStage: ProjectLifecycleStage;
   milestones?: StageMilestoneDates;
-  assignedRoles: {
-    authorityEngineer: string;
-    architectEngineer: string;
-    mepEngineer: string;
-    structureEngineer: string;
-    civilEngineer: string;
-    residentEngineer: string;
-    areaManager: string;
-    docController: string;
-  };
-  assignedMemberIds?: {
-    authorityEngineer?: string;
-    architectEngineer?: string;
-    mepEngineer?: string;
-    structureEngineer?: string;
-    civilEngineer?: string;
-    residentEngineer?: string;
-    areaManager?: string;
-    docController?: string;
-  };
+  assignedRoles: Record<AssignedRoleKey, string>;
+  assignedMembers?: Partial<Record<AssignedRoleKey, AssignedMember[]>>;
 }
 
 export type DisciplineStageStatus =
