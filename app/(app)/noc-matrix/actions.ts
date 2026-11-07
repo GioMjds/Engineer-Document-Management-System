@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser, requireRole } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { MATRIX_EDIT_ROLES } from '@/lib/noc-constants';
 import type {
   MasterAuthorityRecord,
@@ -519,11 +520,11 @@ export async function createMatrixItem(
     }
 
     const res = rpcResult as {
-      id?: string;
+      matrix_item_id?: string;
       sequence_no?: number;
     };
 
-    if (!res.id) {
+    if (!res.matrix_item_id) {
       return {
         ok: false,
         error: 'Database procedure did not return created blueprint ID.',
@@ -560,7 +561,7 @@ export async function createMatrixItem(
         )
       `,
       )
-      .eq('id', res.id)
+      .eq('id', res.matrix_item_id)
       .single();
 
     if (fetchError || !insertedItem) {
@@ -669,12 +670,17 @@ export async function deleteMatrixItem(
     }
 
     // Remove unobtained and not started project NOCs while preserving approved records.
-    const { data: cleanedRows } = await supabase
+    // Admin client: RLS grants project_nocs delete to admin only, so user client silently deletes nothing.
+    const { data: cleanedRows, error: cleanError } = await createAdminClient()
       .from('project_nocs')
       .delete()
       .eq('matrix_item_id', matrixItemId)
       .eq('status_code', 'not_started')
       .select('id, project_id');
+
+    if (cleanError) {
+      return { ok: false, error: cleanError.message };
+    }
 
     const affectedProjectCount = cleanedRows
       ? new Set(cleanedRows.map((r) => r.project_id)).size

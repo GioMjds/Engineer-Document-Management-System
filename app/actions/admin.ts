@@ -8,6 +8,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { type AppRole } from '@/lib/permissions';
 import { sendUserInviteEmail } from '@/lib/email/notifications';
 import type { Json } from '@/types/database';
+import { updateProjectSchema, type ProjectEditInput } from '@/lib/project-edit';
 
 const roleSchema = z.enum([
   'admin',
@@ -42,7 +43,11 @@ const updateRoleSchema = z.object({
 const createProjectSchema = z.object({
   name: z.string().trim().min(1, 'Project name is required.'),
   code: z.string().trim().min(1, 'Project code is required.'),
-  description: z.string().default(''),
+  summary: z
+    .string()
+    .trim()
+    .max(500, 'Description must be 500 characters or fewer.')
+    .default(''),
   stage: z
     .enum(['planning', 'design', 'construction', 'handover', 'completed'])
     .default('planning'),
@@ -576,6 +581,7 @@ export async function createProject(
       ? initialMilestones
       : {}) as Json,
     description: parsed.data.name,
+    summary: parsed.data.summary || null,
     code: parsed.data.code,
     stage: parsed.data.stage,
     client_name: parsed.data.client_name,
@@ -587,11 +593,23 @@ export async function createProject(
     master_authority_id: parsed.data.master_authority_id,
   };
 
-  const { data: fullProj, error: fullProjError } = await adminClient
+  const isSchemaError = (e: { message: string } | null) =>
+    !!e && (e.message.includes('schema cache') || e.message.includes('column'));
+
+  let { data: fullProj, error: fullProjError } = await adminClient
     .from('projects')
     .insert(fullPayload)
     .select('id')
     .single();
+
+  // Unapplied summary migration must not drop amounts, emails and milestones.
+  if (!fullProj && isSchemaError(fullProjError)) {
+    ({ data: fullProj, error: fullProjError } = await adminClient
+      .from('projects')
+      .insert({ ...fullPayload, summary: undefined })
+      .select('id')
+      .single());
+  }
 
   if (fullProj) {
     project = fullProj;
@@ -795,6 +813,63 @@ export async function updateProjectMembers(
       members_count: members.length,
       members,
     },
+  });
+
+  revalidatePath('/projects');
+  revalidatePath('/noc-tracker');
+  revalidatePath('/noc');
+  revalidatePath('/dashboard');
+  revalidatePath(`/projects/${projectId}`);
+  return { ok: true };
+}
+
+// Updates core project details; code, amounts, dates and NOCs are left untouched.
+export async function updateProject(
+  projectId: string,
+  input: ProjectEditInput,
+): Promise<ActionPromise> {
+  const caller = await requireCan('project.create');
+
+  const parsed = updateProjectSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? 'Invalid project data.',
+    };
+  }
+  const d = parsed.data;
+
+  const adminClient = createAdminClient();
+  const core = {
+    description: d.name,
+    stage: d.stage,
+    client_name: d.client_name,
+    contractor_name: d.contractor_name,
+    client_emails: d.client_emails,
+    contractor_emails: d.contractor_emails,
+    master_authority_id: d.master_authority_id,
+  };
+
+  let { error } = await adminClient
+    .from('projects')
+    .update({ ...core, summary: d.summary || null })
+    .eq('id', projectId);
+
+  // Retry without summary if that column is not migrated yet.
+  if (error && /schema cache|column/.test(error.message)) {
+    ({ error } = await adminClient
+      .from('projects')
+      .update(core)
+      .eq('id', projectId));
+  }
+  if (error) return { ok: false, error: error.message };
+
+  await adminClient.from('audit_log').insert({
+    actor_id: caller.id,
+    action: 'PROJECT_UPDATE',
+    entity: 'projects',
+    entity_id: projectId,
+    metadata: { ...core },
   });
 
   revalidatePath('/projects');

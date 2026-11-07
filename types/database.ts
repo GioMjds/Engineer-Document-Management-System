@@ -759,6 +759,7 @@ export type Database = {
           image_path: string | null
           master_authority_id: number
           stage: Database["public"]["Enums"]["project_stage"]
+          summary: string | null
           milestones: Json | null
           updated_at: string
         }
@@ -777,6 +778,7 @@ export type Database = {
           image_path?: string | null
           master_authority_id: number
           stage?: Database["public"]["Enums"]["project_stage"]
+          summary?: string | null
           milestones?: Json | null
           updated_at?: string
         }
@@ -795,6 +797,7 @@ export type Database = {
           image_path?: string | null
           master_authority_id?: number
           stage?: Database["public"]["Enums"]["project_stage"]
+          summary?: string | null
           milestones?: Json | null
           updated_at?: string
         }

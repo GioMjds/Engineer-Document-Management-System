@@ -93,14 +93,13 @@ export function ProjectDialogModal({
         onOpenChange={handleOpenChange}
       >
         <DialogContent
-          className="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
+          className="sm:max-w-2xl max-h-[90vh] gap-5 overflow-y-auto"
           showCloseButton={true}
         >
           <DialogHeader>
-            <DialogTitle>Register New Project</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Admin exclusive: Initialize project scope, stakeholder contacts, and contract values.
-            </DialogDescription>
+            <DialogTitle className="text-base font-semibold">
+              Register project
+            </DialogTitle>
           </DialogHeader>
           {children}
         </DialogContent>

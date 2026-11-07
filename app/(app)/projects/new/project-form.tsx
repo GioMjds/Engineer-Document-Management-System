@@ -55,14 +55,7 @@ import {
   type TeamAssignment,
 } from '@/lib/team-assignment';
 import { useProjectModal } from '@/components/projects/project-dialog-modal';
-
-const STAGE_LABELS = {
-  planning: 'Planning',
-  design: 'Pre-Construction (Design)',
-  construction: 'Construction',
-  handover: 'Handover',
-  completed: 'Completed',
-} satisfies Record<string, string>;
+import { STAGE_LABELS } from '@/lib/project-edit';
 
 const STEP_LABELS = ['Project details', 'Team (optional)'] as const;
 
