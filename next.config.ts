@@ -3,6 +3,11 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   typedRoutes: true,
   reactCompiler: true,
+  // Inline only the public Supabase values so the browser client can read them.
+  env: {
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+  },
   images: {
     qualities: [50, 75, 100],
   },
