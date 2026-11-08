@@ -36,7 +36,10 @@ export async function POST(request: NextRequest) {
     },
     { onConflict: 'endpoint' },
   );
-  if (error) return NextResponse.json({ error: 'Save failed' }, { status: 500 });
+  if (error) {
+    console.error('[push] subscribe upsert failed:', error);
+    return NextResponse.json({ error: 'Save failed' }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }
 
@@ -57,6 +60,9 @@ export async function DELETE(request: NextRequest) {
     .from('push_subscriptions')
     .delete()
     .eq('endpoint', parsed.data.endpoint);
-  if (error) return NextResponse.json({ error: 'Delete failed' }, { status: 500 });
+  if (error) {
+    console.error('[push] subscribe delete failed:', error);
+    return NextResponse.json({ error: 'Delete failed' }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }
