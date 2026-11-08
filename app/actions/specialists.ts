@@ -1,9 +1,12 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireUser } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
+import { getScopedProject } from '@/lib/project-access';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
+  ALL_SPECIALIST_TYPES,
+  actorLabel,
   canUserUploadSpecialist,
   emptyDisciplineStatus,
 } from '@/lib/project-status';
@@ -32,6 +35,18 @@ function sanitizeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
+function isSpecialistType(value: unknown): value is ThirdPartySpecialistType {
+  return (
+    typeof value === 'string' &&
+    (ALL_SPECIALIST_TYPES as string[]).includes(value)
+  );
+}
+
+// Every specialist file lives under its project folder; stored paths outside it are never touched.
+function specialistPrefix(projectCode: string): string {
+  return `specialists/${projectCode}/`;
+}
+
 /**
  * Uploads a specialist technical report to Supabase storage and attaches it to the project record.
  */
@@ -49,10 +64,15 @@ export async function uploadSpecialistFileAction(
   error?: string;
 }> {
   try {
-    const user = await requireUser();
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized.' };
     if (!canUserUploadSpecialist(user.role)) {
       return { success: false, error: 'Your role cannot upload specialist studies.' };
     }
+    if (!isSpecialistType(type)) {
+      return { success: false, error: 'Unknown specialist study type.' };
+    }
+
     const file = formData.get('file') as File | null;
 
     if (!file || !(file instanceof File)) {
@@ -63,9 +83,12 @@ export async function uploadSpecialistFileAction(
       return { success: false, error: 'File size exceeds 50 MB limit.' };
     }
 
+    const project = await getScopedProject(user, projectCode);
+    if (!project) return { success: false, error: 'Project not found.' };
+
     const safeName = sanitizeFileName(file.name);
     const typeSlug = type.toLowerCase().replace(/[^a-z0-9]/g, '-');
-    const storagePath = `specialists/${projectCode}/${typeSlug}-${Date.now()}-${safeName}`;
+    const storagePath = `${specialistPrefix(project.code)}${typeSlug}-${Date.now()}-${safeName}`;
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
@@ -84,24 +107,10 @@ export async function uploadSpecialistFileAction(
       };
     }
 
-    // Fetch existing milestones
-    const { data: projectData, error: fetchError } = await admin
-      .from('projects')
-      .select('milestones')
-      .eq('code', projectCode)
-      .single();
-
-    if (fetchError || !projectData) {
-      return {
-        success: false,
-        error: 'Project record not found in database.',
-      };
-    }
-
     const currentMilestones =
-      (projectData.milestones as unknown as StoredMilestones) || {};
+      (project.milestones as unknown as StoredMilestones) || {};
     const disciplineStatus: ProjectDisciplineStatus =
-      currentMilestones.disciplineStatus || emptyDisciplineStatus(projectCode);
+      currentMilestones.disciplineStatus || emptyDisciplineStatus(project.code);
 
     const specialistsList: ThirdPartySpecialistRecord[] =
       disciplineStatus.specialists || [];
@@ -109,27 +118,23 @@ export async function uploadSpecialistFileAction(
       (s: ThirdPartySpecialistRecord) => s.type === type,
     );
     const computedRevision =
-      revision ||
+      (revision && /^R\d{2,3}$/.test(revision) ? revision : undefined) ||
       (prev?.revision
         ? `R${String(parseInt(prev.revision.replace(/\D/g, '') || '0', 10) + 1).padStart(2, '0')}`
         : 'R00');
 
     const formattedSize = formatBytes(file.size);
-    const actor =
-      user.role === 'admin'
-        ? 'System Administrator'
-        : user.role.replace(/_/g, ' ');
 
     const updatedRecord: ThirdPartySpecialistRecord = {
       id:
         prev?.id ||
-        `spec-${projectCode}-${type.toLowerCase().replace(/\s+/g, '-')}`,
+        `spec-${project.code}-${type.toLowerCase().replace(/\s+/g, '-')}`,
       type,
       fileName: file.name,
       fileSize: formattedSize,
       filePath: storagePath,
       revision: computedRevision,
-      uploadedBy: actor,
+      uploadedBy: actorLabel(user.role),
       uploadedAt: new Date().toISOString(),
       status: 'Uploaded',
       remarks: undefined,
@@ -157,16 +162,17 @@ export async function uploadSpecialistFileAction(
     const { error: updateError } = await admin
       .from('projects')
       .update({ milestones: updatedMilestones as unknown as Json })
-      .eq('code', projectCode);
+      .eq('id', project.id);
 
     if (updateError) {
+      await admin.storage.from('documents').remove([storagePath]);
       return {
         success: false,
         error: `Database update failed: ${updateError.message}`,
       };
     }
 
-    revalidatePath(`/noc-tracker/${projectCode}`);
+    revalidatePath(`/noc-tracker/${project.code}`);
     return {
       success: true,
       filePath: storagePath,
@@ -196,21 +202,14 @@ export async function getSpecialistDownloadUrlAction(
   error?: string;
 }> {
   try {
-    await requireUser();
-    const admin = createAdminClient();
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized.' };
 
-    const { data: projectData, error: fetchError } = await admin
-      .from('projects')
-      .select('milestones')
-      .eq('code', projectCode)
-      .single();
-
-    if (fetchError || !projectData) {
-      return { success: false, error: 'Project record not found.' };
-    }
+    const project = await getScopedProject(user, projectCode);
+    if (!project) return { success: false, error: 'Project record not found.' };
 
     const currentMilestones =
-      (projectData.milestones as unknown as StoredMilestones) || {};
+      (project.milestones as unknown as StoredMilestones) || {};
     const specialists = currentMilestones.disciplineStatus?.specialists || [];
     const specialist = specialists.find(
       (s: ThirdPartySpecialistRecord) => s.type === type,
@@ -232,6 +231,11 @@ export async function getSpecialistDownloadUrlAction(
       };
     }
 
+    if (!specialist.filePath.startsWith(specialistPrefix(project.code))) {
+      return { success: false, error: 'Report location is invalid.' };
+    }
+
+    const admin = createAdminClient();
     const { data: signed, error: signError } = await admin.storage
       .from('documents')
       .createSignedUrl(specialist.filePath, 60, {
@@ -266,26 +270,20 @@ export async function removeSpecialistFileAction(
   type: ThirdPartySpecialistType,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const user = await requireUser();
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized.' };
     if (!canUserUploadSpecialist(user.role)) {
       return { success: false, error: 'Your role cannot remove specialist studies.' };
     }
+
+    const project = await getScopedProject(user, projectCode);
+    if (!project) return { success: false, error: 'Project not found.' };
+
     const admin = createAdminClient();
-
-    const { data: projectData, error: fetchError } = await admin
-      .from('projects')
-      .select('milestones')
-      .eq('code', projectCode)
-      .single();
-
-    if (fetchError || !projectData) {
-      return { success: false, error: 'Project not found.' };
-    }
-
     const currentMilestones =
-      (projectData.milestones as unknown as StoredMilestones) || {};
+      (project.milestones as unknown as StoredMilestones) || {};
     const disciplineStatus: ProjectDisciplineStatus =
-      currentMilestones.disciplineStatus || emptyDisciplineStatus(projectCode);
+      currentMilestones.disciplineStatus || emptyDisciplineStatus(project.code);
 
     const specialistsList: ThirdPartySpecialistRecord[] =
       disciplineStatus.specialists || [];
@@ -293,7 +291,7 @@ export async function removeSpecialistFileAction(
       (s: ThirdPartySpecialistRecord) => s.type === type,
     );
 
-    if (specialist?.filePath) {
+    if (specialist?.filePath?.startsWith(specialistPrefix(project.code))) {
       await admin.storage.from('documents').remove([specialist.filePath]);
     }
 
@@ -319,13 +317,13 @@ export async function removeSpecialistFileAction(
     const { error: updateError } = await admin
       .from('projects')
       .update({ milestones: updatedMilestones as unknown as Json })
-      .eq('code', projectCode);
+      .eq('id', project.id);
 
     if (updateError) {
       return { success: false, error: updateError.message };
     }
 
-    revalidatePath(`/noc-tracker/${projectCode}`);
+    revalidatePath(`/noc-tracker/${project.code}`);
     return { success: true };
   } catch (err) {
     return {

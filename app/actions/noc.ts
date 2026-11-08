@@ -2,19 +2,31 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { requireCan } from '@/lib/auth';
+import { getCurrentUser, requireCan } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type {
   StageMilestoneDates,
   ProjectLifecycleStage,
   ProjectDisciplineStatus,
+  ThirdPartySpecialistRecord,
+  ThirdPartySpecialistType,
 } from '@/types/noc';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
+  DB_STAGE_TO_LIFECYCLE,
+  LIFECYCLE_TO_DB_STAGE,
   canUserAdvanceStage,
   canUserModifyMilestones,
+  getNextLifecycleStage,
 } from '@/lib/project-lifecycle';
-import { canUserReviewSpecialist } from '@/lib/project-status';
+import {
+  ALL_SPECIALIST_TYPES,
+  actorLabel,
+  canUserEditDiscipline,
+  canUserReviewSpecialist,
+  emptyDisciplineStatus,
+} from '@/lib/project-status';
+import { getScopedProject } from '@/lib/project-access';
 import type { Json } from '@/types/database';
 import { notifyNoc } from '@/lib/email/noc-notifications';
 
@@ -547,116 +559,156 @@ export async function updateNocMatrixItem(
   }
 }
 
+const LIFECYCLE_STAGES = [
+  'Pre-Construction',
+  'Construction',
+  'Handover',
+  'Completed',
+] as const;
+
+const dateField = z.string().trim().max(32).optional();
+
+// Only these keys are accepted from the client; disciplineStatus has its own action.
+const milestonesSchema = z.object({
+  preConstruction: z
+    .object({
+      kickoffDate: dateField,
+      surveyCompletionDate: dateField,
+      conceptApprovalDate: dateField,
+      commencementDate: dateField,
+      plannedCompletionDate: dateField,
+      buildingPermitDate: dateField,
+    })
+    .optional(),
+  construction: z
+    .object({
+      commencementDate: dateField,
+      targetCompletionDate: dateField,
+      extensionOfTimeDate: dateField,
+    })
+    .optional(),
+  handover: z
+    .object({
+      commissioningDate: dateField,
+      civilDefenceInspectionDate: dateField,
+      bccIssuanceDate: dateField,
+      targetCompletionDate: dateField,
+    })
+    .optional(),
+  customPrerequisites: z
+    .array(
+      z.object({
+        id: z.string().max(100),
+        title: z.string().trim().min(1).max(200),
+        category: z.string().max(60),
+        stage: z.enum(LIFECYCLE_STAGES),
+        isSatisfied: z.boolean(),
+        mandatoryForNextStage: z.boolean().optional(),
+        sourceReference: z.string().max(200).optional(),
+        actionHint: z.string().max(300).optional(),
+        createdAt: z.string().max(40).optional(),
+      }),
+    )
+    .max(50)
+    .optional(),
+});
+
+const stageStatusSchema = z.enum([
+  'Not Started',
+  'In Progress',
+  'Under Review',
+  'Client Approval',
+  'Approved',
+  'On Hold',
+]);
+
+const disciplineDetailSchema = z.object({
+  status: stageStatusSchema,
+  remarks: z.string().max(1000).optional(),
+});
+
+// Only status and remarks are accepted; actors, dates and file fields are set on the server.
+const disciplineStatusSchema = z.object({
+  architecture: disciplineDetailSchema,
+  structure: disciplineDetailSchema,
+  mep: disciplineDetailSchema,
+  authorities: z.object({
+    designStage: stageStatusSchema,
+    constructionStage: stageStatusSchema,
+    revisionStage: stageStatusSchema,
+  }),
+  specialists: z
+    .array(
+      z.object({
+        type: z.custom<ThirdPartySpecialistType>(
+          (v) =>
+            typeof v === 'string' &&
+            (ALL_SPECIALIST_TYPES as string[]).includes(v),
+        ),
+        status: z.enum(['Pending', 'Uploaded', 'Approved', 'Rejected']),
+        remarks: z.string().max(1000).optional(),
+      }),
+    )
+    .max(20),
+});
+
 /** Updates project milestone dates in public.projects */
 export async function updateProjectMilestonesAction(
   projectCode: string,
   milestones: StageMilestoneDates,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized.' };
 
-    if (!user) {
-      return { success: false, error: 'Unauthorized.' };
-    }
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    const role = profile?.role || '';
-    if (!canUserModifyMilestones(role)) {
+    if (!canUserModifyMilestones(user.role)) {
       return {
         success: false,
         error: 'Only Resident Engineers or Managers can modify milestones.',
       };
     }
 
-    const trimmed = (projectCode || '').trim();
-    if (!trimmed) {
-      return { success: false, error: 'Project code is required.' };
-    }
-
-    const adminClient = createAdminClient();
-    const UUID_REGEX =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const isUuid = UUID_REGEX.test(trimmed);
-
-    // Fetch existing milestones to merge without clobbering concurrent fields
-    const fetchQuery = isUuid
-      ? adminClient
-          .from('projects')
-          .select('id, code, milestones')
-          .eq('id', trimmed)
-      : adminClient
-          .from('projects')
-          .select('id, code, milestones')
-          .eq('code', trimmed);
-
-    const { data: currentProject, error: fetchErr } = await fetchQuery.maybeSingle();
-
-    if (fetchErr || !currentProject) {
+    const parsed = milestonesSchema.safeParse(milestones);
+    if (!parsed.success) {
       return {
         success: false,
-        error: fetchErr?.message || 'Project not found.',
+        error: parsed.error.issues[0]?.message || 'Invalid milestone data.',
       };
     }
 
-    const existingMilestones = (
-      typeof currentProject.milestones === 'object' &&
-      currentProject.milestones !== null
-        ? currentProject.milestones
+    const project = await getScopedProject(user, projectCode);
+    if (!project) return { success: false, error: 'Project not found.' };
+
+    const existing = (
+      typeof project.milestones === 'object' && project.milestones !== null
+        ? project.milestones
         : {}
     ) as Record<string, unknown>;
 
-    // Deep merge statutory dates and custom prerequisites while preserving disciplineStatus
+    const section = (key: 'preConstruction' | 'construction' | 'handover') => ({
+      ...((existing[key] as Record<string, unknown>) || {}),
+      ...(parsed.data[key] || {}),
+    });
+
+    // Keeps disciplineStatus and any other stored keys untouched.
     const mergedMilestones = {
-      ...existingMilestones,
-      ...milestones,
-      preConstruction: {
-        ...((existingMilestones.preConstruction as Record<string, unknown>) ||
-          {}),
-        ...((milestones.preConstruction as Record<string, unknown>) || {}),
-      },
-      construction: {
-        ...((existingMilestones.construction as Record<string, unknown>) || {}),
-        ...((milestones.construction as Record<string, unknown>) || {}),
-      },
-      handover: {
-        ...((existingMilestones.handover as Record<string, unknown>) || {}),
-        ...((milestones.handover as Record<string, unknown>) || {}),
-      },
+      ...existing,
+      preConstruction: section('preConstruction'),
+      construction: section('construction'),
+      handover: section('handover'),
       customPrerequisites:
-        milestones.customPrerequisites !== undefined
-          ? milestones.customPrerequisites
-          : existingMilestones.customPrerequisites,
-      disciplineStatus:
-        milestones.disciplineStatus !== undefined
-          ? milestones.disciplineStatus
-          : existingMilestones.disciplineStatus,
-    } satisfies Record<string, unknown>;
+        parsed.data.customPrerequisites ?? existing.customPrerequisites,
+    };
 
-    const updateQuery = isUuid
-      ? adminClient
-          .from('projects')
-          .update({
-            milestones: mergedMilestones as unknown as Json,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', trimmed)
-      : adminClient
-          .from('projects')
-          .update({
-            milestones: mergedMilestones as unknown as Json,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('code', trimmed);
-
-    const { data: updatedRows, error } = await updateQuery.select('id, code');
+    const adminClient = createAdminClient();
+    const { data: updatedRows, error } = await adminClient
+      .from('projects')
+      .update({
+        milestones: mergedMilestones as unknown as Json,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', project.id)
+      .select('id');
 
     if (error) {
       return { success: false, error: error.message };
@@ -673,15 +725,15 @@ export async function updateProjectMilestonesAction(
       actor_id: user.id,
       action: 'UPDATE_PROJECT_MILESTONES',
       entity: 'projects',
-      entity_id: projectCode,
+      entity_id: project.code,
       metadata: {
-        projectCode,
+        projectCode: project.code,
         milestones: mergedMilestones as unknown as Json,
       },
     });
 
     revalidatePath('/noc-tracker');
-    revalidatePath(`/noc-tracker/${projectCode}`);
+    revalidatePath(`/noc-tracker/${project.code}`);
     revalidatePath('/dashboard');
     revalidatePath('/');
 
@@ -699,23 +751,10 @@ export async function advanceProjectStageAction(
   newStage: ProjectLifecycleStage,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized.' };
 
-    if (!user) {
-      return { success: false, error: 'Unauthorized.' };
-    }
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    const role = profile?.role || '';
-    if (!canUserAdvanceStage(role)) {
+    if (!canUserAdvanceStage(user.role)) {
       return {
         success: false,
         error:
@@ -723,43 +762,41 @@ export async function advanceProjectStageAction(
       };
     }
 
-    const stageEnumMap = {
-      'Pre-Construction': 'design',
-      Construction: 'construction',
-      Handover: 'handover',
-      Completed: 'completed',
-    } satisfies Record<
-      ProjectLifecycleStage,
-      'design' | 'construction' | 'handover' | 'completed'
-    >;
+    const target = z.enum(LIFECYCLE_STAGES).safeParse(newStage);
+    if (!target.success) {
+      return { success: false, error: 'Invalid lifecycle stage.' };
+    }
 
-    const trimmed = (projectCode || '').trim();
-    if (!trimmed) {
-      return { success: false, error: 'Project code is required.' };
+    const project = await getScopedProject(user, projectCode);
+    if (!project) return { success: false, error: 'Project not found.' };
+
+    // Only Admin may skip or reverse a stage; everyone else moves one step forward.
+    const current = DB_STAGE_TO_LIFECYCLE[project.stage];
+    if (user.role !== 'admin') {
+      if (current === 'Completed') {
+        return {
+          success: false,
+          error: 'Project lifecycle is already completed.',
+        };
+      }
+      const next = getNextLifecycleStage(current);
+      if (target.data !== next) {
+        return {
+          success: false,
+          error: `Project is in ${current}; it can only advance to ${next}.`,
+        };
+      }
     }
 
     const adminClient = createAdminClient();
-    const UUID_REGEX =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const isUuid = UUID_REGEX.test(trimmed);
-
-    const updateQuery = isUuid
-      ? adminClient
-          .from('projects')
-          .update({
-            stage: stageEnumMap[newStage] || 'design',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', trimmed)
-      : adminClient
-          .from('projects')
-          .update({
-            stage: stageEnumMap[newStage] || 'design',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('code', trimmed);
-
-    const { data: updatedRows, error } = await updateQuery.select('id, code');
+    const { data: updatedRows, error } = await adminClient
+      .from('projects')
+      .update({
+        stage: LIFECYCLE_TO_DB_STAGE[target.data],
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', project.id)
+      .select('id');
 
     if (error) {
       return { success: false, error: error.message };
@@ -776,12 +813,16 @@ export async function advanceProjectStageAction(
       actor_id: user.id,
       action: 'ADVANCE_PROJECT_STAGE',
       entity: 'projects',
-      entity_id: projectCode,
-      metadata: { projectCode, newStage },
+      entity_id: project.code,
+      metadata: {
+        projectCode: project.code,
+        previousStage: current,
+        newStage: target.data,
+      },
     });
 
     revalidatePath('/noc-tracker');
-    revalidatePath(`/noc-tracker/${projectCode}`);
+    revalidatePath(`/noc-tracker/${project.code}`);
     revalidatePath('/dashboard');
     revalidatePath('/');
 
@@ -793,92 +834,138 @@ export async function advanceProjectStageAction(
   }
 }
 
-/** Updates project discipline progress and specialist studies in public.projects milestones */
+/** Updates discipline progress and specialist review decisions in public.projects milestones */
 export async function updateProjectDisciplineStatusAction(
   projectCode: string,
   disciplineStatus: ProjectDisciplineStatus,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized.' };
 
-    if (!user) {
-      return { success: false, error: 'Unauthorized.' };
-    }
-
-    const trimmed = (projectCode || '').trim();
-    if (!trimmed) {
-      return { success: false, error: 'Project code is required.' };
-    }
-
-    const adminClient = createAdminClient();
-    const UUID_REGEX =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const isUuid = UUID_REGEX.test(trimmed);
-
-    const query = isUuid
-      ? adminClient
-          .from('projects')
-          .select('id, code, milestones')
-          .eq('id', trimmed)
-      : adminClient
-          .from('projects')
-          .select('id, code, milestones')
-          .eq('code', trimmed);
-
-    const { data: project, error: fetchError } = await query
-      .limit(1)
-      .maybeSingle();
-
-    if (fetchError || !project) {
+    const parsed = disciplineStatusSchema.safeParse(disciplineStatus);
+    if (!parsed.success) {
       return {
         success: false,
-        error: fetchError?.message || 'Project not found.',
+        error: parsed.error.issues[0]?.message || 'Invalid discipline data.',
       };
     }
+    const incoming = parsed.data;
 
-    const currentMilestones =
+    const project = await getScopedProject(user, projectCode);
+    if (!project) return { success: false, error: 'Project not found.' };
+
+    const currentMilestones = (
       typeof project.milestones === 'object' && project.milestones !== null
-        ? (project.milestones as Record<string, unknown>)
-        : {};
+        ? project.milestones
+        : {}
+    ) as Record<string, unknown>;
 
-    // Only reviewers may move a specialist study into Approved or Rejected.
-    const storedSpecialists =
-      (currentMilestones.disciplineStatus as ProjectDisciplineStatus | undefined)
-        ?.specialists ?? [];
-    const changesReview = (disciplineStatus.specialists ?? []).some((s) => {
-      const prev = storedSpecialists.find((p) => p.id === s.id);
-      return (
-        s.status !== prev?.status &&
-        (s.status === 'Approved' || s.status === 'Rejected')
-      );
-    });
-    if (changesReview) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-      if (!canUserReviewSpecialist(profile?.role)) {
+    const stored: ProjectDisciplineStatus = {
+      ...emptyDisciplineStatus(project.code),
+      ...((currentMilestones.disciplineStatus as
+        | ProjectDisciplineStatus
+        | undefined) ?? {}),
+    };
+    const next: ProjectDisciplineStatus = { ...stored };
+    const actor = actorLabel(user.role);
+    const now = new Date().toISOString();
+    let changed = false;
+
+    for (const key of ['architecture', 'structure', 'mep'] as const) {
+      const inc = incoming[key];
+      const cur = stored[key];
+      if (
+        inc.status === cur.status &&
+        (inc.remarks ?? '') === (cur.remarks ?? '')
+      ) {
+        continue;
+      }
+      if (!canUserEditDiscipline(user.role, key)) {
         return {
           success: false,
-          error: 'Only Admins, Area Managers or Resident Engineers can review studies.',
+          error: `Your role cannot update ${key} progress.`,
         };
       }
+      next[key] = {
+        status: inc.status,
+        remarks: inc.remarks,
+        updatedBy: actor,
+        updatedAt: now,
+      };
+      changed = true;
     }
 
-    const updatedMilestones = {
-      ...currentMilestones,
-      disciplineStatus,
-    };
+    const incAuth = incoming.authorities;
+    const curAuth = stored.authorities;
+    if (
+      incAuth.designStage !== curAuth.designStage ||
+      incAuth.constructionStage !== curAuth.constructionStage ||
+      incAuth.revisionStage !== curAuth.revisionStage
+    ) {
+      if (!canUserEditDiscipline(user.role, 'authorities')) {
+        return {
+          success: false,
+          error: 'Your role cannot update authority stages.',
+        };
+      }
+      next.authorities = { ...incAuth, updatedBy: actor, updatedAt: now };
+      changed = true;
+    }
 
+    const specialists = [...(stored.specialists ?? [])];
+    for (const inc of incoming.specialists) {
+      const index = specialists.findIndex((s) => s.type === inc.type);
+      const prev = index >= 0 ? specialists[index] : undefined;
+      const prevStatus = prev?.status ?? 'Pending';
+      const statusChanged = inc.status !== prevStatus;
+      const remarksChanged = (inc.remarks ?? '') !== (prev?.remarks ?? '');
+      if (!statusChanged && !remarksChanged) continue;
+
+      // Uploaded and Pending belong to the upload and remove actions, which also move the file.
+      if (
+        statusChanged &&
+        inc.status !== 'Approved' &&
+        inc.status !== 'Rejected'
+      ) {
+        continue;
+      }
+
+      if (!canUserReviewSpecialist(user.role)) {
+        return {
+          success: false,
+          error:
+            'Only Admins, Area Managers or Resident Engineers can review studies.',
+        };
+      }
+
+      const record: ThirdPartySpecialistRecord = {
+        ...(prev ?? {
+          id: `spec-${project.code}-${inc.type.toLowerCase().replace(/\s+/g, '-')}`,
+          type: inc.type,
+        }),
+        status: statusChanged ? inc.status : prevStatus,
+        remarks: inc.remarks,
+        reviewedBy: actor,
+        reviewedAt: now,
+      };
+      if (index >= 0) specialists[index] = record;
+      else specialists.push(record);
+      changed = true;
+    }
+    next.specialists = specialists;
+
+    if (!changed) return { success: true };
+
+    const adminClient = createAdminClient();
     const { error: updateError } = await adminClient
       .from('projects')
       .update({
-        milestones: updatedMilestones as unknown as Json,
-        updated_at: new Date().toISOString(),
+        milestones: {
+          ...currentMilestones,
+          disciplineStatus: next,
+        } as unknown as Json,
+        updated_at: now,
       })
       .eq('id', project.id);
 
@@ -886,24 +973,19 @@ export async function updateProjectDisciplineStatusAction(
       return { success: false, error: updateError.message };
     }
 
-    try {
-      await adminClient.from('audit_log').insert({
-        actor_id: user.id,
-        action: 'UPDATE_PROJECT_DISCIPLINE_STATUS',
-        entity: 'projects',
-        entity_id: project.id,
-        metadata: {
-          projectCode: project.code,
-          disciplineStatus: disciplineStatus as unknown as Json,
-        },
-      });
-    } catch {
-      // Ignore non-fatal audit log insert errors
-    }
+    await adminClient.from('audit_log').insert({
+      actor_id: user.id,
+      action: 'UPDATE_PROJECT_DISCIPLINE_STATUS',
+      entity: 'projects',
+      entity_id: project.id,
+      metadata: {
+        projectCode: project.code,
+        disciplineStatus: next as unknown as Json,
+      },
+    });
 
     revalidatePath('/dashboard');
     revalidatePath(`/noc-tracker/${project.code}`);
-    revalidatePath(`/noc-tracker/${trimmed}`);
     revalidatePath('/');
 
     return { success: true };
