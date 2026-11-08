@@ -2,7 +2,15 @@ import { timingSafeEqual } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { notifyNoc } from '@/lib/email/noc-notifications';
-import { expiryDedupeKey, getExpiryStage } from '@/lib/email/noc-email-logic';
+import {
+  chunk,
+  expiryDedupeKey,
+  getExpiryStage,
+  groupLedgerKey,
+  type RecipientGroup,
+} from '@/lib/email/noc-email-logic';
+
+const GROUPS: RecipientGroup[] = ['staff', 'client', 'contractor'];
 
 export const dynamic = 'force-dynamic';
 
@@ -24,9 +32,10 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
   const { data: nocs, error } = await admin
     .from('project_nocs')
-    .select('id, expiry_date')
+    .select('id, expiry_date, projects!inner(archived_at)')
     .eq('status_code', 'approved')
-    .not('expiry_date', 'is', null);
+    .not('expiry_date', 'is', null)
+    .is('projects.archived_at', null);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -38,41 +47,49 @@ export async function GET(request: NextRequest) {
       : [];
   });
 
-  const { data: sentRows } = due.length
-    ? await admin
-        .from('audit_log')
-        .select('metadata')
-        .eq('action', 'NOC_EXPIRY_NOTIFIED')
-        .in(
-          'entity_id',
-          due.map((d) => d.id),
-        )
-    : { data: [] };
-  const sentKeys = new Set(
-    (sentRows ?? []).map((r) => (r.metadata as { key?: string } | null)?.key),
-  );
+  // Chunked lookups keep the URL short and each page under the row limit.
+  const sentKeys = new Set<string>();
+  for (const ids of chunk(due.map((d) => d.id), 100)) {
+    const { data: rows, error: ledgerError } = await admin
+      .from('audit_log')
+      .select('metadata')
+      .eq('action', 'NOC_EXPIRY_NOTIFIED')
+      .in('entity_id', ids);
+    if (ledgerError) {
+      return NextResponse.json({ error: ledgerError.message }, { status: 500 });
+    }
+    for (const r of rows ?? []) {
+      const key = (r.metadata as { key?: string } | null)?.key;
+      if (key) sentKeys.add(key);
+    }
+  }
 
   let sent = 0;
   let skipped = 0;
   let failed = 0;
   for (const noc of due) {
-    if (sentKeys.has(noc.key)) {
-      skipped += 1;
-      continue;
+    const done = GROUPS.filter((g) =>
+      sentKeys.has(groupLedgerKey(noc.key, g)),
+    );
+    const result = await notifyNoc(
+      noc.id,
+      { type: 'expiry', stage: noc.stage },
+      done,
+    );
+    // Record each group that got the email, so a retry never repeats it.
+    for (const group of result.sentGroups) {
+      const { error: insertError } = await admin.from('audit_log').insert({
+        action: 'NOC_EXPIRY_NOTIFIED',
+        actor_id: null,
+        entity: 'project_nocs',
+        entity_id: noc.id,
+        metadata: { key: groupLedgerKey(noc.key, group), stage: noc.stage, group },
+      });
+      if (insertError) result.ok = false;
     }
-    const result = await notifyNoc(noc.id, { type: 'expiry', stage: noc.stage });
-    if (!result.ok) {
-      failed += 1;
-      continue;
-    }
-    await admin.from('audit_log').insert({
-      action: 'NOC_EXPIRY_NOTIFIED',
-      actor_id: null,
-      entity: 'project_nocs',
-      entity_id: noc.id,
-      metadata: { key: noc.key, stage: noc.stage },
-    });
-    sent += 1;
+    if (!result.ok) failed += 1;
+    else if (result.sentGroups.length > 0) sent += 1;
+    else skipped += 1;
   }
 
   return NextResponse.json({ checked: nocs?.length ?? 0, sent, skipped, failed });

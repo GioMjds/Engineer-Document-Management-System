@@ -6,6 +6,8 @@ import {
   getExpiryStage,
   mergeRecipients,
   buildNocAlert,
+  chunk,
+  groupLedgerKey,
 } from './noc-email-logic.ts';
 
 const ctx = {
@@ -94,4 +96,19 @@ test('buildNocAlert expiry stages differ in headline', () => {
   );
   assert.notEqual(w.headline, l.headline);
   assert.ok(JSON.stringify(l.details).includes('3'));
+});
+
+test('getExpiryStage ignores NOCs lapsed more than 30 days ago', () => {
+  assert.equal(getExpiryStage(daysFromToday(-30)), 'lapsed');
+  assert.equal(getExpiryStage(daysFromToday(-31)), null);
+});
+
+test('chunk splits a list into fixed-size pieces', () => {
+  assert.deepEqual(chunk([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+  assert.deepEqual(chunk([], 2), []);
+});
+
+test('groupLedgerKey separates recipient groups of the same email', () => {
+  const k = expiryDedupeKey('n1', '2027-01-01', 'warning');
+  assert.notEqual(groupLedgerKey(k, 'staff'), groupLedgerKey(k, 'client'));
 });

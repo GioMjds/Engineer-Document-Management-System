@@ -2,7 +2,17 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendEdmsAlert } from './notifications';
 import { getNocRecipients } from './noc-recipients';
-import { buildNocAlert, type NocEmailEvent } from './noc-email-logic';
+import {
+  buildNocAlert,
+  type NocEmailEvent,
+  type RecipientGroup,
+} from './noc-email-logic';
+
+export interface NotifyResult {
+  ok: boolean;
+  error?: string;
+  sentGroups: RecipientGroup[];
+}
 
 // Log a failed NOC email so it is visible in the activity log.
 async function logFailure(nocId: string, event: NocEmailEvent, error: string) {
@@ -20,10 +30,13 @@ async function logFailure(nocId: string, event: NocEmailEvent, error: string) {
 }
 
 // Email staff, client and contractor about a NOC event; never throws.
+// Groups in skipGroups already got this email and are not sent again.
 export async function notifyNoc(
   nocId: string,
   event: NocEmailEvent,
-): Promise<{ ok: boolean; error?: string }> {
+  skipGroups: RecipientGroup[] = [],
+): Promise<NotifyResult> {
+  const sentGroups: RecipientGroup[] = [];
   try {
     const admin = createAdminClient();
     const { data: noc } = await admin
@@ -60,23 +73,27 @@ export async function notifyNoc(
     );
 
     // Separate sends keep client and contractor addresses private from each other.
-    const groups = [
-      recipients.staff,
-      recipients.client,
-      recipients.contractor,
-    ].filter((g) => g.length > 0);
-    if (groups.length === 0) throw new Error('No recipients');
+    const pending = (['staff', 'client', 'contractor'] as const)
+      .filter((g) => !skipGroups.includes(g) && recipients[g].length > 0)
+      .map((g) => ({ group: g, to: recipients[g] }));
+    if (pending.length === 0 && skipGroups.length === 0) {
+      throw new Error('No recipients');
+    }
 
     const results = await Promise.all(
-      groups.map((to) => sendEdmsAlert({ ...alert, to })),
+      pending.map(async (p) => ({
+        group: p.group,
+        result: await sendEdmsAlert({ ...alert, to: p.to }),
+      })),
     );
-    const failed = results.find((r) => !r.ok);
-    if (failed) throw new Error(failed.error ?? 'Send failed');
+    for (const r of results) if (r.result.ok) sentGroups.push(r.group);
+    const failed = results.find((r) => !r.result.ok);
+    if (failed) throw new Error(failed.result.error ?? 'Send failed');
 
-    return { ok: true };
+    return { ok: true, sentGroups };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown email error';
     await logFailure(nocId, event, message);
-    return { ok: false, error: message };
+    return { ok: false, error: message, sentGroups };
   }
 }

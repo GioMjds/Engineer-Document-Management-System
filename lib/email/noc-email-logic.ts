@@ -30,9 +30,17 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
+export type RecipientGroup = 'staff' | 'client' | 'contractor';
+
+// Lapsed NOCs older than this are not emailed, so old backlog never floods recipients.
+const LAPSED_EMAIL_WINDOW_DAYS = 30;
+
 // Pick the expiry email stage, or null when no email is due.
 export function getExpiryStage(expiryDate: string | null): ExpiryStage | null {
-  if (isLapsed(expiryDate)) return 'lapsed';
+  if (isLapsed(expiryDate)) {
+    const days = calculateDaysRemaining(expiryDate);
+    return days !== null && days >= -LAPSED_EMAIL_WINDOW_DAYS ? 'lapsed' : null;
+  }
   if (isExpiringSoon(expiryDate)) return 'warning';
   return null;
 }
@@ -44,6 +52,18 @@ export function expiryDedupeKey(
   stage: ExpiryStage,
 ): string {
   return `${nocId}:${expiryDate}:${stage}`;
+}
+
+// Ledger key for one expiry email sent to one recipient group.
+export function groupLedgerKey(key: string, group: RecipientGroup): string {
+  return `${key}:${group}`;
+}
+
+// Split a list into pieces of at most `size` items.
+export function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 }
 
 // Merge address lists into one lowercase, de-duplicated list of plausible emails.
