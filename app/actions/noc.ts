@@ -14,6 +14,7 @@ import {
   canUserAdvanceStage,
   canUserModifyMilestones,
 } from '@/lib/project-lifecycle';
+import { canUserReviewSpecialist } from '@/lib/project-status';
 import type { Json } from '@/types/database';
 
 const feePaymentSchema = z.object({
@@ -833,6 +834,31 @@ export async function updateProjectDisciplineStatusAction(
       typeof project.milestones === 'object' && project.milestones !== null
         ? (project.milestones as Record<string, unknown>)
         : {};
+
+    // Only reviewers may move a specialist study into Approved or Rejected.
+    const storedSpecialists =
+      (currentMilestones.disciplineStatus as ProjectDisciplineStatus | undefined)
+        ?.specialists ?? [];
+    const changesReview = (disciplineStatus.specialists ?? []).some((s) => {
+      const prev = storedSpecialists.find((p) => p.id === s.id);
+      return (
+        s.status !== prev?.status &&
+        (s.status === 'Approved' || s.status === 'Rejected')
+      );
+    });
+    if (changesReview) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      if (!canUserReviewSpecialist(profile?.role)) {
+        return {
+          success: false,
+          error: 'Only Admins, Area Managers or Resident Engineers can review studies.',
+        };
+      }
+    }
 
     const updatedMilestones = {
       ...currentMilestones,

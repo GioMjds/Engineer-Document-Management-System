@@ -18,7 +18,7 @@ import type {
 } from '@/types/noc';
 import { MapPin, FileCheck2, Paperclip, ArrowRight } from 'lucide-react';
 
-interface ProjectDisciplineCardProps {
+export interface ProjectDisciplineCardProps {
   project: AssignedProject;
   statusRecord: ProjectDisciplineStatus;
   userRole: string;
@@ -99,7 +99,8 @@ export function ProjectDisciplineCard({
                 Discipline Progress & Technical Coordination
               </h3>
               <p className="text-xs text-muted-foreground">
-                Submit specialist studies, update discipline transmittal progress, and coordinate authority approvals.
+                Submit specialist studies, update discipline transmittal
+                progress, and coordinate authority approvals.
               </p>
             </div>
           </div>
@@ -119,7 +120,10 @@ export function ProjectDisciplineCard({
                     {project.contractType}
                   </Badge>
                   {isReadOnly && (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">
+                    <Badge
+                      variant="outline"
+                      className="text-xs text-muted-foreground"
+                    >
                       Analytics View
                     </Badge>
                   )}
@@ -310,14 +314,22 @@ export function ProjectDisciplineCard({
           specialists={statusRecord.specialists}
           userRole={userRole}
           onUploadSpecialistFile={(type, fileName, fileSize, revision, file) =>
-            onUploadSpecialistFile(project.code, type, fileName, fileSize, revision, file)
+            onUploadSpecialistFile(
+              project.code,
+              type,
+              fileName,
+              fileSize,
+              revision,
+              file,
+            )
           }
           onApproveSpecialistFile={(type, remarks) =>
             onApproveSpecialistFile(project.code, type, remarks)
           }
           onRejectSpecialistFile={
             onRejectSpecialistFile
-              ? (type, remarks) => onRejectSpecialistFile(project.code, type, remarks)
+              ? (type, remarks) =>
+                  onRejectSpecialistFile(project.code, type, remarks)
               : undefined
           }
           onRemoveSpecialistFile={

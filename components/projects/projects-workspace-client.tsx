@@ -9,7 +9,6 @@ import {
   FolderPlus,
   HardHat,
   LayoutGrid,
-  MapPin,
   Search,
   ShieldCheck,
   TableProperties,
@@ -293,18 +292,6 @@ export function ProjectsWorkspaceClient({
     });
   }, [projects, query, stageFilter, roleFilter, isAdmin, currentUserName]);
 
-  // Determine active user assignment label for a project.
-  const getUserAssignment = (p: AssignedProject): string | null => {
-    if (isAdmin) return 'Admin';
-    if (!currentUserName || !p.assignedRoles) return null;
-
-    const matchedRole = PROJECT_ROLE_DEFINITIONS.find((def) =>
-      p.assignedRoles[def.field]?.toLowerCase().includes(currentUserName),
-    );
-
-    return matchedRole ? matchedRole.label : null;
-  };
-
   const handleDeleteProject = (p: AssignedProject) => {
     setDeletingProject({
       id: p.id || '',
@@ -558,7 +545,6 @@ export function ProjectsWorkspaceClient({
             <ProjectGridCard
               key={p.code}
               project={p}
-              userAssignment={getUserAssignment(p)}
               canManageMembers={canManageMembers}
               canDeleteProject={canDeleteProject}
               canViewConsultantAmount={canViewConsultantAmount}
@@ -645,7 +631,6 @@ export function ProjectsWorkspaceClient({
 
 interface ProjectGridCardProps {
   project: AssignedProject;
-  userAssignment: string | null;
   canManageMembers: boolean;
   canDeleteProject?: boolean;
   canViewConsultantAmount: boolean;
@@ -657,7 +642,6 @@ interface ProjectGridCardProps {
 
 function ProjectGridCard({
   project,
-  userAssignment,
   canManageMembers,
   canDeleteProject = false,
   canViewConsultantAmount,
@@ -692,16 +676,6 @@ function ProjectGridCard({
             {project.lifecycleStage}
           </Badge>
         </div>
-
-        {userAssignment && (
-          <Badge
-            variant="outline"
-            className="border-(--site-cyan)/30 bg-(--site-cyan)/10 text-(--site-cyan) text-[11px] font-medium"
-          >
-            <UserCheck className="mr-1 size-3" />
-            {userAssignment}
-          </Badge>
-        )}
       </div>
 
       {/* Project Title and Metadata */}
@@ -713,10 +687,6 @@ function ProjectGridCard({
           <p className="flex items-center gap-1.5 truncate">
             <ShieldCheck className="size-3.5 shrink-0 text-muted-foreground/80" />
             <span className="truncate">{project.masterAuthority}</span>
-          </p>
-          <p className="flex items-center gap-1.5 truncate">
-            <MapPin className="size-3.5 shrink-0 text-muted-foreground/80" />
-            <span className="truncate">{project.location}</span>
           </p>
         </div>
         {project.contractorName && (
@@ -822,7 +792,7 @@ function ProjectGridCard({
               className="h-8 gap-1.5 text-xs text-primary hover:bg-primary/10 hover:text-primary"
             >
               <Pencil className="size-3.5" />
-              Edit project
+              Edit Project
             </Button>
           )}
 
@@ -869,7 +839,7 @@ function RoleItemTile({
       </span>
       <span
         className={cn(
-          'mt-0.5 line-clamp-2 break-words text-xs font-medium',
+          'mt-0.5 line-clamp-2 wrap-break-word text-xs font-medium',
           isUnassigned ? 'text-muted-foreground/60 italic' : 'text-foreground',
         )}
         title={name}
@@ -879,10 +849,6 @@ function RoleItemTile({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Projects Table View
-// ---------------------------------------------------------------------------
 
 interface ProjectsTableViewProps {
   projects: AssignedProject[];

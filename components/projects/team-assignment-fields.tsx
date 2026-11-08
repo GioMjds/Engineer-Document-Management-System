@@ -33,7 +33,7 @@ export interface ProfileItem {
 
 const GROUPS = ['Oversight', 'Discipline leads'] as const;
 
-const ROLE_LABELS: Record<string, string> = {
+const ROLE_LABELS = {
   resident_engineer: 'Resident Engineer',
   area_manager: 'Area Manager',
   authority_engineer: 'Authority Engineer',
@@ -42,10 +42,10 @@ const ROLE_LABELS: Record<string, string> = {
   engineer: 'Discipline Engineer',
   admin: 'System Admin',
   ceo: 'Executive',
-};
+} satisfies Record<string, string>;
 
 const formatRole = (role: string) =>
-  ROLE_LABELS[role] ?? role.replace(/_/g, ' ');
+  ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role.replace(/_/g, ' ');
 
 const profileName = (p: ProfileItem) =>
   p.full_name?.trim() || p.email?.trim() || 'Unknown';

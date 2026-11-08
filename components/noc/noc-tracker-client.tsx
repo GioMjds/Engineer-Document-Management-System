@@ -11,7 +11,6 @@ import {
 } from '@/app/actions/specialists';
 import { ProjectLifecycleStepper } from '@/components/lifecycle/project-lifecycle-stepper';
 import { StageGateDrawer } from '@/components/lifecycle/stage-gate-drawer';
-import { ProjectDisciplineCard } from '@/components/dashboard/project-discipline-card';
 import { emptyDisciplineStatus } from '@/lib/project-status';
 import { Input } from '@/components/ui/input';
 import {
@@ -41,6 +40,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { NocAlertBanner } from './noc-alert-banner';
+import { NocCoordinationBar } from './noc-coordination-bar';
 import { NocDataTable } from './noc-data-table';
 import { NocInspectorDrawer } from './noc-inspector-drawer';
 import { NocProjectHeader } from './noc-project-header';
@@ -542,7 +542,7 @@ export function NocTrackerClient({
         onOpenGateDetails={() => setIsGateDrawerOpen(true)}
       />
 
-      <ProjectDisciplineCard
+      <NocCoordinationBar
         project={currentProject}
         statusRecord={disciplineStatus}
         userRole={currentUserRole}

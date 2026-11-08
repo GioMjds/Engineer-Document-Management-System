@@ -130,6 +130,15 @@ export function NocInspectorDrawer({
     }
   }, [item]);
 
+  // Escape closes the inspector, matching the other NOC panels.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) =>
+      e.key === 'Escape' && !e.defaultPrevented && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !item) return null;
 
   const readyDocs = (projectDocuments || []).filter(
@@ -442,9 +451,16 @@ export function NocInspectorDrawer({
 
   return (
     <>
+      <div
+        className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200"
+        onClick={onClose}
+        aria-hidden="true"
+      />
       <aside
+        role="dialog"
+        aria-modal="true"
         aria-label="NOC Details Inspector"
-        className="fixed inset-y-0 right-0 z-40 w-full sm:w-105 bg-background border-l border-border shadow-xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200"
+        className="fixed inset-y-0 right-0 z-50 w-full sm:w-105 bg-background border-l border-border shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200"
       >
         {/* Drawer Header */}
         <div className="flex items-start justify-between p-4 border-b bg-muted/40">

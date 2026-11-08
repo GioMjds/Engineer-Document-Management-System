@@ -1,20 +1,38 @@
-import { Building2, MapPin, ShieldCheck } from 'lucide-react';
-import type { AssignedProject } from '@/types/noc';
+import { Building2, ShieldCheck, Users } from 'lucide-react';
+import { TEAM_FIELDS } from '@/lib/team-assignment';
+import type { AssignedMember, AssignedProject } from '@/types/noc';
 
-type RoleKey = keyof AssignedProject['assignedRoles'];
+const GROUPS = ['Oversight', 'Discipline leads'] as const;
 
-const TEAM: { label: string; key: RoleKey }[] = [
-  { label: 'Authority Eng.', key: 'authorityEngineer' },
-  { label: 'Architect', key: 'architectEngineer' },
-  { label: 'MEP', key: 'mepEngineer' },
-  { label: 'Structure', key: 'structureEngineer' },
-  { label: 'Civil', key: 'civilEngineer' },
-  { label: 'Resident Eng.', key: 'residentEngineer' },
-  { label: 'Area Manager', key: 'areaManager' },
-  { label: 'Doc Controller', key: 'docController' },
-];
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join('');
+
+function Person({ member }: { member: AssignedMember }) {
+  return (
+    <li className="flex min-w-0 items-center gap-1.5">
+      <span
+        aria-hidden
+        className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary"
+      >
+        {initials(member.name)}
+      </span>
+      <span className="truncate font-medium text-foreground" title={member.name}>
+        {member.name}
+      </span>
+    </li>
+  );
+}
 
 export function NocProjectHeader({ project }: { project: AssignedProject }) {
+  const total = Object.values(project.assignedMembers ?? {}).reduce(
+    (n, list) => n + (list?.length ?? 0),
+    0,
+  );
+
   return (
     <section
       aria-labelledby="project-title"
@@ -40,31 +58,50 @@ export function NocProjectHeader({ project }: { project: AssignedProject }) {
               </strong>
             </span>
             <span className="flex items-center gap-1.5">
-              <MapPin className="size-3.5" aria-hidden />
-              {project.location}
-            </span>
-            <span className="flex items-center gap-1.5">
               <Building2 className="size-3.5" aria-hidden />
               {project.projectType} · {project.contractType}
             </span>
           </p>
         </div>
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Users className="size-3.5" aria-hidden />
+          {total} {total === 1 ? 'person' : 'people'} on project
+        </p>
       </div>
 
       <h2 className="sr-only">Project team</h2>
-      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-4 text-xs sm:grid-cols-4">
-        {TEAM.map(({ label, key }) => (
-          <div key={key} className="min-w-0">
-            <dt className="text-muted-foreground">{label}</dt>
-            <dd
-              className="break-words font-medium text-foreground"
-              title={project.assignedRoles[key]}
-            >
-              {project.assignedRoles[key]}
-            </dd>
-          </div>
+      <div className="mt-4 grid gap-x-8 gap-y-4 border-t border-border pt-4 text-xs lg:grid-cols-2">
+        {GROUPS.map((group) => (
+          <section key={group} aria-label={group} className="min-w-0">
+            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {group}
+            </h3>
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
+              {TEAM_FIELDS.filter((f) => f.group === group).map((f) => {
+                const members = project.assignedMembers?.[f.projectKey] ?? [];
+                return (
+                  <div key={f.key} className="min-w-0">
+                    <dt className="text-muted-foreground">{f.label}</dt>
+                    <dd>
+                      {members.length ? (
+                        <ul className="space-y-1">
+                          {members.map((m) => (
+                            <Person key={m.id} member={m} />
+                          ))}
+                        </ul>
+                      ) : (
+                        <span className="italic text-muted-foreground/70">
+                          Unassigned
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </section>
         ))}
-      </dl>
+      </div>
     </section>
   );
 }

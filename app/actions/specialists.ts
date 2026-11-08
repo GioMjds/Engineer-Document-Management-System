@@ -3,7 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { emptyDisciplineStatus } from '@/lib/project-status';
+import {
+  canUserUploadSpecialist,
+  emptyDisciplineStatus,
+} from '@/lib/project-status';
 import type { Json } from '@/types/database';
 import type {
   ThirdPartySpecialistType,
@@ -47,6 +50,9 @@ export async function uploadSpecialistFileAction(
 }> {
   try {
     const user = await requireUser();
+    if (!canUserUploadSpecialist(user.role)) {
+      return { success: false, error: 'Your role cannot upload specialist studies.' };
+    }
     const file = formData.get('file') as File | null;
 
     if (!file || !(file instanceof File)) {
@@ -260,7 +266,10 @@ export async function removeSpecialistFileAction(
   type: ThirdPartySpecialistType,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireUser();
+    const user = await requireUser();
+    if (!canUserUploadSpecialist(user.role)) {
+      return { success: false, error: 'Your role cannot remove specialist studies.' };
+    }
     const admin = createAdminClient();
 
     const { data: projectData, error: fetchError } = await admin
