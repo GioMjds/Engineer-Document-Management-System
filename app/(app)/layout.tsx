@@ -20,7 +20,7 @@ async function signOut() {
   redirect('/login');
 }
 
-export default async function AppLayout({ children, modal }: LayoutProps<'/'>) {
+export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const user = await requireUser();
 
   const roleLabelMap = {
@@ -47,7 +47,6 @@ export default async function AppLayout({ children, modal }: LayoutProps<'/'>) {
       // badges={await getNavBadges(user)}
     >
       {children}
-      {modal}
     </AppShell>
   );
 }

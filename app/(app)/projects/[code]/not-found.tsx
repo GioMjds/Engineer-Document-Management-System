@@ -18,7 +18,7 @@ export default function ProjectDocumentsNotFound() {
       <div className="relative w-full overflow-hidden rounded-xl border bg-card p-8 text-center shadow-sm sm:p-12">
         <div
           aria-hidden
-          className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/20 via-primary to-primary/20"
+          className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-primary/20 via-primary to-primary/20"
         />
 
         <div className="mx-auto flex size-20 items-center justify-center rounded-full bg-primary/10 ring-8 ring-primary/5">
