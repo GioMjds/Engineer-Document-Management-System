@@ -147,17 +147,20 @@ export async function inviteUser(input: {
     actionLink = linkData.properties?.action_link ?? null;
   }
 
-  // Ensure role and active status are explicitly set on profile
-  await adminClient
-    .from('profiles')
-    .upsert({
-      id: userId,
-      email: parsed.data.email,
-      full_name: parsed.data.full_name,
-      role: parsed.data.role,
-      active: true,
-    })
-    .eq('id', userId);
+  // The signup trigger creates every profile as engineer, so the invited role is set here.
+  const { error: profileError } = await adminClient.from('profiles').upsert({
+    id: userId,
+    email: parsed.data.email,
+    full_name: parsed.data.full_name,
+    role: parsed.data.role,
+    active: true,
+  });
+  if (profileError) {
+    return {
+      ok: false,
+      error: `User created as Engineer but the role was not saved: ${profileError.message}. Set it from Edit user.`,
+    };
+  }
 
   // Construct direct app activation URL to avoid reliance on Supabase redirect allowlists
   const directActivationLink = linkData?.properties?.hashed_token
