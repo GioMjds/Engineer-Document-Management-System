@@ -4,6 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireCan } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import type { Database, Tables } from '@/types/database';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface ResidentEngineerReviewInput {
   documentId: string;
@@ -12,6 +15,8 @@ export interface ResidentEngineerReviewInput {
   escalateToAreaManager?: boolean;
   comment?: string;
 }
+
+type DocStatus = Tables<'documents'>['status'];
 
 const reviewInputSchema = z
   .object({
@@ -33,6 +38,25 @@ const reviewInputSchema = z
       path: ['comment'],
     },
   );
+
+async function moveDocumentStatus(
+  client: SupabaseClient<Database>,
+  id: string,
+  from: DocStatus,
+  to: DocStatus,
+): Promise<string | null> {
+  const { data, error } = await client
+    .from('documents')
+    .update({ status: to, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('status', from)
+    .select('id');
+  if (error) return error.message;
+  if (!data || data.length !== 1) {
+    return 'Document changed state or you cannot review it. Refresh and retry.';
+  }
+  return null;
+}
 
 /**
  * Checks if user is assigned to project or holds global project view role.
@@ -65,6 +89,13 @@ export async function submitResidentEngineerReview(
 ): Promise<{ success: boolean; newStatus?: string; error?: string }> {
   // 1. Require review.decide capability
   const user = await requireCan('review.decide');
+
+  if (user.role !== 'resident_engineer' && user.role !== 'admin') {
+    return {
+      success: false,
+      error: 'Access denied: Only Resident Engineers and Admins can perform first-level reviews.',
+    }
+  }
 
   // 2. Validate input payload
   const parsed = reviewInputSchema.safeParse(input);
@@ -109,25 +140,16 @@ export async function submitResidentEngineerReview(
   }
 
   // 6. Update document status
-  const { error: updateError } = await supabase
-    .from('documents')
-    .update({
-      status: newStatus,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', doc.id);
-
-  if (updateError) {
-    return { success: false, error: updateError.message };
+  const moveError = await moveDocumentStatus(supabase, doc.id, 'submitted', newStatus);
+  if (moveError) {
+    return { success: false, error: moveError };
   }
 
   // 7. Insert review audit record into document_reviews
   const reviewLevel: 're' | 'am' | 'admin' =
     user.role === 'admin'
       ? 'admin'
-      : user.role === 'area_manager'
-        ? 'am'
-        : 're';
+      : 're';
 
   const { error: reviewError } = await supabase.from('document_reviews').insert({
     document_id: doc.id,
@@ -140,15 +162,12 @@ export async function submitResidentEngineerReview(
 
   if (reviewError) {
     // Rollback document status update if review logging fails
-    await supabase
-      .from('documents')
-      .update({ status: doc.status, updated_at: new Date().toISOString() })
-      .eq('id', doc.id);
+    await moveDocumentStatus(createAdminClient(), doc.id, newStatus, doc.status);
     return { success: false, error: reviewError.message };
   }
 
   // 8. Log review action in central audit_log
-  await supabase.from('audit_log').insert({
+  const { error: auditError } = await supabase.from('audit_log').insert({
     actor_id: user.id,
     action: `DOCUMENT_REVIEW_${parsed.data.decision.toUpperCase()}`,
     entity: 'documents',
@@ -162,6 +181,10 @@ export async function submitResidentEngineerReview(
       escalated: Boolean(parsed.data.escalateToAreaManager),
     },
   });
+
+  if (auditError) {
+    console.error('[audit_log] Failed to log review action:', auditError);
+  }
 
   // 9. Revalidate paths
   revalidatePath('/review');
@@ -200,30 +223,24 @@ const amReviewInputSchema = z
     },
   );
 
-// Checks if Resident Engineer is absent from the project members.
-export async function isResidentEngineerAbsent(
+// Not exported: exports in a 'use server' file become public endpoints.
+async function isResidentEngineerAbsent(
   projectId: string | null | undefined,
 ): Promise<boolean> {
   if (!projectId) return true;
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const { count, error } = await createAdminClient()
     .from('project_members')
-    .select(`
-      user_id,
-      profiles:profiles!project_members_user_id_fkey (
-        role
-      )
-    `)
-    .eq('project_id', projectId);
+    .select('user_id, profiles!project_members_user_id_fkey!inner(role, active)', {
+      count: 'exact',
+      head: true,
+    })
+    .eq('project_id', projectId)
+    .eq('profiles.role', 'resident_engineer')
+    .eq('profiles.active', true);
 
-  if (error || !data) return true;
-
-  const hasRE = data.some((m) => {
-    const prof = m.profiles as { role: string } | null;
-    return prof?.role === 'resident_engineer';
-  });
-
-  return !hasRE;
+  // Fail closed: a lookup error counts as "RE present" so the Area Manager cannot skip first-level review.
+  if (error) return false;
+  return (count ?? 0) === 0;
 }
 
 // Second-level drawing review decision action by Area Manager.
@@ -290,16 +307,9 @@ export async function submitAreaManagerReview(
     parsed.data.decision === 'reject' ? 'rejected' : 'ready_for_authority';
 
   // 7. Update document status
-  const { error: updateError } = await supabase
-    .from('documents')
-    .update({
-      status: newStatus,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', doc.id);
-
-  if (updateError) {
-    return { success: false, error: updateError.message };
+  const moveError = await moveDocumentStatus(supabase, doc.id, doc.status, newStatus);
+  if (moveError) {
+    return { success: false, error: moveError };
   }
 
   // 8. Insert review audit record into document_reviews at the caller's level
@@ -316,15 +326,12 @@ export async function submitAreaManagerReview(
 
   if (reviewError) {
     // Rollback document status update if review logging fails
-    await supabase
-      .from('documents')
-      .update({ status: doc.status, updated_at: new Date().toISOString() })
-      .eq('id', doc.id);
+    await moveDocumentStatus(createAdminClient(), doc.id, newStatus, doc.status);
     return { success: false, error: reviewError.message };
   }
 
   // 9. Log review action in central audit_log
-  await supabase.from('audit_log').insert({
+  const { error: auditError } = await supabase.from('audit_log').insert({
     actor_id: user.id,
     action: `DOCUMENT_REVIEW_${parsed.data.decision.toUpperCase()}`,
     entity: 'documents',
@@ -337,6 +344,9 @@ export async function submitAreaManagerReview(
       comment: parsed.data.comment?.trim() || null,
     },
   });
+  if (auditError) {
+    console.error('[audit_log] Failed to log review action:', auditError);
+  }
 
   // 10. Revalidate paths
   revalidatePath('/review');

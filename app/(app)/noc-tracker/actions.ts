@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { requireUser, requireCan } from '@/lib/auth';
+import { requireCan } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { NocPayerType } from '@/types/noc';
 
@@ -15,7 +15,7 @@ const recordFeePaymentSchema = z.object({
 
 const resubmitRevisionSchema = z.object({
   nocId: z.string().min(1, 'NOC ID is required'),
-  newRevision: z.string().min(1, 'New revision is required'),
+  newRevision: z.string().regex(/^R\d{2,3}$/, 'Revision must look like R01'),
   resubmitFileName: z.string().optional(),
   previousRejectionReason: z.string().optional(),
 });
@@ -100,7 +100,7 @@ export async function recordNocFeePayment(
 export async function resubmitNocRevision(
   input: ResubmitNocRevisionInput
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireUser();
+  const user = await requireCan('noc.tracker.update');
 
   const parsed = resubmitRevisionSchema.safeParse(input);
   if (!parsed.success) {
@@ -114,23 +114,22 @@ export async function resubmitNocRevision(
     const now = new Date().toISOString();
 
     if (UUID_REGEX.test(nocId)) {
-      // Log previous rejection into noc_resubmission_history
-      const { error: histError } = await supabase.from('noc_resubmission_history').insert({
-        project_noc_id: nocId,
-        revision: newRevision,
-        rejection_reason: previousRejectionReason || 'Authority rejection',
-        rejection_date: now,
-        resubmission_date: now,
-        resubmitted_by: user.id,
-      });
+      const { data: noc } = await supabase
+        .from('project_nocs')
+        .select('id, status_code, current_revision, remarks')
+        .eq('id', nocId)
+        .maybeSingle();
 
-      if (histError) {
-        return { ok: false, error: histError.message };
+      if (!noc) {
+        return { ok: false, error: 'NOC not found.' };
+      }
+      if (noc.status_code !== 'rejected') {
+        return { ok: false, error: 'Only a rejected NOC can be resubmitted.' };
       }
 
       // Update project_nocs status to applied (Submitted)
       const isFileUrl = Boolean(resubmitFileName && /^https?:\/\//i.test(resubmitFileName));
-      const { error: updateError } = await supabase
+      const { data: updated, error: updateError } = await supabase
         .from('project_nocs')
         .update({
           current_revision: newRevision,
@@ -141,10 +140,40 @@ export async function resubmitNocRevision(
           updated_at: now,
           updated_by: user.id,
         })
-        .eq('id', nocId);
+        .eq('id', nocId)
+        .eq('status_code', 'rejected')
+        .select('id');
 
       if (updateError) {
         return { ok: false, error: updateError.message };
+      }
+      if (!updated?.length) {
+        return {
+          ok: false,
+          error: 'NOC changed state or you cannot update it. Refresh and retry.',
+        };
+      }
+
+      // Log previous rejection into noc_resubmission_history
+      const { error: histError } = await supabase.from('noc_resubmission_history').insert({
+        project_noc_id: nocId,
+        revision: newRevision,
+        rejection_reason: previousRejectionReason || noc.remarks || 'Authority rejection',
+        rejection_date: now,
+        resubmission_date: now,
+        resubmitted_by: user.id,
+      });
+
+      if (histError) {
+        await supabase
+          .from('project_nocs')
+          .update({
+            status_code: 'rejected',
+            current_revision: noc.current_revision,
+            remarks: noc.remarks,
+          })
+          .eq('id', nocId);
+        return { ok: false, error: histError.message };
       }
 
       await supabase.from('audit_log').insert({

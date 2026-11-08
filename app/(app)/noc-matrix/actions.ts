@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { requireUser, requireRole } from '@/lib/auth';
+import { requireCan, requireRole } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { MATRIX_EDIT_ROLES } from '@/lib/noc-constants';
@@ -161,6 +161,7 @@ async function resolveReviewingAuthorityId(
 export async function getMatrixTemplates(
   masterAuthorityId: number,
 ): Promise<{ ok: boolean; data: NocMatrixItem[]; error?: string }> {
+  await requireCan('noc.matrix.view');
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -270,6 +271,7 @@ export async function getMatrixTemplates(
 export async function getMatrixRevisions(
   masterAuthorityId: number,
 ): Promise<{ ok: boolean; data: NocMatrixRevision[]; error?: string }> {
+  await requireCan('noc.matrix.view');
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -630,7 +632,7 @@ export async function deleteMatrixItem(
   matrixItemId: string,
   changeSummary: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireRole(MATRIX_EDIT_ROLES);
+  const user = await requireRole(MATRIX_EDIT_ROLES);
 
   const parsed = deleteMatrixItemSchema.safeParse({
     matrixItemId,
@@ -688,7 +690,6 @@ export async function deleteMatrixItem(
     const affectedNocCount = cleanedRows?.length ?? 0;
 
     // Log deletion revision.
-    const user = await requireUser();
     await supabase.from('noc_matrix_revisions').insert({
       master_authority_id: existing.master_authority_id,
       matrix_item_id: existing.id,
@@ -713,44 +714,38 @@ export async function deleteMatrixItem(
   }
 }
 
+const reorderSchema = z.object({
+  masterAuthorityId: z.number().int().positive(),
+  orderedIds: z.array(z.uuid()).min(1, 'Ordered item IDs are required'),
+});
+
 export async function reorderMatrixSequences(
   masterAuthorityId: number,
   orderedIds: string[],
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await requireRole(MATRIX_EDIT_ROLES);
 
-  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
-    return { ok: false, error: 'Ordered item IDs are required' };
+  const parsed = reorderSchema.safeParse({ masterAuthorityId, orderedIds });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message || 'Invalid reorder input',
+    };
   }
 
   try {
     const supabase = await createClient();
 
-    for (let i = 0; i < orderedIds.length; i++) {
-      const id = orderedIds[i];
-      const { error } = await supabase
-        .from('noc_matrix_items')
-        .update({ sequence_no: i + 1, updated_at: new Date().toISOString() })
-        .eq('id', id);
-
-      if (error) {
-        return {
-          ok: false,
-          error: `Failed to update sequence for item ${id}: ${error.message}`,
-        };
-      }
-    }
-
-    await supabase.from('noc_matrix_revisions').insert({
-      master_authority_id: masterAuthorityId,
-      matrix_item_id: null,
-      action: 'REORDER',
-      changed_by: user.id,
-      change_summary: `Reordered ${orderedIds.length} matrix item sequences.`,
-      new_data: { orderedIds },
-      propagated_projects_count: 0,
-      propagated_nocs_count: 0,
+    // Atomic RPC: remaps blocking links and logs the REORDER revision.
+    const { error } = await supabase.rpc('reorder_matrix_items_atomic', {
+      p_master_authority_id: parsed.data.masterAuthorityId,
+      p_ordered_ids: parsed.data.orderedIds,
+      p_caller_id: user.id,
     });
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
 
     revalidatePath('/noc-matrix');
     revalidatePath('/noc-tracker');
@@ -826,16 +821,9 @@ export type CreateMasterAuthorityInput = z.infer<
 export async function createMasterAuthority(
   input: CreateMasterAuthorityInput,
 ): Promise<{ ok: boolean; data?: MasterAuthorityRecord; error?: string }> {
-  try {
-    const caller = await requireUser();
-    if (caller.role !== 'admin') {
-      return {
-        ok: false,
-        error:
-          'Unauthorized: strictly Admin role can register Master Authorities.',
-      };
-    }
+  await requireCan('authority.master.manage');
 
+  try {
     const parsed = createMasterAuthoritySchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -881,9 +869,9 @@ export type CreateReviewingAuthorityInput = z.infer<
 export async function createReviewingAuthority(
   input: CreateReviewingAuthorityInput,
 ): Promise<{ ok: boolean; data?: ReviewingAuthorityRecord; error?: string }> {
-  try {
-    await requireRole(MATRIX_EDIT_ROLES);
+  await requireRole(MATRIX_EDIT_ROLES);
 
+  try {
     const parsed = createReviewingAuthoritySchema.safeParse(input);
     if (!parsed.success) {
       return {

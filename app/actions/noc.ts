@@ -126,12 +126,16 @@ export async function submitNocApplication(
 
     const { data: currentNoc, error: fetchErr } = await supabase
       .from('project_nocs')
-      .select('id, project_id, blocking_sequence_no, override_reason')
+      .select('id, project_id, blocking_sequence_no, override_reason, status_code')
       .eq('id', nocId)
       .maybeSingle();
 
     if (fetchErr || !currentNoc) {
       return { success: false, error: fetchErr?.message || 'NOC not found' };
+    }
+
+    if (currentNoc.status_code === 'applied' || currentNoc.status_code === 'approved') {
+      return { success: false, error: 'This NOC is already submitted.' };
     }
 
     if (currentNoc.blocking_sequence_no && !currentNoc.override_reason) {
@@ -184,22 +188,29 @@ export async function submitNocApplication(
       }
     }
 
-    const { error: updateError } = await supabase
+    // The waiver text lives in the audit log only; override_reason is the prerequisite-sequence override.
+    const { data: updated, error: updateError } = await supabase
       .from('project_nocs')
       .update({
         reference_no: authorityReference,
         apply_date: submittedAt,
         status_code: 'applied',
         receipt_file_url: submissionProofUrl || null,
-        override_reason:
-          statutoryWaiverReason?.trim() || currentNoc.override_reason,
         updated_at: now,
         updated_by: user.id,
       })
-      .eq('id', nocId);
+      .eq('id', nocId)
+      .eq('status_code', currentNoc.status_code)
+      .select('id');
 
     if (updateError) {
       return { success: false, error: updateError.message };
+    }
+    if (!updated?.length) {
+      return {
+        success: false,
+        error: 'NOC changed state or you cannot update it. Refresh and retry.',
+      };
     }
 
     await supabase.from('audit_log').insert({
@@ -264,12 +275,19 @@ export async function recordAuthorityDecision(
 
     const { data: currentNoc } = await supabase
       .from('project_nocs')
-      .select('id, current_revision')
+      .select('id, current_revision, status_code, remarks')
       .eq('id', nocId)
       .maybeSingle();
 
     if (!currentNoc) {
       return { success: false, error: 'NOC not found' };
+    }
+
+    if (currentNoc.status_code !== 'applied') {
+      return {
+        success: false,
+        error: 'A decision can only be recorded on a submitted NOC.',
+      };
     }
 
     if (decision === 'obtained') {
@@ -280,7 +298,7 @@ export async function recordAuthorityDecision(
         trimmedDoc && !isHttpUrl ? `Certificate #${trimmedDoc}` : null;
       const finalExpiryDate = isPermanent ? null : expiryDate || null;
 
-      const { error: updateError } = await supabase
+      const { data: updated, error: updateError } = await supabase
         .from('project_nocs')
         .update({
           status_code: 'approved',
@@ -291,10 +309,18 @@ export async function recordAuthorityDecision(
           updated_at: now,
           updated_by: user.id,
         })
-        .eq('id', nocId);
+        .eq('id', nocId)
+        .eq('status_code', 'applied')
+        .select('id');
 
       if (updateError) {
         return { success: false, error: updateError.message };
+      }
+      if (!updated?.length) {
+        return {
+          success: false,
+          error: 'NOC changed state or you cannot update it. Refresh and retry.',
+        };
       }
 
       await supabase.from('audit_log').insert({
@@ -317,16 +343,7 @@ export async function recordAuthorityDecision(
       const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
       const nextRevision = `R${String(nextNum).padStart(2, '0')}`;
 
-      await supabase.from('noc_resubmission_history').insert({
-        project_noc_id: nocId,
-        revision: nextRevision,
-        rejection_reason: rejectionReason!,
-        rejection_date: now,
-        resubmission_date: now,
-        resubmitted_by: user.id,
-      });
-
-      const { error: updateError } = await supabase
+      const { data: updated, error: updateError } = await supabase
         .from('project_nocs')
         .update({
           status_code: 'rejected',
@@ -335,10 +352,41 @@ export async function recordAuthorityDecision(
           updated_at: now,
           updated_by: user.id,
         })
-        .eq('id', nocId);
+        .eq('id', nocId)
+        .eq('status_code', 'applied')
+        .select('id');
 
       if (updateError) {
         return { success: false, error: updateError.message };
+      }
+      if (!updated?.length) {
+        return {
+          success: false,
+          error: 'NOC changed state or you cannot update it. Refresh and retry.',
+        };
+      }
+
+      const { error: histError } = await supabase
+        .from('noc_resubmission_history')
+        .insert({
+          project_noc_id: nocId,
+          revision: nextRevision,
+          rejection_reason: rejectionReason!,
+          rejection_date: now,
+          resubmission_date: now,
+          resubmitted_by: user.id,
+        });
+
+      if (histError) {
+        await supabase
+          .from('project_nocs')
+          .update({
+            status_code: 'applied',
+            current_revision: currentNoc.current_revision,
+            remarks: currentNoc.remarks,
+          })
+          .eq('id', nocId);
+        return { success: false, error: histError.message };
       }
 
       await supabase.from('audit_log').insert({

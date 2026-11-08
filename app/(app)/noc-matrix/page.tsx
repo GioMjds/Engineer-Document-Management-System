@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { requireUser } from '@/lib/auth';
+import { requireCan } from '@/lib/auth';
 import { NocMatrixWorkspace } from '@/components/matrix/noc-matrix-workspace';
 import { canEditMatrix } from '@/lib/noc-constants';
 import {
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 export default async function NocMatrixPage() {
-  const user = await requireUser();
+  const user = await requireCan('noc.matrix.view');
   const canEdit = canEditMatrix(user.role);
 
   const [masterAuthRes, revAuthRes] = await Promise.all([

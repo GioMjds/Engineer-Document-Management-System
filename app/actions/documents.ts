@@ -116,6 +116,9 @@ export async function uploadDocument(
 
   // Enforce engineer discipline scope check: engineers can only submit drawings matching assigned discipline
   if (user.role === 'engineer') {
+    if (!validDiscipline) {
+      return { success: false, error: 'Discipline is required for engineer uploads.' };
+    }
     const { data: member } = await supabase
       .from('project_members')
       .select('discipline')
@@ -123,10 +126,12 @@ export async function uploadDocument(
       .eq('user_id', user.id)
       .maybeSingle();
 
-    if (member?.discipline && validDiscipline && member.discipline !== validDiscipline) {
+    if (!member?.discipline || member.discipline !== validDiscipline) {
       return {
         success: false,
-        error: `Upload rejected: Engineers can only upload drawings for their assigned discipline (${member.discipline.toUpperCase()}).`,
+        error: member?.discipline
+          ? `Upload rejected: Engineers can only upload drawings for their assigned discipline (${member.discipline.toUpperCase()}).`
+          : 'Upload rejected: no discipline is assigned to you on this project.',
       };
     }
   }
@@ -316,7 +321,9 @@ export async function uploadDocumentRevision(
 
   const { data: doc } = await supabase
     .from('documents')
-    .select('id, project_id, revision, status, uploaded_by, title, doc_number')
+    .select(
+      'id, project_id, revision, status, uploaded_by, title, doc_number, file_path, file_name',
+    )
     .eq('id', documentId)
     .maybeSingle();
 
@@ -334,20 +341,21 @@ export async function uploadDocumentRevision(
     return { success: false, error: 'Access denied to document project.' };
   }
 
-  if (user.role === 'engineer') {
-    if (doc.uploaded_by !== user.id) {
-      return {
-        success: false,
-        error:
-          'Forbidden: You can only upload revisions for your own drawings.',
-      };
-    }
-    if (doc.status !== 'rejected') {
-      return {
-        success: false,
-        error: 'Revisions can only be uploaded after a drawing has been rejected.',
-      };
-    }
+  if (
+    (user.role === 'engineer' || user.role === 'authority_engineer') &&
+    doc.uploaded_by !== user.id
+  ) {
+    return {
+      success: false,
+      error: 'Forbidden: You can only upload revisions for your own drawings.',
+    };
+  }
+  // Only a rejected drawing takes a new revision, for every role.
+  if (doc.status !== 'rejected') {
+    return {
+      success: false,
+      error: 'Revisions can only be uploaded after a drawing has been rejected.',
+    };
   }
 
   const file = formData.get('file') as File | null;
@@ -382,7 +390,7 @@ export async function uploadDocumentRevision(
   }
 
   const adminClient = createAdminClient();
-  const { error: updateError } = await adminClient
+  const { data: updated, error: updateError } = await adminClient
     .from('documents')
     .update({
       revision: nextRevision,
@@ -393,14 +401,23 @@ export async function uploadDocumentRevision(
       mime_type: file.type || 'application/octet-stream',
       updated_at: new Date().toISOString(),
     })
-    .eq('id', documentId);
+    .eq('id', documentId)
+    .eq('status', 'rejected')
+    .eq('revision', doc.revision)
+    .select('id');
 
-  if (updateError) {
+  if (updateError || !updated?.length) {
     await supabase.storage.from('documents').remove([filePath]);
-    return { success: false, error: updateError.message };
+    return {
+      success: false,
+      error:
+        updateError?.message ??
+        'Document changed while uploading. Refresh and retry.',
+    };
   }
 
-  await supabase.from('audit_log').insert({
+  // The previous file stays in storage; its path is kept here as revision history.
+  const { error: auditError } = await supabase.from('audit_log').insert({
     actor_id: user.id,
     action: 'DOCUMENT_REVISION_UPLOAD',
     entity: 'documents',
@@ -410,10 +427,15 @@ export async function uploadDocumentRevision(
       doc_number: doc.doc_number,
       previous_revision: doc.revision,
       new_revision: nextRevision,
+      previous_file_path: doc.file_path,
+      previous_file_name: doc.file_name,
       file_name: file.name,
       file_size: file.size,
     },
   });
+  if (auditError) {
+    console.error('[audit_log] Failed to log revision upload:', auditError);
+  }
 
   revalidatePath('/documents');
   revalidatePath('/review');

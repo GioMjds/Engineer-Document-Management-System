@@ -1031,6 +1031,14 @@ export type Database = {
         }
         Returns: Json
       }
+      reorder_matrix_items_atomic: {
+        Args: {
+          p_caller_id: string
+          p_master_authority_id: number
+          p_ordered_ids: string[]
+        }
+        Returns: Json
+      }
       save_matrix_item_atomic: {
         Args: {
           p_blocking_seq: number | null
