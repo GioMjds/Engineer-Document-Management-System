@@ -226,18 +226,18 @@ export async function isResidentEngineerAbsent(
   return !hasRE;
 }
 
-// Second-level drawing review decision action by Area Manager or Admin.
+// Second-level drawing review decision action by Area Manager.
 export async function submitAreaManagerReview(
   input: AreaManagerReviewInput,
 ): Promise<{ success: boolean; newStatus?: string; error?: string }> {
   // 1. Require review.decide capability
   const user = await requireCan('review.decide');
 
-  // 2. Verify caller has role 'area_manager' or 'admin'
-  if (user.role !== 'area_manager' && user.role !== 'admin') {
+  // 2. Verify caller has role 'area_manager'
+  if (user.role !== 'area_manager') {
     return {
       success: false,
-      error: 'Access denied: Only Area Managers and Admins can perform second-level reviews.',
+      error: 'Access denied: Only Area Managers can perform second-level reviews.',
     };
   }
 
@@ -303,8 +303,7 @@ export async function submitAreaManagerReview(
   }
 
   // 8. Insert review audit record into document_reviews at 'am' level
-  const reviewLevel: 'am' | 'admin' =
-    user.role === 'admin' ? 'admin' : 'am';
+  const reviewLevel = 'am';
 
   const { error: reviewError } = await supabase.from('document_reviews').insert({
     document_id: doc.id,

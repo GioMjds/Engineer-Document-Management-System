@@ -88,6 +88,8 @@ export function DrawingReviewModal({
   const [downloading, setDownloading] = useState(false);
 
   const isAM = userRole === 'area_manager';
+  const isEscalated = document.status === 'escalated';
+  const awaitingAM = isEscalated && !isAM;
 
   async function handleDownload() {
     setDownloading(true);
@@ -178,7 +180,7 @@ export function DrawingReviewModal({
     }
 
     setPendingAction('reject');
-    const res = isAM
+    const res = isAM || isEscalated
       ? await submitAreaManagerReview({
           documentId: document.id,
           decision: 'reject',
@@ -400,7 +402,11 @@ export function DrawingReviewModal({
             Review Decision Panel
           </div>
 
-          {showRejectForm ? (
+          {awaitingAM ? (
+            <p className="text-sm text-muted-foreground">
+              Escalated drawing. Awaiting Area Manager decision.
+            </p>
+          ) : showRejectForm ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <Label

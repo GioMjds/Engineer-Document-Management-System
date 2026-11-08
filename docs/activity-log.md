@@ -1683,3 +1683,28 @@
   - Decisions: receipt link is not stored in the log, only a yes/no flag. No migration, since `audit_log.action` is free text.
   - Verification: `tsc --noEmit` clean. Not run in browser.
   - User workflow: on the NOC tracker, record a fee or resubmit a rejected NOC as before. Admin then sees a new row in Activity log (filter NOCs) with who, when and the details.
+
+- Added NOC email notifications: approved, rejected, expiring within 14 days, and lapsed.
+  - [lib/email/noc-email-logic.ts](lib/email/noc-email-logic.ts): pure module (HTML escaping, expiry stage, dedupe key, recipient merge, email content). Tests in `lib/email/noc-email-logic.test.ts`.
+  - [lib/email/noc-recipients.ts](lib/email/noc-recipients.ts): staff (active project members plus active admins), client and contractor emails per project.
+  - [lib/email/noc-notifications.ts](lib/email/noc-notifications.ts): `notifyNoc` sends one email per recipient group through `sendEdmsAlert`; never throws; failures write `NOC_EMAIL_FAILED` to `audit_log`.
+  - [app/actions/noc.ts](app/actions/noc.ts): `recordAuthorityDecision` calls `notifyNoc` after approve and reject.
+  - [app/api/cron/noc-expiry/route.ts](app/api/cron/noc-expiry/route.ts): GET, needs `Authorization: Bearer $CRON_SECRET`; sends each warning or lapsed email once per NOC, expiry date and stage, tracked by `NOC_EXPIRY_NOTIFIED` rows in `audit_log`; returns `{ checked, sent, skipped, failed }`.
+  - [proxy.ts](proxy.ts): `/api/cron/` skips the login redirect; the route enforces its own secret.
+  - Decisions: staff, client and contractor get separate emails so addresses stay private; no migration (audit_log is the sent ledger); email failure never fails the user action; study approve and reject emails are out of scope.
+  - Setup: set `CRON_SECRET` in the environment and have any scheduler call `curl -H "Authorization: Bearer <secret>" https://<host>/api/cron/noc-expiry` once a day.
+  - Verification: `pnpm test` 8/8 (failed first on the missing module), `tsc --noEmit` and eslint clean. Route without secret returns 401 and the proxy still redirects protected pages.
+  - Not verified: authorized cron run and real email delivery (needs `CRON_SECRET` in the running server and SMTP); approve and reject from the browser.
+  - User workflow: an authority engineer records an approved or rejected decision on the NOC tracker as before. Project staff, client and contractor then receive an email with project, authority, NOC, dates or rejection reason, and a link to the NOC page. Each day the scheduler call emails the same groups for NOCs expiring within 14 days and for lapsed ones, once each. Admin sees `NOC_EMAIL_FAILED` rows in the activity log when a send fails.
+
+- Fixed: an archived user who still knows their password no longer bounces between `/login` and `/dashboard`.
+  - Root cause: archiving only sets `profiles.active=false`; the Supabase session stays valid. The proxy sends signed-in users from `/login` to `/dashboard`, and `requireUser()` sent them back to `/login` because the profile is inactive.
+  - [lib/auth.ts](lib/auth.ts): `requireUser()` redirects to `/auth/inactive` when a session exists but the profile is unusable; no session still goes to `/login`.
+  - [app/auth/inactive/route.ts](app/auth/inactive/route.ts): signs the session out and redirects to `/login?error=...` with an archived-account message.
+  - [proxy.ts](proxy.ts): `/auth/inactive` is a lifecycle route.
+  - [app/(auth)/login/page.tsx](app/(auth)/login/page.tsx), [login-form.tsx](app/(auth)/login/login-form.tsx): the page reads `?error=` and the form shows it in the existing alert. This also surfaces the invite and reset link errors set by `/auth/confirm`, which were never displayed before.
+  - Decisions: no test framework covers auth routes, so no automated test; the fix is one redirect path for both fresh sign-in and sessions archived while signed in.
+  - Verification: `tsc --noEmit` and eslint clean. Not run in browser.
+  - User workflow: an archived user signs in with the correct password, lands on the sign-in page once, and sees "This account has been archived. Contact your system administrator." Wrong password still shows the existing credentials error.
+  - Review fixes: expiry ledger is now per recipient group (a partial send no longer repeats to groups already emailed); cron skips archived projects and NOCs lapsed more than 30 days; ledger lookup is chunked and returns 500 on error; SMTP transport has 10-15 second timeouts. `pnpm test` 11/11.
+  - Deferred minors: addresses repeated across groups get two emails; all-empty recipients logs `NOC_EMAIL_FAILED` daily per NOC; recipient query errors are ignored (staff falls back to admins); subject is not escaped in `<title>`; approve email can go out when RLS blocks the update; concurrent cron runs can double-send.

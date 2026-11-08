@@ -57,8 +57,14 @@ export const getCurrentUser = cache(
 
 export async function requireUser(): Promise<AuthenticatedUser> {
   const user = await getCurrentUser();
-  if (!user) redirect('/login');
-  return user;
+  if (user) return user;
+
+  // A live session without a usable profile (archived) must be signed out, or /login bounces back here.
+  const supabase = await createClient();
+  const {
+    data: { user: session },
+  } = await supabase.auth.getUser();
+  redirect(session ? '/auth/inactive' : '/login');
 }
 
 export async function requireRole(
