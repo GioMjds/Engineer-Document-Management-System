@@ -1671,3 +1671,8 @@
   - Verification: `pnpm test` 14/14 (schema tests failed first), `pnpm lint` and `tsc --noEmit` clean.
   - Not verified: browser walkthrough, screenshot and video.
   - User workflow: roles with `project.create` (admin) see "Edit project" on each card and "Edit" in table view. It opens a dialog prefilled with current values. Change fields and press Save changes; the page refreshes with the new values. Other roles do not see the button.
+
+- Created a plain-language system flowchart of the whole app, published as a private artifact (https://claude.ai/artifact/1ufBPZaGM8DiaZ7nRxZkjq); no code changed.
+  - 11 flows: overview, access, role menus, project setup, drawing review, authority approvals, stage gates, coordination, approval library, archive, users and audit log.
+  - Source of truth was the code (actions, permissions, gate rules), not the older docs, which drift in places (DEWA/RTA fixed gates, expiry emails, 7-gate count).
+  - Gaps found and listed on the page: forgot-password placeholder, notifications bell placeholder, no NOC alert emails (only invites), admin cannot decide escalated drawings from the review modal, archived user redirect loop, fee payments and NOC resubmissions not audit-logged.

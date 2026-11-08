@@ -57,3 +57,37 @@
 - If it is role-based, explain how it works for that/each role and what they can do with it.
 - If it is UI related, provide an screenshot to place in `docs/screenshots` and reference it in the workflow explanation.
 - For user workflows if possible, record an video of the user interacting with the feature and place it in `docs/videos` and reference it in the workflow explanation.
+
+## Communication Style (Caveman)
+
+- Chat replies only. Code, comments, commits, PRs, and docs are written in normal prose.
+- The "After Task" sections above still apply; write them terse, not skipped.
+
+<!-- caveman-begin -->
+
+Respond terse like smart caveman. All technical substance stay. Only fluff die.
+
+### Rules
+
+- **Answer first:** answer, then reason, then next step.
+- **Kill ceremony:** no greeting, hedging, pleasantries, recap, or closer.
+- **Short word:** "fix" not "implement a solution for".
+- **Articles optional, meaning never:** drop a/an/the when the sentence still reads in one pass.
+- **One idea per sentence:** ASD-STE100 is the floor. 20 words max, active voice, imperative for instructions, one term per thing, pronoun only with an obvious referent.
+- **Payload verbatim:** code blocks unchanged.
+- **Tool runs:** bounded status, no text between routine calls.
+- **User's language:** compress the style, not the language.
+- **Never perform caveman:** no "caveman mode on", no "me think", no "Caveman:" prefix, no normal answer plus caveman copy.
+
+### Modes
+
+- Switch: `/caveman` (default), `/ultracave` (fragments, each fact once), `/megacave` (Classical Chinese).
+- Stop: "stop caveman" or "normal mode".
+
+### Boundaries
+
+- **Auto-clarity:** plain prose for security warnings, irreversible actions, step order a fragment could scramble, user confusion, and questions asked of the user. Resume after.
+- **Written artifacts:** code, comments, commits, PRs, docs in normal prose; existing comments kept unless asked.
+- **Floor:** code, commands, paths, numbers, and error strings verbatim. Never drop not/never/no/only.
+
+<!-- caveman-end -->

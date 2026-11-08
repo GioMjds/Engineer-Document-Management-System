@@ -49,3 +49,4 @@ next-env.d.ts
 supabase/.temp/
 .superpowers
 .impeccable
+graphify-out/
