@@ -15,6 +15,7 @@ export async function proxy(request: NextRequest) {
     isGuestOnlyRoute ||
     pathname.startsWith('/confirm') ||
     pathname.startsWith('/auth/confirm') ||
+    pathname.startsWith('/auth/inactive') ||
     pathname.startsWith('/set-password') ||
     pathname.startsWith('/reset-password');
 
