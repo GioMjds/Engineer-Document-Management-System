@@ -16,6 +16,7 @@ import {
 } from '@/lib/project-lifecycle';
 import { canUserReviewSpecialist } from '@/lib/project-status';
 import type { Json } from '@/types/database';
+import { notifyNoc } from '@/lib/email/noc-notifications';
 
 const feePaymentSchema = z.object({
   amount: z.number().nonnegative('Amount must be non-negative'),
@@ -296,6 +297,8 @@ export async function recordAuthorityDecision(
           officialDocumentUrl: trimmedDoc || null,
         },
       });
+
+      await notifyNoc(nocId, { type: 'approved' });
     } else {
       const currentRev = currentNoc.current_revision || 'R00';
       const match = currentRev.match(/^R(\d+)$/i);
@@ -332,6 +335,12 @@ export async function recordAuthorityDecision(
         entity: 'project_nocs',
         entity_id: nocId,
         metadata: { decision, rejectionReason, nextRevision },
+      });
+
+      await notifyNoc(nocId, {
+        type: 'rejected',
+        reason: rejectionReason!,
+        revision: nextRevision,
       });
     }
 

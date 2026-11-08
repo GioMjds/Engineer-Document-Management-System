@@ -18,7 +18,10 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/set-password') ||
     pathname.startsWith('/reset-password');
 
-  if (!user && !isAuthLifecycleRoute) {
+  // Scheduled jobs are signed-out callers; the route checks its own bearer secret.
+  const isCronRoute = pathname.startsWith('/api/cron/');
+
+  if (!user && !isAuthLifecycleRoute && !isCronRoute) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
