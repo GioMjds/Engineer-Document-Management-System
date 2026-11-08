@@ -1708,3 +1708,12 @@
   - User workflow: an archived user signs in with the correct password, lands on the sign-in page once, and sees "This account has been archived. Contact your system administrator." Wrong password still shows the existing credentials error.
   - Review fixes: expiry ledger is now per recipient group (a partial send no longer repeats to groups already emailed); cron skips archived projects and NOCs lapsed more than 30 days; ledger lookup is chunked and returns 500 on error; SMTP transport has 10-15 second timeouts. `pnpm test` 11/11.
   - Deferred minors: addresses repeated across groups get two emails; all-empty recipients logs `NOC_EMAIL_FAILED` daily per NOC; recipient query errors are ignored (staff falls back to admins); subject is not escaped in `<title>`; approve email can go out when RLS blocks the update; concurrent cron runs can double-send.
+
+- Fixed: PWA install metadata and mobile safe areas.
+  - Root cause: [app/manifest.ts](app/manifest.ts) pointed to `icon-192x192.png`, `icon-512x512.png` and `icon-maskable-512x512.png`, which did not exist in `public/`, so the app was not installable.
+  - Generated those three icons from `public/android-chrome-512x512.png` (CVTEC logo, circle-clipped; maskable has a full-bleed `#00abd4` background with the logo inside the 80% safe zone). Removed stale `public/site.webmanifest` (empty names, white theme).
+  - Manifest: `id`, `lang`, `orientation`, `categories`, `start_url=/dashboard`, theme `#152a44`, background `#f4f6f8` (DESIGN.md navy and neutral-bg).
+  - [app/layout.tsx](app/layout.tsx): renamed to "CVTEC EDMS", added favicon and apple-touch icon links, light and dark `themeColor`, `viewportFit: cover`; removed `maximumScale`/`minimumScale` (blocked pinch zoom).
+  - Safe-area insets added to the app-shell header, main bottom padding, mobile drawer, and offline toast; offline page uses `100dvh`. `sw.js` cache bumped to v4.
+  - Push-ready: `sw.js` has no `push` or `notificationclick` handlers yet; add them plus a VAPID subscription table when building push. iOS requires the installed PWA.
+  - Verification: `tsc --noEmit` clean. Not run on a device.

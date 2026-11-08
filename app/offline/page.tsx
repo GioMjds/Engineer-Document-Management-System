@@ -13,7 +13,7 @@ const css = `
     --fg: #152a44; --muted: #6b7280;
     --warn-bg: #fef3c7; --warn-fg: #b45309;
     --btn: #152a44; --btn-fg: #ffffff;
-    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center;
     padding: 24px; box-sizing: border-box; background: var(--bg); color: var(--fg);
     font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   }

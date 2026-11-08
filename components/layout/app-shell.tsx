@@ -183,7 +183,7 @@ export function AppShell({
         {/* Main layout surface */}
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Header with sidebar toggles, breadcrumbs, notifications, theme, and profile */}
-          <header className="sticky top-0 z-30 flex h-14 items-center gap-2.5 sm:gap-3 border-b border-border bg-background/90 px-3 sm:px-6 lg:px-8 backdrop-blur">
+          <header className="sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-2.5 sm:gap-3 border-b border-border bg-background/90 px-3 pt-[env(safe-area-inset-top)] sm:px-6 lg:px-8 backdrop-blur">
             {/* Mobile menu drawer trigger */}
             <Button
               variant="ghost"
@@ -255,7 +255,7 @@ export function AppShell({
           <main
             id="main-content"
             tabIndex={-1}
-            className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-5 sm:px-6 sm:py-6 lg:px-8 outline-none"
+            className="mx-auto w-full max-w-[1600px] flex-1 px-3 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))] lg:px-8 outline-none"
           >
             {children}
           </main>
@@ -274,7 +274,7 @@ export function AppShell({
               role="dialog"
               aria-modal="true"
               aria-label="Main navigation"
-              className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-sidebar text-sidebar-foreground shadow-2xl animate-in slide-in-from-left duration-200 motion-reduce:animate-none flex flex-col"
+              className="absolute inset-y-0 left-0 w-72 max-w-[85vw] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] bg-sidebar text-sidebar-foreground shadow-2xl animate-in slide-in-from-left duration-200 motion-reduce:animate-none flex flex-col"
             >
               <Button
                 variant="ghost"

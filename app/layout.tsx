@@ -19,30 +19,40 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'CVTEC Engineer CMS',
+  title: 'CVTEC EDMS',
   description: 'Collaborative document management and review application.',
-  applicationName: 'CVTEC Engineer CMS',
+  applicationName: 'CVTEC EDMS',
   manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'CVTEC Engineer CMS',
+    title: 'CVTEC EDMS',
   },
-  // Add more metadata properties as needed
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  minimumScale: 1,
-  themeColor: 'light',
+  viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#152a44' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a1424' },
+  ],
 };
 
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
-  name: 'CVTEC Engineer CMS',
+  name: 'CVTEC EDMS',
   url: 'https://cvtec-edms.vercel.app/',
   description: 'Collaborative document management and review application.',
   // Add more as needed

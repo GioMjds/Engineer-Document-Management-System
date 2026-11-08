@@ -2,14 +2,18 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'CVTEC Engineer CMS',
-    short_name: 'CVTEC CMS',
+    id: '/',
+    name: 'CVTEC EDMS',
+    short_name: 'CVTEC EDMS',
     description: 'Collaborative document management and review application.',
-    start_url: '/',
+    start_url: '/dashboard',
     scope: '/',
     display: 'standalone',
-    background_color: '#f8fbfa',
-    theme_color: '#087f74',
+    orientation: 'any',
+    lang: 'en',
+    categories: ['business', 'productivity'],
+    background_color: '#f4f6f8',
+    theme_color: '#152a44',
     icons: [
       {
         src: '/icon-192x192.png',
