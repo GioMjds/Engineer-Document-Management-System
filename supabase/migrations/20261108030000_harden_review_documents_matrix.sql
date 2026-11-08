@@ -240,14 +240,14 @@ ON public.project_noc_requirements
 FOR ALL
 TO authenticated
 USING (
-  private.has_role(ARRAY['admin', 'authority_engineer', 'dc', 'resident_engineer'])
+  private.has_role(ARRAY['admin', 'authority_engineer', 'dc'])
   AND EXISTS (
     SELECT 1 FROM public.project_nocs pn
     WHERE pn.id = project_noc_requirements.project_noc_id
   )
 )
 WITH CHECK (
-  private.has_role(ARRAY['admin', 'authority_engineer', 'dc', 'resident_engineer'])
+  private.has_role(ARRAY['admin', 'authority_engineer', 'dc'])
   AND EXISTS (
     SELECT 1 FROM public.project_nocs pn
     WHERE pn.id = project_noc_requirements.project_noc_id
