@@ -1717,3 +1717,14 @@
   - Safe-area insets added to the app-shell header, main bottom padding, mobile drawer, and offline toast; offline page uses `100dvh`. `sw.js` cache bumped to v4.
   - Push-ready: `sw.js` has no `push` or `notificationclick` handlers yet; add them plus a VAPID subscription table when building push. iOS requires the installed PWA.
   - Verification: `tsc --noEmit` clean. Not run on a device.
+
+- Added: [scripts/generate-vapid-keys.mjs](scripts/generate-vapid-keys.mjs) (Node `crypto`, no dependency) and VAPID placeholders in `.env.example`. Keys are not generated or stored by the assistant, so the private key never enters the transcript or repo.
+
+- Added: Web Push handlers and subscription flow (not yet applied or verified).
+  - Dependencies: `web-push`, `@types/web-push` (approved by user).
+  - [public/sw.js](public/sw.js): `push` shows the notification; `notificationclick` focuses or opens a same-origin URL only. Cache bumped to v5.
+  - [supabase/migrations/20261108000000_push_subscriptions.sql](supabase/migrations/20261108000000_push_subscriptions.sql): `push_subscriptions` with owner-only RLS. NOT applied; needs user confirmation. [types/database.ts](types/database.ts) hand-edited to match; regenerate after applying.
+  - [app/api/push/subscribe/route.ts](app/api/push/subscribe/route.ts): POST upserts and DELETE removes the caller's subscription, zod-validated, RLS-scoped.
+  - [lib/push/send.ts](lib/push/send.ts): `sendPushToUsers(userIds, payload)` uses the admin client, skips silently without VAPID env, prunes 404 and 410 endpoints. Nothing calls it yet.
+  - [components/pwa/push-toggle.tsx](components/pwa/push-toggle.tsx) in the notifications popover; `VAPID_PUBLIC_KEY` exposed to the client through `next.config.ts` `env`.
+  - Verification: `node --check public/sw.js` passes. `tsc` and eslint crash with an access violation (exit -1073741819) even on a one-line file, so types are unchecked.

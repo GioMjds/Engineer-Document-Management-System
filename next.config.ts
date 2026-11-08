@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   env: {
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY,
   },
   images: {
     qualities: [50, 75, 100],

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Bell, Layers, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PushToggle } from '@/components/pwa/push-toggle';
 import {
   Popover,
   PopoverContent,
@@ -85,6 +86,10 @@ export function NotificationsPopover() {
             approvals, and stage-gate milestones are currently being built for
             Phase 2.
           </p>
+        </div>
+
+        <div className="border-t border-border p-3">
+          <PushToggle />
         </div>
       </PopoverContent>
     </Popover>
