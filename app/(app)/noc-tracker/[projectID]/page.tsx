@@ -10,6 +10,16 @@ export async function generateMetadata({
   params,
 }: PageProps<'/noc-tracker/[projectID]'>): Promise<Metadata> {
   const { projectID } = await params;
+
+  const { projects } = await getNocTrackerData();
+  const project = projects.find((p) => p.code === projectID);
+
+  if (!project) {
+    return {
+      title: 'Project Not Found · NOC Tracker',
+    }
+  }
+
   return {
     title: `Project ${projectID} · NOC Tracker`,
     description:

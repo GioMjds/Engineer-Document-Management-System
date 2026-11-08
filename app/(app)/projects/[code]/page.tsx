@@ -18,6 +18,16 @@ export async function generateMetadata({
   params,
 }: PageProps<'/projects/[code]'>): Promise<Metadata> {
   const { code } = await params;
+
+  const { projects } = await getNocTrackerData();
+  const project = projects.find((p) => p.code === code);
+  if (!project) {
+    return {
+      title: 'Project Not Found · Documents',
+      description: 'The requested project was not found.',
+    };
+  }
+
   return {
     title: `Project ${code} · Documents`,
     description: `Engineering submittals and document records for project ${code}`,
