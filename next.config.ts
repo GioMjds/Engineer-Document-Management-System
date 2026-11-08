@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
     useOffline: true,
     turbopackRustReactCompiler: true,
     turbopackGc: true,
-    turbopackPluginRuntimeStrategy: 'workerThreads',
+    // turbopackPluginRuntimeStrategy: 'workerThreads',
   },
   async headers() {
     return [
