@@ -1,5 +1,6 @@
 import { sendMail } from './client';
 import { renderInviteEmail } from './templates/invite-user';
+import { renderResetPasswordEmail } from './templates/reset-password';
 
 export interface EmailDetailItem {
   label: string;
@@ -74,6 +75,22 @@ export async function sendEdmsAlert(
   `.trim();
 
   return sendMail({ to: payload.to, subject: payload.subject, html });
+}
+
+// Send self-service password reset email containing the recovery link.
+export async function sendPasswordResetEmail(params: {
+  email: string;
+  fullName: string;
+  resetLink: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  return sendMail({
+    to: [params.email],
+    subject: 'Reset your CVTEC EDMS password',
+    html: renderResetPasswordEmail({
+      fullName: params.fullName,
+      resetLink: params.resetLink,
+    }),
+  });
 }
 
 // Send custom account invitation email containing password setup activation link.

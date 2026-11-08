@@ -28,7 +28,9 @@ export async function GET(request: NextRequest) {
   const loginUrl = new URL('/login', request.url);
   loginUrl.searchParams.set(
     'error',
-    'Invitation link has expired or is invalid. Please contact your administrator for a new invite.',
+    type === 'recovery'
+      ? 'Reset link has expired or is invalid. Request a new one from Forgot password.'
+      : 'Invitation link has expired or is invalid. Please contact your administrator for a new invite.',
   );
   return NextResponse.redirect(loginUrl);
 }

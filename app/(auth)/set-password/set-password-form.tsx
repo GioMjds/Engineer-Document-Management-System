@@ -9,8 +9,34 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
-// Dedicated form for new users to set initial password and enter the system.
-export function SetPasswordForm() {
+const COPY = {
+  activate: {
+    verifying: 'Verifying your invitation...',
+    expiredNote: 'Your invitation link may have expired.',
+    expiredSub: 'Your invitation or activation link is no longer valid.',
+    badge: 'Account Activation',
+    title: 'Set Your Password',
+    intro: 'Welcome! Setting up access for',
+    successTitle: 'Account Activated',
+    successSub: 'Your password has been set. Redirecting you to the system dashboard...',
+    submit: 'Save Password & Access EDMS',
+  },
+  reset: {
+    verifying: 'Verifying your reset link...',
+    expiredNote: 'Your reset link may have expired.',
+    expiredSub: 'Your password reset link is no longer valid.',
+    badge: 'Password Reset',
+    title: 'Reset Your Password',
+    intro: 'Choosing a new password for',
+    successTitle: 'Password Updated',
+    successSub: 'Your password has been changed. Redirecting you to the system dashboard...',
+    submit: 'Save New Password',
+  },
+} as const;
+
+// Form to set a password after an invite (activate) or a recovery link (reset).
+export function SetPasswordForm({ mode = 'activate' }: { mode?: 'activate' | 'reset' }) {
+  const copy = COPY[mode];
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -52,7 +78,7 @@ export function SetPasswordForm() {
         const timer = setTimeout(() => {
           setIsLoadingSession((loading) => {
             if (loading) {
-              setErrorMsg('No active session found. Your invitation link may have expired.');
+              setErrorMsg(`No active session found. ${copy.expiredNote}`);
             }
             return false;
           });
@@ -70,7 +96,7 @@ export function SetPasswordForm() {
     }
 
     checkSession();
-  }, []);
+  }, [copy.expiredNote]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +137,7 @@ export function SetPasswordForm() {
         <CardContent className="flex flex-col items-center justify-center py-14 space-y-3">
           <LoaderCircle className="size-7 animate-spin text-primary" />
           <p className="text-sm font-medium text-muted-foreground">
-            Verifying your invitation...
+            {copy.verifying}
           </p>
         </CardContent>
       </Card>
@@ -125,10 +151,10 @@ export function SetPasswordForm() {
           <CheckCircle2 className="size-10 text-emerald-600" />
           <div className="space-y-1">
             <h2 className="text-xl font-semibold tracking-tight text-foreground">
-              Account Activated
+              {copy.successTitle}
             </h2>
             <p className="text-sm text-muted-foreground">
-              Your password has been set. Redirecting you to the system dashboard...
+              {copy.successSub}
             </p>
           </div>
         </CardContent>
@@ -142,7 +168,7 @@ export function SetPasswordForm() {
         <CardHeader className="gap-1.5">
           <h1 className="text-2xl font-semibold tracking-tight">Session Expired</h1>
           <p className="text-sm text-muted-foreground">
-            Your invitation or activation link is no longer valid.
+            {copy.expiredSub}
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -170,13 +196,13 @@ export function SetPasswordForm() {
       <CardHeader className="gap-1.5">
         <div className="flex items-center gap-2 text-primary mb-1">
           <KeyRound className="size-5" />
-          <span className="text-xs font-semibold uppercase tracking-wider">Account Activation</span>
+          <span className="text-xs font-semibold uppercase tracking-wider">{copy.badge}</span>
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">Set Your Password</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{copy.title}</h1>
         <p className="text-sm text-muted-foreground">
           {userEmail ? (
             <>
-              Welcome! Setting up access for{' '}
+              {copy.intro}{' '}
               <strong className="text-foreground font-medium">{userEmail}</strong>.
             </>
           ) : (
@@ -253,7 +279,7 @@ export function SetPasswordForm() {
                 Saving Password...
               </>
             ) : (
-              'Save Password & Access EDMS'
+              copy.submit
             )}
           </Button>
         </form>

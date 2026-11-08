@@ -15,14 +15,15 @@ export async function proxy(request: NextRequest) {
     isGuestOnlyRoute ||
     pathname.startsWith('/confirm') ||
     pathname.startsWith('/auth/confirm') ||
-    pathname.startsWith('/set-password');
+    pathname.startsWith('/set-password') ||
+    pathname.startsWith('/reset-password');
 
   if (!user && !isAuthLifecycleRoute) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
   // Only redirect away from login/forgot-password or root if user is already signed in.
-  // Do NOT redirect away from /set-password or /confirm so new users can set their password.
+  // Do NOT redirect away from /set-password, /reset-password or /confirm so new users can set their password.
   if (user && (isGuestOnlyRoute || pathname === '/')) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
