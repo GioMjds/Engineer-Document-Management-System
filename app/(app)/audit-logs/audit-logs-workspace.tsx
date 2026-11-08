@@ -97,6 +97,7 @@ export function AuditLogsWorkspace({ initialLogs }: AuditLogsWorkspaceProps) {
       case 'DOCUMENT_REVISION_UPLOAD':
       case 'NOC_SUBMITTED':
       case 'NOC_FEE_RECORDED':
+      case 'NOC_RESUBMITTED':
         return (
           <Badge
             variant="outline"
@@ -140,6 +141,10 @@ export function AuditLogsWorkspace({ initialLogs }: AuditLogsWorkspaceProps) {
         return `Recorded NOC obtained status (Expires: ${m.expiryDate ?? '-'})`;
       case 'NOC_REJECTED':
         return `Recorded authority rejection. Reason: ${m.rejectionReason ?? '-'}`;
+      case 'NOC_FEE_RECORDED':
+        return `Recorded NOC fee of ${m.paymentFee ?? '-'} paid by ${String(m.payerType ?? '-').replace(/_/g, ' ')}`;
+      case 'NOC_RESUBMITTED':
+        return `Resubmitted NOC as revision ${m.newRevision ?? '-'}. Previous rejection: ${m.previousRejectionReason ?? '-'}`;
       case 'DOCUMENT_REVIEW_APPROVE':
         return `Approved drawing revision ${m.revision_label ?? 'R00'} at ${String(m.level ?? '').toUpperCase()} level`;
       case 'DOCUMENT_REVIEW_REJECT':

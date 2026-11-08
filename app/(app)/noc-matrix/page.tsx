@@ -34,7 +34,10 @@ export default async function NocMatrixPage() {
           getMatrixTemplates(initialAuthorityId),
           getMatrixRevisions(initialAuthorityId),
         ])
-      : [{ ok: true, data: [] }, { ok: true, data: [] }];
+      : [
+          { ok: true, data: [] },
+          { ok: true, data: [] },
+        ];
 
   return (
     <div className="py-2">

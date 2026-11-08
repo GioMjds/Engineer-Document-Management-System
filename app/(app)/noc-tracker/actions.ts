@@ -78,6 +78,14 @@ export async function recordNocFeePayment(
       if (error) {
         return { ok: false, error: error.message };
       }
+
+      await supabase.from('audit_log').insert({
+        action: 'NOC_FEE_RECORDED',
+        actor_id: user.id,
+        entity: 'project_nocs',
+        entity_id: nocId,
+        metadata: { paymentFee, payerType, hasReceipt: Boolean(receiptFileUrl) },
+      });
     }
 
     revalidatePath('/noc-tracker');
@@ -138,6 +146,17 @@ export async function resubmitNocRevision(
       if (updateError) {
         return { ok: false, error: updateError.message };
       }
+
+      await supabase.from('audit_log').insert({
+        action: 'NOC_RESUBMITTED',
+        actor_id: user.id,
+        entity: 'project_nocs',
+        entity_id: nocId,
+        metadata: {
+          newRevision,
+          previousRejectionReason: previousRejectionReason || null,
+        },
+      });
     }
 
     revalidatePath('/noc-tracker');

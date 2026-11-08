@@ -1676,3 +1676,10 @@
   - 11 flows: overview, access, role menus, project setup, drawing review, authority approvals, stage gates, coordination, approval library, archive, users and audit log.
   - Source of truth was the code (actions, permissions, gate rules), not the older docs, which drift in places (DEWA/RTA fixed gates, expiry emails, 7-gate count).
   - Gaps found and listed on the page: forgot-password placeholder, notifications bell placeholder, no NOC alert emails (only invites), admin cannot decide escalated drawings from the review modal, archived user redirect loop, fee payments and NOC resubmissions not audit-logged.
+
+- Fixed: NOC fee payments and NOC resubmissions now write to the audit log.
+  - [app/(app)/noc-tracker/actions.ts](app/(app)/noc-tracker/actions.ts): `recordNocFeePayment` writes `NOC_FEE_RECORDED` (fee, payer type, whether a receipt was attached); `resubmitNocRevision` writes `NOC_RESUBMITTED` (new revision, previous rejection reason). Both insert after the save succeeds, same pattern as the requirement actions.
+  - [app/(app)/audit-logs/audit-logs-workspace.tsx](app/(app)/audit-logs/audit-logs-workspace.tsx): summary text for both actions; `NOC_RESUBMITTED` uses the blue badge like submitted and fee recorded. Both already fall under the NOCs filter because of the `NOC_` prefix.
+  - Decisions: receipt link is not stored in the log, only a yes/no flag. No migration, since `audit_log.action` is free text.
+  - Verification: `tsc --noEmit` clean. Not run in browser.
+  - User workflow: on the NOC tracker, record a fee or resubmit a rejected NOC as before. Admin then sees a new row in Activity log (filter NOCs) with who, when and the details.
