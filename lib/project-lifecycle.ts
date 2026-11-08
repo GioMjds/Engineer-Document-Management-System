@@ -1,3 +1,4 @@
+import type { Enums } from '@/types/database';
 import type {
   AssignedProject,
   ProjectNocItem,
@@ -20,6 +21,22 @@ export function getNextLifecycleStage(
       return 'Completed';
   }
 }
+
+// Database project stage to lifecycle label; planning and design both read as Pre-Construction.
+export const DB_STAGE_TO_LIFECYCLE = {
+  planning: 'Pre-Construction',
+  design: 'Pre-Construction',
+  construction: 'Construction',
+  handover: 'Handover',
+  completed: 'Completed',
+} satisfies Record<Enums<'project_stage'>, ProjectLifecycleStage>;
+
+export const LIFECYCLE_TO_DB_STAGE = {
+  'Pre-Construction': 'design',
+  Construction: 'construction',
+  Handover: 'handover',
+  Completed: 'completed',
+} satisfies Record<ProjectLifecycleStage, Enums<'project_stage'>>;
 
 export function canUserAdvanceStage(role: string): boolean {
   const normalized = role.toLowerCase().replace(/[\s-]/g, '_');

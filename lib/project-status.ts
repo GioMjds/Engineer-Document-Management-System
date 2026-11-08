@@ -1,3 +1,4 @@
+import { normalizeRole } from './permissions.ts';
 import type {
   ProjectNocItem,
   AssignedProject,
@@ -157,7 +158,11 @@ export function canUserReviewSpecialist(role?: string): boolean {
 
 // Verify if the current user role can upload reports or submit revisions for specialist scopes.
 export function canUserUploadSpecialist(role?: string): boolean {
-  const normalized = (role || '').toLowerCase().replace(/[\s-]/g, '_');
-  if (normalized === 'ceo') return false;
-  return true;
+  const normalized = normalizeRole(role);
+  return normalized !== null && normalized !== 'ceo';
+}
+
+// Label stored in updatedBy and reviewedBy fields, derived on the server from the session role.
+export function actorLabel(role: string): string {
+  return role === 'admin' ? 'System Administrator' : role.replace(/_/g, ' ');
 }
