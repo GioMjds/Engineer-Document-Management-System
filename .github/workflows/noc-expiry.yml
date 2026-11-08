@@ -7,4 +7,8 @@ jobs:
   run:
     runs-on: ubuntu-latest
     steps:
-      - run: curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" "${{ secrets.APP_URL }}/api/cron/noc-expiry"
+      - name: Call NOC expiry route
+        run: |
+          curl -fsS --max-time 120 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/noc-expiry"
