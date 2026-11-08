@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import type { Route } from 'next';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,26 +12,18 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  Calendar,
-  Check,
-  ChevronsUpDown,
-  HardHat,
+  Building2,
+  ChevronDown,
   Hash,
+  HardHat,
   Loader2,
-  ShieldCheck,
-  Users,
 } from 'lucide-react';
 import { cn } from 'cn';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Card } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -48,34 +40,24 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import {
   createProject,
   getNextProjectCode,
   checkProjectCodeAvailability,
 } from '@/app/actions/admin';
 import type { MasterAuthorityRecord } from '@/types/noc';
-import type { ProfileItem } from '@/components/projects/project-team-dialog';
+import {
+  TeamAssignmentFields,
+  type ProfileItem,
+} from '@/components/projects/team-assignment-fields';
+import {
+  collectMembers,
+  createEmptyTeam,
+  type TeamAssignment,
+} from '@/lib/team-assignment';
 import { useProjectModal } from '@/components/projects/project-dialog-modal';
+import { STAGE_LABELS } from '@/lib/project-edit';
 
-const STAGE_LABELS = {
-  planning: 'Planning',
-  design: 'Pre-Construction (Design)',
-  construction: 'Construction',
-  handover: 'Handover',
-  completed: 'Completed',
-} satisfies Record<string, string>;
+const STEP_LABELS = ['Project details', 'Team (optional)'] as const;
 
 const parseEmails = (str?: string) =>
   (str ?? '')
@@ -83,17 +65,29 @@ const parseEmails = (str?: string) =>
     .map((e) => e.trim())
     .filter((e) => e.length > 0);
 
-const validateEmailList = (emails?: string) => {
-  if (!emails) return true;
-  const list = parseEmails(emails);
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return list.every((e) => emailRegex.test(e));
-};
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const validateEmailList = (emails?: string) =>
+  parseEmails(emails).every((e) => EMAIL_REGEX.test(e));
+
+const PARTY_STYLES = {
+  client: {
+    label: 'Client',
+    Icon: Building2,
+    chip: 'border-sky-600/30 bg-sky-50 text-sky-800 dark:border-sky-400/30 dark:bg-sky-950/40 dark:text-sky-300',
+  },
+  contractor: {
+    label: 'Contractor',
+    Icon: HardHat,
+    chip: 'border-amber-600/30 bg-amber-50 text-amber-800 dark:border-amber-400/30 dark:bg-amber-950/40 dark:text-amber-300',
+  },
+} as const;
 
 const projectSchema = z
   .object({
     code: z.string().trim().min(1, 'Project code is required.'),
     name: z.string().trim().min(1, 'Project name is required.'),
+    summary: z.string().max(500, 'Description must be 500 characters or fewer.'),
     stage: z.enum([
       'planning',
       'design',
@@ -163,123 +157,122 @@ interface ProjectRegistrationFormProps {
   teamProfiles?: ProfileItem[];
 }
 
-const UNASSIGNED = 'unassigned';
-
-interface StaffOption {
+interface FieldProps {
   id: string;
-  name: string;
-  role?: string;
-  suggested: boolean;
+  label: ReactNode;
+  error?: string;
+  hint?: string;
+  children: ReactNode;
 }
 
-const formatRole = (role?: string) => (role ?? '').replace(/_/g, ' ');
-
-interface StaffSelectProps {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: StaffOption[];
+// Label, control, and a single error-or-hint line.
+function Field({ id, label, error, hint, children }: FieldProps) {
+  return (
+    <div className="min-w-0 space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      {children}
+      {error ? (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      ) : (
+        hint && <p className="text-xs text-muted-foreground">{hint}</p>
+      )}
+    </div>
+  );
 }
 
-function StaffSelect({
-  id,
-  label,
-  value,
-  onChange,
-  options,
-}: StaffSelectProps) {
+interface OptionalSectionProps {
+  title: string;
+  forceOpen: boolean;
+  children: ReactNode;
+}
+
+// Collapsed by default; opens itself when it holds a validation error.
+function OptionalSection({ title, forceOpen, children }: OptionalSectionProps) {
   const [open, setOpen] = useState(false);
 
-  const selected = options.find((o) => o.id === value);
-  const hasValue = value !== UNASSIGNED && !!selected;
-  const suggested = options.filter((o) => o.id !== UNASSIGNED && o.suggested);
-  const others = options.filter((o) => o.id !== UNASSIGNED && !o.suggested);
-
-  const pick = (nextId: string) => {
-    onChange(nextId);
-    setOpen(false);
-  };
-
-  const renderItem = (o: StaffOption) => (
-    <CommandItem
-      key={o.id}
-      value={o.id}
-      keywords={[o.name, formatRole(o.role)]}
-      onSelect={() => pick(o.id)}
-      className="gap-2 text-xs"
+  return (
+    <details
+      open={open || forceOpen}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+      className="group rounded-md border border-border"
     >
-      <Check
-        className={cn(
-          'size-3.5 shrink-0',
-          value === o.id ? 'opacity-100' : 'opacity-0',
-        )}
-      />
-      <span className="truncate">{o.name}</span>
-      <span className="ml-auto shrink-0 text-xs capitalize text-muted-foreground">
-        {formatRole(o.role)}
-      </span>
-    </CommandItem>
+      <summary className="flex cursor-pointer list-none items-center justify-between rounded-md px-3 py-2 text-xs font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+        <span>
+          {title}{' '}
+          <span className="font-normal text-muted-foreground">(optional)</span>
+        </span>
+        <ChevronDown className="size-4 text-muted-foreground transition-transform duration-150 group-open:rotate-180" />
+      </summary>
+      <div className="space-y-3 border-t border-border p-3">{children}</div>
+    </details>
   );
+}
+
+// Party-tinted label with icon so client and contractor fields read as separate.
+function PartyLabel({ party, text }: { party: keyof typeof PARTY_STYLES; text: string }) {
+  const { Icon, chip } = PARTY_STYLES[party];
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn('flex size-5 items-center justify-center rounded border', chip)}>
+        <Icon className="size-3" aria-hidden />
+      </span>
+      {text}
+    </span>
+  );
+}
+
+// One chip per parsed address; invalid ones get a red border and warning icon.
+function EmailChips({ party, value }: { party: keyof typeof PARTY_STYLES; value?: string }) {
+  const emails = parseEmails(value);
+  if (emails.length === 0) return null;
+  const { label, Icon, chip } = PARTY_STYLES[party];
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-xs">
-        {label}
-      </Label>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger
-          id={id}
-          type="button"
-          className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-left text-xs shadow-xs outline-none transition-colors hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          <span
-            className={cn('truncate', !hasValue && 'text-muted-foreground')}
+    <ul aria-label={`${label} recipients`} className="flex flex-wrap gap-1.5">
+      {emails.map((email, i) => {
+        const valid = EMAIL_REGEX.test(email);
+        const ChipIcon = valid ? Icon : AlertTriangle;
+        return (
+          <li
+            key={`${email}-${i}`}
+            className={cn(
+              'inline-flex max-w-full items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-xs',
+              valid ? chip : 'border-destructive/40 bg-destructive/10 text-destructive',
+            )}
           >
-            {hasValue ? selected.name : '— Unassigned —'}
-          </span>
-          <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-80 p-0">
-          <Command>
-            <CommandInput
-              placeholder="Search name or role…"
-              className="text-xs"
-            />
-            <CommandList className="max-h-64">
-              <CommandEmpty className="py-4 text-xs">
-                No staff found.
-              </CommandEmpty>
-              <CommandGroup>
-                <CommandItem
-                  value={UNASSIGNED}
-                  keywords={['unassigned', 'none', 'clear']}
-                  onSelect={() => pick(UNASSIGNED)}
-                  className="gap-2 text-xs text-muted-foreground"
-                >
-                  <Check
-                    className={cn(
-                      'size-3.5 shrink-0',
-                      value === UNASSIGNED ? 'opacity-100' : 'opacity-0',
-                    )}
-                  />
-                  — Unassigned —
-                </CommandItem>
-              </CommandGroup>
-              {suggested.length > 0 && (
-                <CommandGroup heading="Suggested for this role">
-                  {suggested.map(renderItem)}
-                </CommandGroup>
-              )}
-              {others.length > 0 && (
-                <CommandGroup heading="Other staff">
-                  {others.map(renderItem)}
-                </CommandGroup>
-              )}
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+            <ChipIcon className="size-3 shrink-0" aria-hidden />
+            <span className="truncate">{email}</span>
+            {!valid && <span className="sr-only">(invalid address)</span>}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function AmountInput({
+  error,
+  ...props
+}: React.ComponentProps<typeof Input> & { error?: string }) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-xs font-medium text-muted-foreground">
+        AED
+      </span>
+      <Input
+        type="number"
+        step="0.01"
+        min="0"
+        placeholder="0.00"
+        className="pl-12 font-mono text-xs"
+        aria-invalid={!!error}
+        onFocus={(e) => {
+          if (e.target.value === '0') e.target.select();
+        }}
+        {...props}
+      />
     </div>
   );
 }
@@ -293,24 +286,13 @@ export function ProjectRegistrationForm({
   const [pending, startTransition] = useTransition();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showStandaloneConfirm, setShowStandaloneConfirm] = useState(false);
-  // 2-step wizard state for creating projects
   const [step, setStep] = useState<1 | 2>(1);
-
-  // Consultant team assignments state for Phase 2
-  const [reId, setReId] = useState<string>('unassigned');
-  const [amId, setAmId] = useState<string>('unassigned');
-  const [aeId, setAeId] = useState<string>('unassigned');
-  const [dcId, setDcId] = useState<string>('unassigned');
-  const [archId, setArchId] = useState<string>('unassigned');
-  const [structId, setStructId] = useState<string>('unassigned');
-  const [mepId, setMepId] = useState<string>('unassigned');
-  const [civilId, setCivilId] = useState<string>('unassigned');
+  const [team, setTeam] = useState<TeamAssignment>(createEmptyTeam);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [initialAutoCode, setInitialAutoCode] = useState<string | null>(null);
   const [codeAvailability, setCodeAvailability] = useState<{
     checked: boolean;
     available?: boolean;
-    message?: string;
   }>({ checked: false });
 
   const {
@@ -325,6 +307,7 @@ export function ProjectRegistrationForm({
     defaultValues: {
       code: '',
       name: '',
+      summary: '',
       stage: 'planning',
       master_authority_id: authorities[0]?.id ?? 1,
       client_name: '',
@@ -344,16 +327,11 @@ export function ProjectRegistrationForm({
   const projectName = useWatch({ control, name: 'name' });
   const clientName = useWatch({ control, name: 'client_name' });
   const contractorName = useWatch({ control, name: 'contractor_name' });
+  const summary = useWatch({ control, name: 'summary' });
+  const clientEmails = useWatch({ control, name: 'client_emails' });
+  const contractorEmails = useWatch({ control, name: 'contractor_emails' });
 
-  const hasTeamAssignments =
-    reId !== 'unassigned' ||
-    amId !== 'unassigned' ||
-    aeId !== 'unassigned' ||
-    dcId !== 'unassigned' ||
-    archId !== 'unassigned' ||
-    structId !== 'unassigned' ||
-    mepId !== 'unassigned' ||
-    civilId !== 'unassigned';
+  const members = collectMembers(team);
 
   const hasCustomCode = Boolean(
     projectCode &&
@@ -368,7 +346,7 @@ export function ProjectRegistrationForm({
     (contractorName && contractorName.trim().length > 0),
   );
 
-  const isFormDirty = isDirty || step > 1 || hasTeamAssignments || hasFilledText;
+  const isFormDirty = isDirty || step > 1 || members.length > 0 || hasFilledText;
 
   // Sync form dirty state with modal context.
   useEffect(() => {
@@ -399,12 +377,7 @@ export function ProjectRegistrationForm({
       if (res.ok && res.code) {
         setValue('code', res.code, { shouldValidate: true, shouldDirty: true });
         setInitialAutoCode(res.code);
-        setCodeAvailability({
-          checked: true,
-          available: true,
-          message: `Auto-generated code #${res.code} is available.`,
-        });
-        toast.success(`Generated next project code: ${res.code}`);
+        setCodeAvailability({ checked: true, available: true });
       } else {
         toast.error(res.error || 'Failed to auto-generate code');
       }
@@ -421,13 +394,7 @@ export function ProjectRegistrationForm({
     }
     const res = await checkProjectCodeAvailability(trimmed);
     if (res.ok) {
-      setCodeAvailability({
-        checked: true,
-        available: res.available,
-        message: res.available
-          ? `Code #${trimmed} is available`
-          : `Code #${trimmed} is already assigned to an existing project`,
-      });
+      setCodeAvailability({ checked: true, available: res.available });
     }
   };
 
@@ -438,11 +405,7 @@ export function ProjectRegistrationForm({
         if (res.ok && res.code) {
           setValue('code', res.code, { shouldValidate: true, shouldDirty: false });
           setInitialAutoCode(res.code);
-          setCodeAvailability({
-            checked: true,
-            available: true,
-            message: `Next available sequential code: #${res.code}`,
-          });
+          setCodeAvailability({ checked: true, available: true });
         }
       });
     }
@@ -458,63 +421,13 @@ export function ProjectRegistrationForm({
     }
   };
 
-  const getOptionsForRole = (primaryRole?: string): StaffOption[] => [
-    { id: UNASSIGNED, name: '— Unassigned —', suggested: false },
-    ...teamProfiles.map((p) => ({
-      id: p.id,
-      name: p.full_name || p.email || 'Unknown',
-      role: p.role,
-      suggested: !primaryRole || p.role === primaryRole,
-    })),
-  ];
-
-  const collectMembers = () => {
-    const members: {
-      userId: string;
-      discipline?: 'mep' | 'architect' | 'structure' | 'civil';
-    }[] = [];
-
-    if (reId !== 'unassigned') members.push({ userId: reId });
-    if (amId !== 'unassigned') members.push({ userId: amId });
-    if (aeId !== 'unassigned') members.push({ userId: aeId });
-    if (dcId !== 'unassigned') members.push({ userId: dcId });
-    if (archId !== 'unassigned')
-      members.push({ userId: archId, discipline: 'architect' });
-    if (structId !== 'unassigned')
-      members.push({ userId: structId, discipline: 'structure' });
-    if (mepId !== 'unassigned')
-      members.push({ userId: mepId, discipline: 'mep' });
-    if (civilId !== 'unassigned')
-      members.push({ userId: civilId, discipline: 'civil' });
-
-    return members;
-  };
-
   const handleProceedToStep2 = async () => {
-    const valid = await trigger([
-      'code',
-      'name',
-      'stage',
-      'master_authority_id',
-      'client_name',
-      'contractor_name',
-      'client_emails',
-      'contractor_emails',
-      'client_contractor_amount',
-      'client_consultant_amount',
-      'design_commencement_date',
-      'design_completion_date',
-      'supervision_commencement_date',
-      'supervision_completion_date',
-    ]);
-    if (valid) {
-      setStep(2);
-    }
+    if (await trigger()) setStep(2);
   };
 
   const submitProject = (values: ProjectFormValues, withTeam: boolean) => {
     startTransition(async () => {
-      const members = withTeam ? collectMembers() : [];
+      const teamMembers = withTeam ? members : [];
       const res = await createProject({
         code: values.code,
         name: values.name,
@@ -530,8 +443,8 @@ export function ProjectRegistrationForm({
         design_completion_date: values.design_completion_date,
         supervision_commencement_date: values.supervision_commencement_date,
         supervision_completion_date: values.supervision_completion_date,
-        description: values.name,
-        members,
+        summary: values.summary,
+        members: teamMembers,
       });
 
       if (!res.ok) {
@@ -543,8 +456,8 @@ export function ProjectRegistrationForm({
       modalContext?.setIsDirty(false);
 
       toast.success(
-        members.length > 0
-          ? `Project ${values.code} created with ${members.length} team members.`
+        teamMembers.length > 0
+          ? `Project ${values.code} created with ${teamMembers.length} team members.`
           : `Project ${values.code} created successfully.`,
       );
 
@@ -558,150 +471,98 @@ export function ProjectRegistrationForm({
   };
 
   const isModal = Boolean(modalContext);
-  const teamMembers = collectMembers();
-  const teamCount = teamMembers.length;
-
   const Container = isModal ? 'div' : Card;
-  const Header = isModal ? 'div' : CardHeader;
-  const Content = isModal ? 'div' : CardContent;
-  const Footer = isModal ? 'div' : CardFooter;
 
   return (
     <>
-      <Container className={cn(isModal ? 'space-y-4' : 'border-border bg-card shadow-xs')}>
-      {/* 2-Phase Wizard Stepper */}
-      <div
-        className={cn(
-          'flex items-center justify-between border-b border-border/80 px-6 py-3.5 bg-muted/15',
-          isModal && 'rounded-md border border-border/70 px-4 py-2.5',
-        )}
+      <Container
+        className={cn('space-y-5', !isModal && 'border-border bg-card p-6 shadow-xs')}
       >
-        <div className="flex items-center gap-2.5">
-          <div
-            className={cn(
-              'flex size-6 items-center justify-center rounded-full text-xs font-semibold transition-colors',
-              step === 1
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-primary/15 text-primary',
-            )}
-          >
-            1
+        <div className="space-y-1.5" aria-label="Registration progress">
+          <p className="text-xs text-muted-foreground">
+            Step {step} of 2 ·{' '}
+            <span className="font-medium text-foreground">
+              {STEP_LABELS[step - 1]}
+            </span>
+          </p>
+          <div className="flex gap-1" aria-hidden>
+            {[1, 2].map((n) => (
+              <div
+                key={n}
+                className={cn(
+                  'h-0.5 flex-1 rounded-full',
+                  n <= step ? 'bg-primary' : 'bg-border',
+                )}
+              />
+            ))}
           </div>
-          <span
-            className={cn(
-              'text-xs transition-colors',
-              step === 1
-                ? 'font-semibold text-foreground'
-                : 'text-muted-foreground',
-            )}
-          >
-            Phase 1: Scope & Commercials
-          </span>
         </div>
 
-        <div className="h-px w-8 bg-border sm:w-16" />
-
-        <div className="flex items-center gap-2.5">
-          <div
-            className={cn(
-              'flex size-6 items-center justify-center rounded-full text-xs font-semibold transition-colors',
-              step === 2
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground',
-            )}
-          >
-            2
-          </div>
-          <span
-            className={cn(
-              'text-xs transition-colors',
-              step === 2
-                ? 'font-semibold text-foreground'
-                : 'text-muted-foreground',
-            )}
-          >
-            Phase 2: Consultant Staffing (Optional)
-          </span>
-        </div>
-      </div>
-
-      <form noValidate>
-        {step === 1 ? (
-          <>
-            <Header className={cn(isModal && 'pb-1 pt-1')}>
-              <CardTitle className="text-base font-semibold">
-                Project Metadata & Stakeholders
-              </CardTitle>
-            </Header>
-            <Content className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="code">Project Code</Label>
-                    <button
-                      type="button"
-                      onClick={handleAutoGenerateCode}
-                      disabled={isGeneratingCode || pending}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-50"
-                      title="Auto-calculate next sequential code for current year"
-                    >
-                      {isGeneratingCode ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Hash className="size-3.5" />
-                      )}
-                      <span>{isGeneratingCode ? 'Generating...' : 'Auto-Generate'}</span>
-                    </button>
-                  </div>
-                  <Input
+        <form noValidate className="space-y-5">
+          {step === 1 ? (
+            <>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <Field
                     id="code"
-                    placeholder="e.g. 26004"
-                    className="font-mono tracking-wider text-xs"
-                    aria-invalid={!!errors.code}
-                    {...register('code', {
-                      onBlur: (e) => handleCheckCodeAvailability(e.target.value),
-                    })}
-                  />
-                  {errors.code && (
-                    <p className="text-xs text-destructive">
-                      {errors.code.message}
-                    </p>
-                  )}
-                  {!errors.code && codeAvailability.checked && (
-                    <p
-                      className={cn(
-                        'text-xs font-medium',
-                        codeAvailability.available
-                          ? 'text-emerald-700 dark:text-emerald-400'
-                          : 'text-destructive',
-                      )}
-                    >
-                      {codeAvailability.message}
-                    </p>
-                  )}
-                </div>
+                    label="Project code"
+                    error={errors.code?.message}
+                    hint={
+                      codeAvailability.checked
+                        ? codeAvailability.available
+                          ? 'Code available.'
+                          : 'Code already in use.'
+                        : undefined
+                    }
+                  >
+                    <div className="relative">
+                      <Input
+                        id="code"
+                        placeholder="e.g. 26004"
+                        className="pr-9 font-mono text-xs tracking-wider"
+                        aria-invalid={
+                          !!errors.code ||
+                          (codeAvailability.checked && !codeAvailability.available)
+                        }
+                        {...register('code', {
+                          onBlur: (e) => handleCheckCodeAvailability(e.target.value),
+                        })}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={handleAutoGenerateCode}
+                        disabled={isGeneratingCode || pending}
+                        aria-label="Generate next project code"
+                        title="Generate next project code"
+                        className="absolute right-1 top-1/2 -translate-y-1/2"
+                      >
+                        {isGeneratingCode ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Hash className="size-3.5" />
+                        )}
+                      </Button>
+                    </div>
+                  </Field>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="masterAuthority">Master Authority</Label>
-                  <Controller
-                    name="master_authority_id"
-                    control={control}
-                    render={({ field }) => {
-                      const selected = authorities.find(
-                        (a) => a.id === field.value,
-                      );
-
-                      return (
+                  <Field
+                    id="masterAuthority"
+                    label="Master authority"
+                    error={errors.master_authority_id?.message}
+                  >
+                    <Controller
+                      name="master_authority_id"
+                      control={control}
+                      render={({ field }) => (
                         <Select
                           value={String(field.value)}
                           onValueChange={(v) => field.onChange(Number(v))}
                         >
-                          <SelectTrigger
-                            id="masterAuthority"
-                            className="w-full"
-                          >
-                            <SelectValue placeholder="Select Authority">
-                              {selected?.name}
+                          <SelectTrigger id="masterAuthority" className="w-full">
+                            <SelectValue placeholder="Select authority">
+                              {authorities.find((a) => a.id === field.value)?.name}
                             </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
@@ -712,473 +573,284 @@ export function ProjectRegistrationForm({
                             ))}
                           </SelectContent>
                         </Select>
-                      );
-                    }}
-                  />
-                  {errors.master_authority_id && (
-                    <p className="text-xs text-destructive">
-                      {errors.master_authority_id.message}
-                    </p>
-                  )}
-                  {authorities.length === 0 && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                      No authorities found.{' '}
-                      <Link
-                        href={'/authorities' as Route}
-                        className="underline hover:text-amber-500"
-                      >
-                        Register one first
-                      </Link>
-                      .
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="stage">Initial Stage</Label>
-                  <Controller
-                    name="stage"
-                    control={control}
-                    render={({ field }) => (
-                      <Select
-                        value={field.value}
-                        onValueChange={field.onChange}
-                      >
-                        <SelectTrigger id="stage" className="w-full">
-                          <SelectValue>
-                            {STAGE_LABELS[field.value] ?? field.value}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(STAGE_LABELS).map(([key, label]) => (
-                            <SelectItem key={key} value={key}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      )}
+                    />
+                    {authorities.length === 0 && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        No authorities found.{' '}
+                        <Link
+                          href={'/authorities' as Route}
+                          className="underline"
+                        >
+                          Register one first
+                        </Link>
+                        .
+                      </p>
                     )}
-                  />
-                  {errors.stage && (
-                    <p className="text-xs text-destructive">
-                      {errors.stage.message}
-                    </p>
-                  )}
-                </div>
-              </div>
+                  </Field>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="name">Project Name / Description</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g. CVTEC Commercial Tower & Hotel"
-                  aria-invalid={!!errors.name}
-                  {...register('name')}
-                />
-                {errors.name && (
-                  <p className="text-xs text-destructive">
-                    {errors.name.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="clientName">Client Name</Label>
-                  <Input
-                    id="clientName"
-                    placeholder="e.g. Dubai Holding"
-                    aria-invalid={!!errors.client_name}
-                    {...register('client_name')}
-                  />
-                  {errors.client_name && (
-                    <p className="text-xs text-destructive">
-                      {errors.client_name.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="contractorName">Contractor Name</Label>
-                  <Input
-                    id="contractorName"
-                    placeholder="e.g. Al Naboodah Contracting"
-                    aria-invalid={!!errors.contractor_name}
-                    {...register('contractor_name')}
-                  />
-                  {errors.contractor_name && (
-                    <p className="text-xs text-destructive">
-                      {errors.contractor_name.message}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="clientEmails">
-                    Client Notification Emails
-                  </Label>
-                  <Input
-                    id="clientEmails"
-                    placeholder="pm@client.ae, director@client.ae"
-                    aria-invalid={!!errors.client_emails}
-                    {...register('client_emails')}
-                  />
-                  {errors.client_emails ? (
-                    <p className="text-xs text-destructive">
-                      {errors.client_emails.message}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Comma-separated emails for automated alerts.
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="contractorEmails">
-                    Contractor Notification Emails
-                  </Label>
-                  <Input
-                    id="contractorEmails"
-                    placeholder="project@contractor.ae"
-                    aria-invalid={!!errors.contractor_emails}
-                    {...register('contractor_emails')}
-                  />
-                  {errors.contractor_emails ? (
-                    <p className="text-xs text-destructive">
-                      {errors.contractor_emails.message}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Comma-separated emails for automated alerts.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 pt-2 border-t border-border">
-                <div className="space-y-1.5">
-                  <Label htmlFor="contractorAmount">
-                    Client–Contractor Contract Sum (AED)
-                  </Label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-xs font-semibold text-muted-foreground">
-                      AED
-                    </span>
-                    <Input
-                      id="contractorAmount"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className="pl-12 font-mono text-xs"
-                      placeholder="0.00"
-                      onFocus={(e) => {
-                        if (e.target.value === '0') e.target.select();
-                      }}
-                      aria-invalid={!!errors.client_contractor_amount}
-                      {...register('client_contractor_amount', {
-                        valueAsNumber: true,
-                      })}
+                  <Field id="stage" label="Initial stage" error={errors.stage?.message}>
+                    <Controller
+                      name="stage"
+                      control={control}
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger id="stage" className="w-full">
+                            <SelectValue>
+                              {STAGE_LABELS[field.value] ?? field.value}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(STAGE_LABELS).map(([key, label]) => (
+                              <SelectItem key={key} value={key}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                     />
-                  </div>
-                  {errors.client_contractor_amount ? (
-                    <p className="text-xs text-destructive">
-                      {errors.client_contractor_amount.message}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Visible to internal project team.
-                    </p>
-                  )}
+                  </Field>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="consultantAmount">
-                    Client–Consultant Sum (AED) [Confidential]
-                  </Label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-xs font-semibold text-muted-foreground">
-                      AED
-                    </span>
-                    <Input
-                      id="consultantAmount"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className="pl-12 font-mono text-xs"
-                      placeholder="0.00"
-                      onFocus={(e) => {
-                        if (e.target.value === '0') e.target.select();
-                      }}
-                      aria-invalid={!!errors.client_consultant_amount}
-                      {...register('client_consultant_amount', {
-                        valueAsNumber: true,
-                      })}
-                    />
-                  </div>
-                  {errors.client_consultant_amount ? (
-                    <p className="text-xs text-destructive">
-                      {errors.client_consultant_amount.message}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Restricted to Admin, CEO, and Area Manager.
-                    </p>
-                  )}
-                </div>
-              </div>
 
-              {/* Separate Contract Dates for Design and Supervision */}
-              <div className="pt-3 border-t border-border space-y-3">
-                <div className="flex items-center gap-2">
-                  <Calendar className="size-4 text-primary" />
-                  <span className="text-xs font-semibold text-foreground">
-                    Contract Schedules & Target Dates (Optional)
-                  </span>
-                </div>
+                <Field id="name" label="Project name" error={errors.name?.message}>
+                  <Input
+                    id="name"
+                    placeholder="e.g. Commercial Tower & Hotel"
+                    aria-invalid={!!errors.name}
+                    {...register('name')}
+                  />
+                </Field>
+
+                <Field
+                  id="summary"
+                  label={
+                    <>
+                      Description{' '}
+                      <span className="font-normal text-muted-foreground">
+                        (optional)
+                      </span>
+                    </>
+                  }
+                  error={errors.summary?.message}
+                  hint={`${(summary ?? '').length}/500 · Scope or notes, separate from the name.`}
+                >
+                  <Textarea
+                    id="summary"
+                    rows={2}
+                    maxLength={500}
+                    placeholder="e.g. 42-storey mixed-use tower with podium parking"
+                    className="min-h-0 resize-none text-sm"
+                    aria-invalid={!!errors.summary}
+                    {...register('summary')}
+                  />
+                </Field>
+
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
-                    <p className="text-xs font-semibold text-foreground">
-                      Design Contract Dates
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="designStart" className="text-xs">
-                          Commencement
-                        </Label>
-                        <Input
-                          id="designStart"
-                          type="date"
-                          className="h-9 text-xs"
-                          {...register('design_commencement_date')}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="designEnd" className="text-xs">
-                          Completion
-                        </Label>
-                        <Input
-                          id="designEnd"
-                          type="date"
-                          className="h-9 text-xs"
-                          aria-invalid={!!errors.design_completion_date}
-                          {...register('design_completion_date')}
-                        />
-                      </div>
-                    </div>
-                    {errors.design_completion_date && (
-                      <p className="text-xs text-destructive">
-                        {errors.design_completion_date.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
-                    <p className="text-xs font-semibold text-foreground">
-                      Supervision Contract Dates
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="supervisionStart" className="text-xs">
-                          Commencement
-                        </Label>
-                        <Input
-                          id="supervisionStart"
-                          type="date"
-                          className="h-9 text-xs"
-                          {...register('supervision_commencement_date')}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="supervisionEnd" className="text-xs">
-                          Target Completion
-                        </Label>
-                        <Input
-                          id="supervisionEnd"
-                          type="date"
-                          className="h-9 text-xs"
-                          aria-invalid={!!errors.supervision_completion_date}
-                          {...register('supervision_completion_date')}
-                        />
-                      </div>
-                    </div>
-                    {errors.supervision_completion_date && (
-                      <p className="text-xs text-destructive">
-                        {errors.supervision_completion_date.message}
-                      </p>
-                    )}
-                  </div>
+                  <Field
+                    id="clientName"
+                    label="Client"
+                    error={errors.client_name?.message}
+                  >
+                    <Input
+                      id="clientName"
+                      placeholder="e.g. Dubai Holding"
+                      aria-invalid={!!errors.client_name}
+                      {...register('client_name')}
+                    />
+                  </Field>
+                  <Field
+                    id="contractorName"
+                    label="Contractor"
+                    error={errors.contractor_name?.message}
+                  >
+                    <Input
+                      id="contractorName"
+                      placeholder="e.g. Al Naboodah Contracting"
+                      aria-invalid={!!errors.contractor_name}
+                      {...register('contractor_name')}
+                    />
+                  </Field>
                 </div>
               </div>
-            </Content>
 
-            <Footer className={cn(
-              "flex justify-between items-center py-4",
-              isModal ? "border-t border-border pt-4 pb-0" : "border-t border-border"
-            )}>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleCancel}
-                disabled={pending}
-              >
-                Cancel
-              </Button>
+              <div className="space-y-2">
+                <OptionalSection
+                  title="Contract values and dates"
+                  forceOpen={Boolean(
+                    errors.client_contractor_amount ||
+                      errors.client_consultant_amount ||
+                      errors.design_completion_date ||
+                      errors.supervision_completion_date,
+                  )}
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field
+                      id="contractorAmount"
+                      label="Contractor contract sum"
+                      error={errors.client_contractor_amount?.message}
+                    >
+                      <AmountInput
+                        id="contractorAmount"
+                        error={errors.client_contractor_amount?.message}
+                        {...register('client_contractor_amount', {
+                          valueAsNumber: true,
+                        })}
+                      />
+                    </Field>
+                    <Field
+                      id="consultantAmount"
+                      label="Consultant contract sum"
+                      error={errors.client_consultant_amount?.message}
+                      hint="Visible to Admin, CEO, and Area Manager only."
+                    >
+                      <AmountInput
+                        id="consultantAmount"
+                        error={errors.client_consultant_amount?.message}
+                        {...register('client_consultant_amount', {
+                          valueAsNumber: true,
+                        })}
+                      />
+                    </Field>
+                    <Field id="designStart" label="Design commencement">
+                      <Input
+                        id="designStart"
+                        type="date"
+                        className="h-9 text-xs"
+                        {...register('design_commencement_date')}
+                      />
+                    </Field>
+                    <Field
+                      id="designEnd"
+                      label="Design completion"
+                      error={errors.design_completion_date?.message}
+                    >
+                      <Input
+                        id="designEnd"
+                        type="date"
+                        className="h-9 text-xs"
+                        aria-invalid={!!errors.design_completion_date}
+                        {...register('design_completion_date')}
+                      />
+                    </Field>
+                    <Field id="supervisionStart" label="Supervision commencement">
+                      <Input
+                        id="supervisionStart"
+                        type="date"
+                        className="h-9 text-xs"
+                        {...register('supervision_commencement_date')}
+                      />
+                    </Field>
+                    <Field
+                      id="supervisionEnd"
+                      label="Supervision completion"
+                      error={errors.supervision_completion_date?.message}
+                    >
+                      <Input
+                        id="supervisionEnd"
+                        type="date"
+                        className="h-9 text-xs"
+                        aria-invalid={!!errors.supervision_completion_date}
+                        {...register('supervision_completion_date')}
+                      />
+                    </Field>
+                  </div>
+                </OptionalSection>
 
-              <div className="flex items-center gap-2.5">
+                <OptionalSection
+                  title="Notification emails"
+                  forceOpen={Boolean(
+                    errors.client_emails || errors.contractor_emails,
+                  )}
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field
+                      id="clientEmails"
+                      label={<PartyLabel party="client" text="Client emails" />}
+                      error={errors.client_emails?.message}
+                    >
+                      <Input
+                        id="clientEmails"
+                        placeholder="pm@client.ae, director@client.ae"
+                        aria-invalid={!!errors.client_emails}
+                        {...register('client_emails')}
+                      />
+                      <EmailChips party="client" value={clientEmails} />
+                    </Field>
+                    <Field
+                      id="contractorEmails"
+                      label={<PartyLabel party="contractor" text="Contractor emails" />}
+                      error={errors.contractor_emails?.message}
+                    >
+                      <Input
+                        id="contractorEmails"
+                        placeholder="project@contractor.ae"
+                        aria-invalid={!!errors.contractor_emails}
+                        {...register('contractor_emails')}
+                      />
+                      <EmailChips party="contractor" value={contractorEmails} />
+                    </Field>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Separate multiple addresses with commas. Used for automated alerts.
+                  </p>
+                </OptionalSection>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={handleSubmit((vals) => submitProject(vals, false))}
+                  onClick={handleCancel}
                   disabled={pending}
-                  className="text-xs text-muted-foreground hover:text-foreground"
                 >
-                  Quick Register (Skip Staffing)
+                  Cancel
                 </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleSubmit((vals) => submitProject(vals, false))}
+                    disabled={pending}
+                  >
+                    {pending ? 'Registering...' : 'Register without team'}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleProceedToStep2}
+                    disabled={pending}
+                  >
+                    Next: team
+                    <ArrowRight className="ml-1.5 size-4" />
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="truncate text-xs text-muted-foreground">
+                <span className="font-mono font-medium text-foreground">
+                  {projectCode}
+                </span>{' '}
+                · {projectName}. Team can be changed later from the projects list.
+              </p>
+
+              <TeamAssignmentFields
+                team={team}
+                profiles={teamProfiles}
+                onChange={(key, ids) => setTeam((t) => ({ ...t, [key]: ids }))}
+              />
+
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
                 <Button
                   type="button"
-                  onClick={handleProceedToStep2}
+                  variant="ghost"
+                  onClick={() => setStep(1)}
                   disabled={pending}
                 >
-                  Next: Assign Team
-                  <ArrowRight className="ml-1.5 size-4" />
+                  <ArrowLeft className="mr-1.5 size-4" />
+                  Back
                 </Button>
-              </div>
-            </Footer>
-          </>
-        ) : (
-          <>
-            <Header className={cn(
-              "space-y-1",
-              isModal ? "pb-2 pt-1" : ""
-            )}>
-              <div className="flex items-center gap-2">
-                <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-                  <Users className="size-4" />
-                </span>
-                <CardTitle className="text-base font-semibold">
-                  Consultant Team Staffing
-                </CardTitle>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Assign registered staff to oversight and discipline engineering
-                roles for project{' '}
-                <span className="font-semibold text-foreground font-mono">
-                  {projectCode || 'New Project'}
-                </span>
-                .
-              </p>
-            </Header>
-
-            <Content className="space-y-4">
-              {/* Context Project Summary */}
-              <div className="rounded-md border border-border bg-muted/20 p-3 text-xs flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <div className="truncate">
-                  <span className="font-semibold text-foreground font-mono">
-                    {projectCode || '—'}
-                  </span>{' '}
-                  <span className="text-muted-foreground truncate">
-                    {projectName || '—'}
-                  </span>
-                </div>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  Staffing can be adjusted anytime via Projects Directory.
-                </span>
-              </div>
-
-              {/* Management & Permitting Oversight */}
-              <div className="rounded-md border border-border bg-muted/10 p-3.5 space-y-3">
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <ShieldCheck className="size-3.5 text-muted-foreground" />
-                  Management & Permitting Oversight
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <StaffSelect
-                    id="re-select"
-                    label="Resident Engineer (RE)"
-                    value={reId}
-                    onChange={setReId}
-                    options={getOptionsForRole('resident_engineer')}
-                  />
-                  <StaffSelect
-                    id="am-select"
-                    label="Area Manager (AM)"
-                    value={amId}
-                    onChange={setAmId}
-                    options={getOptionsForRole('area_manager')}
-                  />
-                  <StaffSelect
-                    id="ae-select"
-                    label="Authority Engineer"
-                    value={aeId}
-                    onChange={setAeId}
-                    options={getOptionsForRole('authority_engineer')}
-                  />
-                  <StaffSelect
-                    id="dc-select"
-                    label="Document Controller (DC)"
-                    value={dcId}
-                    onChange={setDcId}
-                    options={getOptionsForRole('dc')}
-                  />
-                </div>
-              </div>
-
-              {/* Multidisciplinary Engineering Leads */}
-              <div className="rounded-md border border-border bg-muted/10 p-3.5 space-y-3">
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <HardHat className="size-3.5 text-muted-foreground" />
-                  Multidisciplinary Engineering Leads
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <StaffSelect
-                    id="arch-select"
-                    label="Architectural Lead"
-                    value={archId}
-                    onChange={setArchId}
-                    options={getOptionsForRole('engineer')}
-                  />
-                  <StaffSelect
-                    id="struct-select"
-                    label="Structural Lead"
-                    value={structId}
-                    onChange={setStructId}
-                    options={getOptionsForRole('engineer')}
-                  />
-                  <StaffSelect
-                    id="mep-select"
-                    label="MEP Lead"
-                    value={mepId}
-                    onChange={setMepId}
-                    options={getOptionsForRole('engineer')}
-                  />
-                  <StaffSelect
-                    id="civil-select"
-                    label="Civil Lead"
-                    value={civilId}
-                    onChange={setCivilId}
-                    options={getOptionsForRole('engineer')}
-                  />
-                </div>
-              </div>
-            </Content>
-
-            <Footer className={cn(
-              "flex justify-between items-center py-4",
-              isModal ? "border-t border-border pt-4 pb-0" : "border-t border-border"
-            )}>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setStep(1)}
-                disabled={pending}
-              >
-                <ArrowLeft className="mr-1.5 size-4" />
-                Back to Scope
-              </Button>
-
-              <div className="flex items-center gap-2.5">
                 <Button
                   type="button"
                   onClick={handleSubmit((vals) => submitProject(vals, true))}
@@ -1186,57 +858,56 @@ export function ProjectRegistrationForm({
                 >
                   {pending
                     ? 'Registering...'
-                    : teamCount > 0
-                    ? `Register Project (${teamCount} Assigned)`
-                    : 'Register Project'}
+                    : members.length > 0
+                      ? `Register project (${members.length} assigned)`
+                      : 'Register project'}
                 </Button>
               </div>
-            </Footer>
-          </>
-        )}
-      </form>
-    </Container>
+            </>
+          )}
+        </form>
+      </Container>
 
-    {!modalContext && (
-      <Dialog
-        open={showStandaloneConfirm}
-        disablePointerDismissal
-        onOpenChange={(open) => {
-          if (!open) setShowStandaloneConfirm(false);
-        }}
-      >
-        <DialogContent className="sm:max-w-md z-[60]" showCloseButton={false}>
-          <DialogHeader>
-            <div className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="size-5 shrink-0" />
-              <DialogTitle>Discard Unsaved Project?</DialogTitle>
-            </div>
-            <DialogDescription>
-              You have unsaved changes in this project registration form. Exiting now will discard all entered details and team assignments.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-2 flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowStandaloneConfirm(false)}
-            >
-              Continue Editing
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={() => {
-                setShowStandaloneConfirm(false);
-                router.back();
-              }}
-            >
-              Discard and Exit
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    )}
+      {!modalContext && (
+        <Dialog
+          open={showStandaloneConfirm}
+          disablePointerDismissal
+          onOpenChange={(open) => {
+            if (!open) setShowStandaloneConfirm(false);
+          }}
+        >
+          <DialogContent className="sm:max-w-md z-[60]" showCloseButton={false}>
+            <DialogHeader>
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="size-5 shrink-0" />
+                <DialogTitle>Discard Unsaved Project?</DialogTitle>
+              </div>
+              <DialogDescription>
+                You have unsaved changes in this project registration form. Exiting now will discard all entered details and team assignments.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-2 flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowStandaloneConfirm(false)}
+              >
+                Continue Editing
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => {
+                  setShowStandaloneConfirm(false);
+                  router.back();
+                }}
+              >
+                Discard and Exit
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }

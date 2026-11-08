@@ -17,6 +17,7 @@ import {
   Users,
   Layers,
   FileText,
+  Pencil,
   Trash2,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -32,7 +33,10 @@ import {
 import { cn } from '@/lib/utils';
 import { formatCurrencyAED } from '@/utils/formatters';
 import type { AssignedProject, ProjectLifecycleStage, MasterAuthorityRecord } from '@/types/noc';
-import { ProjectTeamDialog, type ProfileItem } from './project-team-dialog';
+import type { ProjectEditDetails } from '@/lib/project-edit';
+import { ProjectTeamDialog } from './project-team-dialog';
+import { ProjectEditDialog } from './project-edit-dialog';
+import type { ProfileItem } from './team-assignment-fields';
 import { DeleteProjectDialog } from './delete-project-dialog';
 import { ProjectDialogModal } from './project-dialog-modal';
 import { ProjectRegistrationForm } from '@/app/(app)/projects/new/project-form';
@@ -46,6 +50,7 @@ interface ProjectsWorkspaceClientProps {
   };
   teamProfiles: ProfileItem[];
   authorities?: MasterAuthorityRecord[];
+  editDetails?: Record<string, ProjectEditDetails>;
   canCreateProject: boolean;
   canDeleteProject?: boolean;
   canManageMembers: boolean;
@@ -170,6 +175,7 @@ export function ProjectsWorkspaceClient({
   currentUser,
   teamProfiles,
   authorities = [],
+  editDetails = {},
   canCreateProject,
   canDeleteProject = false,
   canManageMembers,
@@ -183,6 +189,9 @@ export function ProjectsWorkspaceClient({
   const [roleFilter, setRoleFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [editingProject, setEditingProject] = useState<AssignedProject | null>(
+    null,
+  );
+  const [editingDetails, setEditingDetails] = useState<AssignedProject | null>(
     null,
   );
   const [deletingProject, setDeletingProject] = useState<{
@@ -555,6 +564,9 @@ export function ProjectsWorkspaceClient({
               canViewConsultantAmount={canViewConsultantAmount}
               highlightedRole={roleFilter}
               onManageMembers={() => setEditingProject(p)}
+              onEditProject={
+                canCreateProject ? () => setEditingDetails(p) : undefined
+              }
               onDeleteProject={() => handleDeleteProject(p)}
             />
           ))}
@@ -566,6 +578,7 @@ export function ProjectsWorkspaceClient({
           canDeleteProject={canDeleteProject}
           canViewConsultantAmount={canViewConsultantAmount}
           onManageMembers={(p) => setEditingProject(p)}
+          onEditProject={canCreateProject ? setEditingDetails : undefined}
           onDeleteProject={handleDeleteProject}
         />
       )}
@@ -578,6 +591,18 @@ export function ProjectsWorkspaceClient({
           teamProfiles={teamProfiles}
           open={!!editingProject}
           onOpenChange={(open) => !open && setEditingProject(null)}
+        />
+      )}
+
+      {/* Edit Project Details Dialog */}
+      {editingDetails?.id && editDetails[editingDetails.id] && (
+        <ProjectEditDialog
+          key={editingDetails.id}
+          project={editingDetails}
+          details={editDetails[editingDetails.id]}
+          authorities={authorities}
+          open
+          onOpenChange={(open) => !open && setEditingDetails(null)}
         />
       )}
 
@@ -626,6 +651,7 @@ interface ProjectGridCardProps {
   canViewConsultantAmount: boolean;
   highlightedRole: string;
   onManageMembers: () => void;
+  onEditProject?: () => void;
   onDeleteProject?: () => void;
 }
 
@@ -637,9 +663,16 @@ function ProjectGridCard({
   canViewConsultantAmount,
   highlightedRole,
   onManageMembers,
+  onEditProject,
   onDeleteProject,
 }: ProjectGridCardProps) {
   const roles = project.assignedRoles || DEFAULT_ASSIGNED_ROLES;
+  // Distinct people across all slots.
+  const headcount = new Set(
+    Object.values(project.assignedMembers ?? {})
+      .flat()
+      .map((m) => m.id),
+  ).size;
 
   return (
     <li className="flex flex-col rounded-lg border border-border bg-card p-5 shadow-xs transition-colors hover:border-ring/50">
@@ -725,7 +758,7 @@ function ProjectGridCard({
             Assigned Roles & Personnel
           </span>
           <span className="text-[11px] text-muted-foreground">
-            8 disciplines
+            {headcount} assigned
           </span>
         </div>
 
@@ -780,6 +813,19 @@ function ProjectGridCard({
             </Button>
           )}
 
+          {onEditProject && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onEditProject}
+              className="h-8 gap-1.5 text-xs text-primary hover:bg-primary/10 hover:text-primary"
+            >
+              <Pencil className="size-3.5" />
+              Edit project
+            </Button>
+          )}
+
           {canDeleteProject && (
             <Button
               type="button"
@@ -823,7 +869,7 @@ function RoleItemTile({
       </span>
       <span
         className={cn(
-          'mt-0.5 block truncate text-xs font-medium',
+          'mt-0.5 line-clamp-2 break-words text-xs font-medium',
           isUnassigned ? 'text-muted-foreground/60 italic' : 'text-foreground',
         )}
         title={name}
@@ -844,6 +890,7 @@ interface ProjectsTableViewProps {
   canDeleteProject?: boolean;
   canViewConsultantAmount: boolean;
   onManageMembers: (p: AssignedProject) => void;
+  onEditProject?: (p: AssignedProject) => void;
   onDeleteProject?: (p: AssignedProject) => void;
 }
 
@@ -853,6 +900,7 @@ function ProjectsTableView({
   canDeleteProject = false,
   canViewConsultantAmount,
   onManageMembers,
+  onEditProject,
   onDeleteProject,
 }: ProjectsTableViewProps) {
   return (
@@ -1002,6 +1050,17 @@ function ProjectsTableView({
                         className="h-7 px-2 text-[11px] text-primary"
                       >
                         Team
+                      </Button>
+                    )}
+                    {onEditProject && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onEditProject(p)}
+                        className="h-7 px-2 text-[11px] text-primary"
+                      >
+                        Edit
                       </Button>
                     )}
                     {canDeleteProject && (

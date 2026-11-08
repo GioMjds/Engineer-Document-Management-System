@@ -56,7 +56,10 @@ export function NocProjectHeader({ project }: { project: AssignedProject }) {
         {TEAM.map(({ label, key }) => (
           <div key={key} className="min-w-0">
             <dt className="text-muted-foreground">{label}</dt>
-            <dd className="truncate font-medium text-foreground">
+            <dd
+              className="break-words font-medium text-foreground"
+              title={project.assignedRoles[key]}
+            >
               {project.assignedRoles[key]}
             </dd>
           </div>

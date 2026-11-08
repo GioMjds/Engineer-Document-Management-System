@@ -2,9 +2,11 @@ import type { Metadata } from 'next';
 import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { getNocTrackerData } from '@/lib/server/noc-data';
+import { getProjectEditDetails } from '@/lib/server/project-edit-details';
+import type { ProjectEditDetails } from '@/lib/project-edit';
 import { can } from '@/lib/permissions';
 import { ProjectsWorkspaceClient } from '@/components/projects/projects-workspace-client';
-import type { ProfileItem } from '@/components/projects/project-team-dialog';
+import type { ProfileItem } from '@/components/projects/team-assignment-fields';
 import { getMasterAuthorities } from '@/app/(app)/noc-matrix/actions';
 import type { MasterAuthorityRecord } from '@/types/noc';
 
@@ -18,7 +20,9 @@ interface ProjectsPageProps {
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default async function ProjectsPage({ searchParams }: ProjectsPageProps) {
+export default async function ProjectsPage({
+  searchParams,
+}: ProjectsPageProps) {
   const [user, sp] = await Promise.all([
     requireUser(),
     searchParams ? searchParams : Promise.resolve(undefined),
@@ -50,11 +54,16 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
   }
 
   let authorities: MasterAuthorityRecord[] = [];
+  let editDetails: Record<string, ProjectEditDetails> = {};
   if (canCreateProject) {
-    const authRes = await getMasterAuthorities();
+    const [authRes, details] = await Promise.all([
+      getMasterAuthorities(),
+      getProjectEditDetails(),
+    ]);
     if (authRes.ok && authRes.data) {
       authorities = authRes.data;
     }
+    editDetails = details;
   }
 
   const initialOpenCreate = sp?.create === 'true' || sp?.new === 'true';
@@ -70,6 +79,7 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
         }}
         teamProfiles={teamProfiles}
         authorities={authorities}
+        editDetails={editDetails}
         canCreateProject={canCreateProject}
         canDeleteProject={canDeleteProject}
         canManageMembers={canManageMembers}

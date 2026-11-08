@@ -1631,3 +1631,43 @@
   - [lib/email/notifications.ts](lib/email/notifications.ts), [app/actions/admin.ts](app/actions/admin.ts): use `sendMail`; `inviteUser` returns `warning` when the email fails.
   - [app/(app)/users/invite-user-dialog.tsx](app/(app)/users/invite-user-dialog.tsx): shows warning toast.
   - Removed `resend`; added `nodemailer`, `@types/nodemailer`. `.env.example` updated.
+
+- Redesigned project registration form and manage-team dialog to reduce visual clutter.
+  - [components/projects/team-assignment-fields.tsx](components/projects/team-assignment-fields.tsx): new shared `TeamAssignmentFields`, `TEAM_FIELDS` config, `collectMembers`; replaces 16 duplicated `useState` role fields and two separate pickers. `ProfileItem` moved here.
+  - [components/projects/project-team-dialog.tsx](components/projects/project-team-dialog.tsx): removed duplicate header, context pill bar, boxed sections; Save disabled until a change is made.
+  - [app/(app)/projects/new/project-form.tsx](app/(app)/projects/new/project-form.tsx): stepper circles replaced by "Step n of 2" line; required fields only on first view; contract values/dates and notification emails collapse into `<details>` sections that auto-open on validation errors; shortened labels and helper text.
+  - [components/projects/project-dialog-modal.tsx](components/projects/project-dialog-modal.tsx): shorter title, removed description.
+  - Verification: `tsc` and `eslint` clean for changed files. Pre-existing `tsc` error in `app/(app)/projects/page.tsx:26` (searchParams typing), not from this change.
+
+- Separated project name from description and added visual cues for client and contractor emails in the registration form.
+  - [supabase/migrations/20261107000000_add_project_summary.sql](supabase/migrations/20261107000000_add_project_summary.sql): new nullable `projects.summary` column, max 500 characters. Not yet applied.
+  - [types/database.ts](types/database.ts): added `summary` to `projects` Row, Insert, Update.
+  - [app/actions/admin.ts](app/actions/admin.ts): `createProject` takes `summary` and stores it; removed the unused `description` input field (the `description` column still holds the project name).
+  - [app/(app)/projects/new/project-form.tsx](app/(app)/projects/new/project-form.tsx): optional Description textarea with counter under Project name; email fields get party icon labels (client blue with building, contractor amber with hard hat) and one chip per parsed address, invalid ones red with a warning icon.
+  - Fallback: if the migration is not applied, `createProject` retries with core columns and the description is dropped.
+  - Verification: `tsc` and `eslint` clean.
+
+- Allowed several people per project team slot (RE, AM, AE, DC, Arch, Struct, MEP, Civil); no schema change.
+  - [lib/team-assignment.ts](lib/team-assignment.ts): new pure module with `TEAM_FIELDS`, `TeamAssignment` (`Record<TeamKey, string[]>`), `createEmptyTeam`, `collectMembers` (de-duplicates a person picked in two slots, first slot wins), `isSameTeam`, `groupMembersByRole`. Tests in `lib/team-assignment.test.ts`, run with `pnpm test` (Node built-in runner, no new dependency).
+  - [components/projects/team-assignment-fields.tsx](components/projects/team-assignment-fields.tsx): single picker replaced by a chip multi-select; picker stays open for repeated adds and hides people already chosen in the slot.
+  - [components/projects/project-team-dialog.tsx](components/projects/project-team-dialog.tsx), [app/(app)/projects/new/project-form.tsx](app/(app)/projects/new/project-form.tsx): array state; Save enables only when the set of people changes, not their order.
+  - [types/noc.ts](types/noc.ts), [lib/server/noc-data.ts](lib/server/noc-data.ts): added `assignedMembers` (id and name arrays); `assignedRoles` stays a joined display string so cards, table, search and filters keep working; removed `assignedMemberIds`.
+  - [components/noc/noc-project-header.tsx](components/noc/noc-project-header.tsx): shows the full joined list.
+  - Decision: project cards and table show the joined names truncated with a tooltip, not "first name plus +N".
+  - Verification: `pnpm test` 7/7, `pnpm lint` clean, `tsc --noEmit` clean, `pnpm build` passes.
+  - Not verified: live `project_members` unique key on `(project_id, user_id)` (needs the Supabase SQL editor); browser walkthrough and screenshot (needs an admin login).
+  - Known limitation (existing behavior): a member whose profile role has no slot (admin, ceo), or an engineer with no discipline, is not shown and is dropped on the next team save.
+  - User workflow: in registration step 2 and in Manage team, each slot shows the chosen people as chips. Use "Add staff" or "Add another" to search and add more, and the X on a chip to remove one. Registration shows "Register project (N assigned)" with the total. Other roles see the full list in the NOC project header and on project cards (hover for the whole list).
+  - Review fix: each slot's picker now lists only staff whose role fits the slot and who are not already chosen in any slot (`availableProfiles`), so nobody is silently dropped on save. The "Other staff" group is gone; admin and executive profiles cannot be added to a slot.
+
+- Added Edit project (core details) to the projects page; also fixed the card header that still said "8 disciplines".
+  - [lib/project-edit.ts](lib/project-edit.ts): pure module with `updateProjectSchema` (zod), `PROJECT_STAGES`, `STAGE_LABELS`, `parseEmailList`, `ProjectEditDetails`. Tests in `lib/project-edit.test.ts`.
+  - [app/actions/admin.ts](app/actions/admin.ts): new `updateProject(projectId, input)`; requires `project.create`, validates with the shared schema, updates the `projects` row, writes a `PROJECT_UPDATE` audit entry, revalidates project pages. Retries without `summary` if that column is not migrated.
+  - [lib/server/project-edit-details.ts](lib/server/project-edit-details.ts): loads the editable fields per project id; the page calls it only when the user can create projects.
+  - [components/projects/project-edit-dialog.tsx](components/projects/project-edit-dialog.tsx): dialog with name, description, stage, master authority, client and contractor names and emails; code is read-only; Save enables only after a change; warns when the authority changes.
+  - [components/projects/projects-workspace-client.tsx](components/projects/projects-workspace-client.tsx): "Edit project" button on cards, "Edit" in the table; card header shows "N assigned" instead of "8 disciplines"; role tiles wrap to two lines.
+  - [app/(app)/projects/new/project-form.tsx](app/(app)/projects/new/project-form.tsx): `STAGE_LABELS` now imported from `lib/project-edit.ts`.
+  - Decisions: contract amounts, dates and project code are not editable. Changing the master authority does not regenerate the NOCs already created. Permission reuses `project.create`, no new permission and no migration.
+  - Verification: `pnpm test` 14/14 (schema tests failed first), `pnpm lint` and `tsc --noEmit` clean.
+  - Not verified: browser walkthrough, screenshot and video.
+  - User workflow: roles with `project.create` (admin) see "Edit project" on each card and "Edit" in table view. It opens a dialog prefilled with current values. Change fields and press Save changes; the page refreshes with the new values. Other roles do not see the button.
