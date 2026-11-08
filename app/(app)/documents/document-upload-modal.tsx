@@ -135,12 +135,14 @@ export function DocumentUploadModal({
             >
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.code} - {p.name}
+                  Project #{p.code}
                 </option>
               ))}
             </select>
             {errors.projectId && (
-              <p className="text-xs text-destructive">{errors.projectId.message}</p>
+              <p className="text-xs text-destructive">
+                {errors.projectId.message}
+              </p>
             )}
           </div>
 
@@ -158,7 +160,9 @@ export function DocumentUploadModal({
                 <option value="civil">Civil</option>
               </select>
               {errors.discipline && (
-                <p className="text-xs text-destructive">{errors.discipline.message}</p>
+                <p className="text-xs text-destructive">
+                  {errors.discipline.message}
+                </p>
               )}
             </div>
 
@@ -170,7 +174,9 @@ export function DocumentUploadModal({
                 {...register('doc_number')}
               />
               {errors.doc_number && (
-                <p className="text-xs text-destructive">{errors.doc_number.message}</p>
+                <p className="text-xs text-destructive">
+                  {errors.doc_number.message}
+                </p>
               )}
             </div>
           </div>

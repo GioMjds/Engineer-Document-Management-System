@@ -22,7 +22,7 @@ export default async function DocumentsPage() {
   const canUpload = can(user.role, 'document.upload');
 
   // Fetch projects visible to this user
-  let projects: Array<{ id: string; name: string; code: string }> = [];
+  let projects: { id: string; name: string; code: string }[] = [];
 
   if (can(user.role, 'project.viewAll')) {
     const { data: allProjects } = await supabase
@@ -176,11 +176,14 @@ export default async function DocumentsPage() {
             <span className="text-xl font-bold font-mono text-[#0284c7]">
               {
                 mappedDocuments.filter(
-                  (d) => d.status === 'submitted' || d.status === 'under_review',
+                  (d) =>
+                    d.status === 'submitted' || d.status === 'under_review',
                 ).length
               }
             </span>
-            <span className="text-xs text-muted-foreground">pending sign-off</span>
+            <span className="text-xs text-muted-foreground">
+              pending sign-off
+            </span>
           </div>
         </div>
 
@@ -210,7 +213,9 @@ export default async function DocumentsPage() {
             <span className="text-xl font-bold font-mono text-amber-600 dark:text-amber-400">
               {mappedDocuments.filter((d) => d.status === 'rejected').length}
             </span>
-            <span className="text-xs text-muted-foreground">action required</span>
+            <span className="text-xs text-muted-foreground">
+              action required
+            </span>
           </div>
         </div>
       </div>

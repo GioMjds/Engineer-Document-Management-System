@@ -87,8 +87,9 @@ export function DrawingReviewModal({
   >(null);
   const [downloading, setDownloading] = useState(false);
 
-  const isAM = userRole === 'area_manager';
   const isEscalated = document.status === 'escalated';
+  const isAM =
+    userRole === 'area_manager' || (userRole === 'admin' && isEscalated);
   const awaitingAM = isEscalated && !isAM;
 
   async function handleDownload() {

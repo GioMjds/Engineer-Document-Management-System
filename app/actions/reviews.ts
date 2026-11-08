@@ -233,11 +233,11 @@ export async function submitAreaManagerReview(
   // 1. Require review.decide capability
   const user = await requireCan('review.decide');
 
-  // 2. Verify caller has role 'area_manager'
-  if (user.role !== 'area_manager') {
+  // 2. Verify caller is an Area Manager or Admin
+  if (user.role !== 'area_manager' && user.role !== 'admin') {
     return {
       success: false,
-      error: 'Access denied: Only Area Managers can perform second-level reviews.',
+      error: 'Access denied: Only Area Managers and Admins can perform second-level reviews.',
     };
   }
 
@@ -302,8 +302,8 @@ export async function submitAreaManagerReview(
     return { success: false, error: updateError.message };
   }
 
-  // 8. Insert review audit record into document_reviews at 'am' level
-  const reviewLevel = 'am';
+  // 8. Insert review audit record into document_reviews at the caller's level
+  const reviewLevel: 'am' | 'admin' = user.role === 'admin' ? 'admin' : 'am';
 
   const { error: reviewError } = await supabase.from('document_reviews').insert({
     document_id: doc.id,
